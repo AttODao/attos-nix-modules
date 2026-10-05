@@ -7,8 +7,12 @@
     ./cloudflare-public-cnames
     ./dns
     ./docker
+    ./forgejo
+    ./forgejo-actions-runner
+    ./immich
     ./incus
     ./jellyfin
+    ./karakeep
     ./mineos
     ./ollama
     ./open-terminal
