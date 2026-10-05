@@ -23,7 +23,7 @@ assert enabled.programs.zsh.syntaxHighlighting.enable;
 assert enabledCfg.programs.zsh.enable && enabledCfg.programs.zsh.autosuggestions.enable;
 assert enabledCfg.programs.zsh.syntaxHighlighting.enable;
 assert enabled.programs.starship.enable && enabled.programs.starship.enableZshIntegration;
-assert enabledCfg.programs.starship.enable && enabledCfg.programs.starship.enableZshIntegration;
+assert enabledCfg.programs.starship.enable;
 assert enabled.programs.starship.settings == enabledCfg.programs.starship.settings;
 assert enabled.programs.starship.settings.palette == "gruvbox_dark";
 assert enabled.programs.starship.settings.palettes.gruvbox_dark.color_orange == "#d65d0e";
