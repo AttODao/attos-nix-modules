@@ -1,5 +1,6 @@
 { pkgs }:
 {
+  karakeep-monolith = pkgs.callPackage ./karakeep-monolith.nix { };
   pipeasio = pkgs.callPackage ./pipeasio.nix { };
   pi = pkgs.callPackage ./pi.nix { };
   context-mode = pkgs.callPackage ./context-mode.nix { };

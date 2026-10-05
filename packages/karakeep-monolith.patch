@@ -1,0 +1,192 @@
+diff --git a/src/core.rs b/src/core.rs
+index 3437290..cc4d708 100644
+--- a/src/core.rs
++++ b/src/core.rs
+@@ -17,8 +17,8 @@
+ use crate::cookies::Cookie;
+ use crate::html::{
+     add_favicon, create_metadata_tag, get_base_url, get_charset, get_robots, get_title,
+-    has_favicon, html_to_dom, serialize_document, set_base_url, set_charset, set_robots,
+-    walk_and_embed_assets,
++    has_favicon, html_to_dom, rewrite_fragment_navigation, serialize_document, set_base_url,
++    set_charset, set_robots, walk_and_embed_assets,
+ };
+ use crate::url::{clean_url, create_data_url, get_referer_url, parse_data_url, resolve_url};
+ 
+@@ -76,6 +76,7 @@ pub struct Options {
+     pub no_metadata: bool,
+     pub no_video: bool,
+     pub output_format: MonolithOutputFormat,
++    pub fragment_navigation_url: Option<String>,
+     pub silent: bool,
+     pub timeout: u64,
+     pub unwrap_noscript: bool,
+@@ -278,6 +279,21 @@
+         dom = set_charset(dom, document_encoding.clone());
+     }
+ 
++    // A BASE element makes fragment-only links resolve against the source page.
++    // Archive viewers can opt in to rewriting only navigation links back to the
++    // saved document while leaving all other relative URLs and SVG references
++    // under the source BASE URL.
++    if let Some(fragment_navigation_url) = options.fragment_navigation_url.as_ref() {
++        for missing_fragment in
++            rewrite_fragment_navigation(&dom.document, fragment_navigation_url)
++        {
++            print_error_message(
++                &format!("Warning: fragment target not found: #{}", missing_fragment),
++                options,
++            );
++        }
++    }
++
+     let document_title: Option<String> = get_title(&dom.document);
+ 
+     if options.output_format == MonolithOutputFormat::HTML {
+diff --git a/src/html.rs b/src/html.rs
+index 275784a..22ef49f 100644
+--- a/src/html.rs
++++ b/src/html.rs
+@@ -8,10 +8,12 @@
+ use html5ever::tree_builder::{create_element, TreeSink};
+ use html5ever::{namespace_url, ns, LocalName};
+ use markup5ever_rcdom::{Handle, NodeData, RcDom, SerializableHandle};
++use percent_encoding::percent_decode_str;
+ use regex::Regex;
+ use reqwest::blocking::Client;
+ use reqwest::Url;
+ use sha2::{Digest, Sha256, Sha384, Sha512};
++use std::collections::HashSet;
+ use std::default::Default;
+ 
+ use crate::cache::Cache;
+@@ -300,6 +302,77 @@
+     parent.and_then(|node| node.upgrade()).unwrap()
+ }
+ 
++fn collect_fragment_targets(node: &Handle, targets: &mut HashSet<String>) {
++    if let NodeData::Element { ref name, .. } = node.data {
++        if let Some(id) = get_node_attr(node, "id") {
++            if !id.is_empty() {
++                targets.insert(id);
++            }
++        }
++
++        // HTML also supports the legacy <a name="..."> fragment target.
++        if name.local.as_ref() == "a" {
++            if let Some(anchor_name) = get_node_attr(node, "name") {
++                if !anchor_name.is_empty() {
++                    targets.insert(anchor_name);
++                }
++            }
++        }
++    }
++
++    for child in node.children.borrow().iter() {
++        collect_fragment_targets(child, targets);
++    }
++}
++
++fn rewrite_fragment_navigation_nodes(
++    node: &Handle,
++    archive_url: &str,
++    targets: &HashSet<String>,
++    missing_targets: &mut HashSet<String>,
++) {
++    if let NodeData::Element { ref name, .. } = node.data {
++        if name.local.as_ref() == "a" || name.local.as_ref() == "area" {
++            if let Some(href) = get_node_attr(node, "href") {
++                let trimmed_href = href.trim();
++
++                // Keep an empty hash (commonly used as a UI placeholder) and
++                // every non-fragment URL on monolith's existing code path.
++                if trimmed_href.len() > 1 && trimmed_href.starts_with('#') {
++                    let fragment = percent_decode_str(&trimmed_href[1..])
++                        .decode_utf8_lossy()
++                        .to_string();
++                    if !targets.contains(&fragment) {
++                        missing_targets.insert(fragment);
++                    }
++
++                    set_node_attr(
++                        node,
++                        "href",
++                        Some(format!("{}{}", archive_url, trimmed_href)),
++                    );
++                }
++            }
++        }
++    }
++
++    for child in node.children.borrow().iter() {
++        rewrite_fragment_navigation_nodes(child, archive_url, targets, missing_targets);
++    }
++}
++
++pub fn rewrite_fragment_navigation(document: &Handle, archive_url: &str) -> Vec<String> {
++    let mut targets = HashSet::new();
++    collect_fragment_targets(document, &mut targets);
++
++    let mut missing_targets = HashSet::new();
++    rewrite_fragment_navigation_nodes(document, archive_url, &targets, &mut missing_targets);
++
++    let mut result: Vec<String> = missing_targets.into_iter().collect();
++    result.sort();
++    result
++}
++
+ pub fn get_robots(handle: &Handle) -> Option<String> {
+     for meta_node in find_nodes(handle, vec!["html", "head", "meta"]).iter() {
+         // Only the first base tag matters (we ignore the rest, if there's any)
+@@ -1014,6 +1087,12 @@
+ 
+                     for attr_name in attr_names.into_iter() {
+                         if let Some(use_attr_href_value) = get_node_attr(node, attr_name) {
++                            // Fragment-only SVG USE references point into this document.
++                            // Fetching them embeds the HTML document instead of the SVG node.
++                            if !options.no_images && use_attr_href_value.trim().starts_with("#") {
++                                continue;
++                            }
++
+                             if options.no_images {
+                                 set_node_attr(node, attr_name, None);
+                             } else {
+diff --git a/src/main.rs b/src/main.rs
+index 013de67..f8f6687 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -1,5 +1,6 @@
+ use std::fs;
+ use std::io::{self, Error as IoError, Read, Write};
++use std::path::Path;
+ use std::process;
+ 
+ use clap::Parser;
+@@ -204,6 +205,27 @@
+         destination = cli.output.clone();
+     }
+ 
++    // Karakeep writes each archive to a temporary file named with its asset ID.
++    // When an archive URL prefix is configured, derive the final same-origin URL
++    // so fragment-only navigation survives monolith's source BASE element.
++    options.fragment_navigation_url = destination.as_deref().and_then(|output_path| {
++        if output_path == "-" {
++            return None;
++        }
++
++        let asset_id = Path::new(output_path).file_name()?.to_str()?;
++        let mut prefix = std::env::var("MONOLITH_FRAGMENT_NAVIGATION_PREFIX").ok()?;
++        if prefix.is_empty() {
++            return None;
++        }
++        if !prefix.ends_with('/') {
++            prefix.push('/');
++        }
++
++        let prefix_url = url::Url::parse(&prefix).ok()?;
++        prefix_url.join(asset_id).ok().map(|url| url.to_string())
++    });
++
+     // Set up cache (attempt to create temporary file)
+     let temp_cache_file: Option<NamedTempFile> = match Builder::new().prefix("monolith-").tempfile()
+     {
