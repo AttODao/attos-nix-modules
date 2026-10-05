@@ -8,9 +8,17 @@
     ./dns
     ./docker
     ./incus
+    ./jellyfin
+    ./mineos
+    ./ollama
+    ./open-terminal
+    ./open-webui
+    ./opencloud
     ./openssh
+    ./searxng
     ./swarm
     ./traefik
+    ./vaultwarden
     ./wireguard-server
     ./ytdl-sub
     ./discord
