@@ -9,10 +9,12 @@
     ./docker
     ./forgejo
     ./forgejo-actions-runner
+    ./groupware
     ./immich
     ./incus
     ./jellyfin
     ./karakeep
+    ./mailserver
     ./mineos
     ./ollama
     ./open-terminal
