@@ -1,0 +1,21 @@
+---
+# MX Master 4 thumb gesture button. Set it to "Diverted" in Solaar's
+# Key/Button Diversion setting.
+- Key: [Mouse Gesture Button, pressed]
+- Execute:
+  - "@OPEN_NOCTALIA_LAUNCHER@"
+...
+---
+# MX Master 4 haptic button opens Kando while pressed.
+- Key: [Haptic, pressed]
+- Execute:
+  - "@OPEN_KANDO_MENU@"
+...
+---
+# Releasing the haptic button selects the hovered Kando item and closes
+# the menu. Diverting the button prevents the native click, so send one.
+- Key: [Haptic, released]
+- MouseClick: [left, click]
+- Execute:
+  - "@CLOSE_KANDO_MENU@"
+...

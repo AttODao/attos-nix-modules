@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=PCMan File Manager
+Name[ja]=PCMan ファイルマネージャ
+GenericName=File Manager
+GenericName[ja]=ファイルマネージャ
+Exec=@PCMANFM@ %U
+Icon=pcmanfm
+Terminal=false
+StartupNotify=true
+Categories=GTK;System;Core;FileTools;FileManager;
+MimeType=inode/directory;x-directory/normal;

@@ -1,11 +1,24 @@
 {
-  description = "Shared NixOS and Home Manager modules for AttODao";
+  description = "Shared NixOS configuration with integrated Home Manager for AttODao";
 
-  outputs = { ... }: {
-    nixosModules.default = ./nixos/default.nix;
-    homeModules = {
-      default = ./home/default.nix;
-      foot = ./home/foot.nix;
-    };
+  inputs.home-manager = {
+    url = "github:nix-community/home-manager/acd21c5a3420a9d5fd0ed06299b10828267ef9ba";
+    flake = false;
   };
+
+  outputs =
+    { home-manager, ... }:
+    let
+      default = {
+        imports = [
+          "${home-manager}/nixos"
+          ./modules
+        ];
+      };
+    in
+    {
+      attopkgs = import ./packages;
+      nixosModules.default = default;
+      nixos.default = default;
+    };
 }

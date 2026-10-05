@@ -1,0 +1,29 @@
+{
+  # Keep imports static; feature defaults decide activation and dependencies.
+  imports = [
+    ./home-manager
+    ./discord
+    ./fcitx5
+    ./floorp
+    ./fonts
+    ./foot
+    ./greeter
+    ./hyprland
+    ./linux-wallpaperengine
+    ./login-pin
+    ./noctalia
+    ./open-deck-desktop
+    ./opencloud-client
+    ./pandora-launcher
+    ./paseo
+    ./pcmanfm
+    ./pi
+    ./pipeasio
+    ./pipewire
+    ./solaar
+    ./thunderbird
+    ./userDirs
+    ./vscode
+    ./zsh
+  ];
+}
