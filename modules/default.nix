@@ -21,6 +21,7 @@
     ./pipeasio
     ./pipewire
     ./solaar
+    ./ssh
     ./thunderbird
     ./userDirs
     ./vscode
