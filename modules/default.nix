@@ -7,9 +7,12 @@
     ./cloudflare-public-cnames
     ./dns
     ./docker
+    ./incus
     ./openssh
     ./swarm
     ./traefik
+    ./wireguard-server
+    ./ytdl-sub
     ./discord
     ./fcitx5
     ./floorp

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# Keep legacy sequencing, last-command status and overlapping-run behavior.
+ytdl-sub --config /config/config.yaml sub /config/subscriptions-youtube.yaml
+ytdl-sub --config /config/config.yaml sub /config/subscriptions-twitch.yaml
