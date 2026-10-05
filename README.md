@@ -2,6 +2,8 @@
 
 AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機能ごとのenableでシステム設定と全HMユーザーの設定をまとめて有効化する。
 
+各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
+
 ## 使い方
 
 利用側のflakeで、このrepoの `nixosModules.default` をNixOS moduleリストへ一度追加する。
@@ -109,23 +111,83 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | login-pin | NixOS | — |
 | discord | HM | Fcitx5 |
 | foot | HM | Fonts |
+| ssh | NixOS + HM（clientのみ） | — |
 | paseo | HM | Pi |
+| public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[サーバー設定](docs/server-services.md)を参照 |
+| docker / swarm / traefik / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | Docker / Swarm等、詳細はサーバー設定 |
+| ytdl-sub / ollama / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | fcitx5 / floorp / noctalia / open-deck-desktop / pandora-launcher / pcmanfm / pi / userDirs / vscode / linux-wallpaperengine | HM | Open-DeckはNixOS AppImage supportも有効化 |
 
 依存先を通常代入でfalseにすると競合する。依存を切る変更は、動作条件を確認した上で行う。
 
 ### enable以外の独自option
 
-すべてNixOS側の `modules.<feature>` に指定する。
+デスクトップ・非公開機能はNixOS側の `modules.<feature>`、公開サーバーは
+`modules.public-services.<FQDN>.<service>` に指定する。
 
 - `hyprland.{monitors,neowall.enable,lidSwitch.enable}`: モニター・壁紙shader起動・蓋イベント。詳細は[Hyprland](docs/hyprland.md)。
 - `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
 - `noctalia.{dock.pinned,screenRecorder.enable,calendar.account,location}`: 詳細は[Noctalia](docs/noctalia.md)。
-- `paseo.hostname`: 有効時必須。runtime env fileは各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
+- `paseo.{hostname,environmentFile}`: hostnameは有効時必須。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
 - `userDirs.{homeDirectory,dataDirectory}`: 既定null。ユーザーごとのHOMEを使用し、dataDirectory未指定はhomeDirectoryへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
+- `ssh.<Host>`: ホスト固有の接続先・共通設定の上書き。OpenSSHのdirective名で指定し、全HMユーザーに適用する。`enable` は有効化switchとして予約。
 - `linux-wallpaperengine.wallpapers`: monitor / wallpaper / scalingのリスト。assetsは各ユーザーのSteamディレクトリを参照する。
 
-その他の独自optionはenableのみ。詳細の変更は標準NixOS / HM optionへ書く。
+その他のデスクトップ独自optionはenableのみ。サーバーの入力・運用条件は
+[サーバー設定](docs/server-services.md)に記載する。詳細の調整には標準NixOS / HM optionも使う。
+
+### SSH client
+
+`modules.ssh.enable = true;` で、全HMユーザーへ共通接続先を設定する。
+`attofort` / `attobox` / `devcon` / `desktop` / `git` / `github` を利用でき、
+Gitは `git.attodao.cc`、GitHubは `github.com` でも同じ設定を使う。
+接続先・ユーザー名は [modules/ssh/home.nix](modules/ssh/home.nix) を参照。
+鍵は各ユーザーの `~/.ssh/id_ed25519` を参照するだけで、配布・生成しない。
+
+ホスト固有の接続先は `modules.ssh.<Host>` で追加する。共通設定は通常代入で上書きできる。
+
+```nix
+modules.ssh = {
+  enable = true;
+  extra = {
+    HostName = "extra.example.org";
+    User = "operator";
+    Port = 2222;
+  };
+  attofort.User = "operator";
+  git.IdentityFile = "~/.ssh/git_key";
+};
+```
+
+共通設定は接続多重化・keepalive・`StrictHostKeyChecking accept-new` を使用する。
+初回のhost keyは自動登録するが、変更されたkeyは拒否する。
+OpenSSHのowner check対策として、生成したconfigをactivationでユーザー所有の実ファイル（0600）に配置し、
+NixOSの `programs.ssh.systemd-ssh-proxy.enable` は既定falseにする。
+`~/.ssh/config` の手編集は次回activationで置き換わるため、追加設定は `modules.ssh.<Host>` へ書く。
+鍵・known_hostsは管理せず、sshd・firewall・認証policyも変更しない。
+
+## サーバー機能
+
+公開サービスは、enableを含む独自設定を一つのnamespaceへ集約する。
+
+```nix
+modules.public-services."vault.example.org".vaultwarden = {
+  enable = true;
+  dataDir = "/srv/vaultwarden";
+  environmentFile = "/run/secrets/vaultwarden.env";
+};
+```
+
+対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mineos`,
+`jellyfin`, `open-webui`, `searxng`, `mailserver`, `groupware`, `wireguard-server`,
+`paseo`, `ssh`、externally managedな `code-server` / `sunshine`。
+DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
+`deploy = false` は別ホストのendpoint登録のみで、local unit・秘密・保存先を要求しない。
+通常は `private = false`。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
+
+公開するサービスの独自enable aliasは追加しない。既存Paseoは互換bridgeを保持する。
+保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
+localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[サーバー設定](docs/server-services.md)を参照。
 
 ## ホスト側に残すもの
 
@@ -150,6 +212,13 @@ sourceの取得・実体化が必要な評価には `--read-write-mode` を追�
 ```sh
 python3 modules/login-pin/test-check-login-pin.py
 python3 modules/pipeasio/test-register-steam-prefixes.py
+python3 modules/cloudflare-ddns/test-sync-dns.py
+python3 modules/swarm/test-swarm.py
+python3 modules/forgejo/test-networks.py
+python3 modules/ytdl-sub/test-stage-config.py
+python3 modules/wireguard-server/test-wireguard-runtime.py
+python3 modules/incus/test-provision.py
+python3 modules/groupware/test-radicale-users.py
 ```
 
 共有側の実装のみ変更しており、各dotfilesへの移行・lock更新・rebuildは別作業。

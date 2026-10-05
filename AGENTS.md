@@ -21,7 +21,7 @@ hardware、ユーザー作成、ログインシェル、権限・linger、secret
 
 ## 2. 最小の公開APIを決める
 
-- 機能選択はNixOS側の`modules.<name>.enable`に集約し、`lib.mkEnableOption`で既定falseにする。
+- 機能選択はNixOS側の`modules.<name>.enable`に集約し、`lib.mkEnableOption`で既定falseにする。公開サーバーはenableを含む独自設定を`modules.public-services.<FQDN>.<service>`へ集約し、別のglobal enable aliasを追加しない（既存Paseo bridgeのみ維持）。
 - HM専用の機能にもNixOS側のenableを設ける。HM側に別のenableやstandalone HM exportを追加しない。
 - enable以外の独自optionは、利用側から渡す必要がある値だけに限定する。型、説明、妥当な既定値または有効時の必須条件を定義する。
 - ユーザーごとの調整は標準`home-manager.users.<name>`へ書けるようにする。調整可能な既定値には`lib.mkDefault`を使い、安易に`mkForce`で固定しない。
@@ -57,7 +57,8 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 ```
 
 - NixOSの`imports`は静的に宣言し、enableから組み立てない。依存moduleのimportも同様。
-- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。
+- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーは`public-services/lib.nix`の`select`・`option`・`common`・`pathOption`・`require`を再利用し、`select.enabled`でlocal設定を囲む。singleton assertionも登録し、`deploy = false`でlocal依存・必須path・unitを作らない。
+- 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は`docs/server-services.md`を参照。
 - `home.nix`の実設定は`lib.mkIf osConfig.modules.<name>.enable`で囲む。
 - HM設定は`home-manager.sharedModules`で接続する。特定ユーザーへの直書きや、ユーザー一覧を機能ごとに走査する実装はしない。
 - 有効なHM設定は、標準`home-manager.users`に直接宣言したユーザーを含む全HMユーザーに適用される。固定アカウント・デバイス設定や複数ユーザーでの競合を確認する。

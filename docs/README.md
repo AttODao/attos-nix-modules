@@ -1,7 +1,8 @@
 # 共有設定の設計・移行方針
 
-現在のAPIと機能一覧は[root README](../README.md)を参照。
+現在のAPIと機能一覧は[root README](../README.md)、module別の設定リファレンスは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
 [調査台帳](inventory.md)は旧構成の調査記録であり、現在のmodule配置・依存方針とは異なる。
+公開namespace・remote登録・サーバーstateの境界は[サーバーサービス](server-services.md)を参照。
 
 ## 構成
 
@@ -27,7 +28,7 @@ importは静的に宣言する。依存はenableで表現し、独自resolver・
 
 ユーザー作成、ログインシェル、権限・linger、hardware、保存先、secrets、
 stateVersion、unfree許可、機器固有設定は利用側に残す。
-共有moduleがユーザーを自動作成することはない。
+共有moduleはログインユーザーを作成しない。daemon用system userはサービスの標準module等で管理する。
 
 既存のHM stateVersionは保持する。共有既定値26.05を移行済みホストへ無条件に採用しない。
 秘密の内容をNix storeへ読まず、必要な設定には復号後のruntime pathを渡す。
@@ -52,8 +53,8 @@ HMのrevision更新はこのrepoのinputとlockを更新して検証する。
 各dotfilesでは共有inputのlock更新と各ホストのrebuildが必要。
 共有repoへのpushだけで全ホストへ反映されるわけではない。
 
-評価テストは `tests/*.nix`、PIN照合・PipeASIO登録のscriptテストは
-`modules/login-pin/`・`modules/pipeasio/` にある。
+評価テストは `tests/*.nix`。PIN照合・PipeASIO登録に加え、サーバーruntimeの
+scriptテストは各機能ディレクトリにあり、[一覧](server-services.md#検証)から実行できる。
 NixOSのboot・PAM・user service・desktop起動はconsumer移行後に実機確認する。
 失敗時は共有input更新を戻し、前のlock / NixOS generationへ戻す。
 
