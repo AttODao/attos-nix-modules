@@ -2,6 +2,14 @@
   # Keep imports static; feature defaults decide activation and dependencies.
   imports = [
     ./home-manager
+    ./public-services
+    ./cloudflare-ddns
+    ./cloudflare-public-cnames
+    ./dns
+    ./docker
+    ./openssh
+    ./swarm
+    ./traefik
     ./discord
     ./fcitx5
     ./floorp

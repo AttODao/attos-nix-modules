@@ -9,7 +9,8 @@ let
   cfg = osConfig.modules.paseo;
   userHome = config.home.homeDirectory;
   paseoHome = "${userHome}/paseo";
-  environmentFile = "${paseoHome}/daemon.env";
+  environmentFile =
+    if cfg.environmentFile == null then "${paseoHome}/daemon.env" else cfg.environmentFile;
   paseoConfig = pkgs.writeText "paseo-config.json" (
     builtins.toJSON {
       "$schema" = "https://paseo.sh/schemas/paseo.config.v1.json";
