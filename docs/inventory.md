@@ -2,9 +2,11 @@
 
 [移行計画・共有方法へ戻る](./README.md)
 
+**最新のmodule・APIは[root README](../README.md)を参照。** この文書は調査時点の共通化判断・差分・候補を記録したもの。各行の「候補」「保留」、旧`home/`・`nixos/`配置、HMなしサーバーやscope独立の方針は当時の記録であり、現在の設計・実装状況やconsumerへの適用完了を示さない。
+
 ## 表の読み方
 
-- **L**: `.dotfiles`（attodesk / attolap）、**S**: server（attofort / attobox）、**D**: dev（devcon、Nix出力名development）、**R**: remote（desktop）。commitは[計画書](./README.md#1-調査対象と確認できた範囲)に記録。
+- **L**: `.dotfiles`（attodesk / attolap）、**S**: server（attofort / attobox）、**D**: dev（devcon、Nix出力名development）、**R**: remote（desktop）。commitは[計画書](./README.md#調査対象と確認できた範囲)に記録。
 - feature表の`repo: category/name/file.nix`は、そのrepoの**`modules/features/`からの相対パス**。例: `L: development/pi/home.nix`は`modules/features/development/pi/home.nix`。
 - `H`はHome Manager、`N`はNixOS。単純に同名moduleをまとめるのではなく、option・生成設定・起動経路を比較した。
 - **A**: 別repoにも設定の重複がある。優先して抽出する。
@@ -18,7 +20,7 @@
 | module・優先度 | 比較した設定本体 | 共通化する内容 | ホスト側へ残す差分・注意 |
 | --- | --- | --- | --- |
 | **zsh / A / H+N** | L/R: `system/zsh/{home,nixos}.nix`、D: `system/zsh/{home,nixos}.nix`、S: `applications/zsh/nixos.nix` | Hのenable・autosuggestion・syntax highlightingはL/D/Rで同一。Sにも同じ機能のN設定がある。HとNの薄い設定を分ける | L/Rの`users.users.attodao.shell`、D/Sのcore側ユーザーshellはローカル。Nの`autosuggestions`とHの`autosuggestion`は別optionで、文字列置換で統一しない。`environment.shells`の差も維持 |
-| **starship / A / H+N** | L/R: `development/starship/home.nix`、D: `system/starship/home.nix`、S: `applications/starship/nixos.nix` | Gruvbox palette、format、言語表示、directory置換、time、character等の`settings`全体が同一。`data/starship.nix`等へ一度だけ置く | Hの`enableZshIntegration`はH adapterへ。SにはHMを入れず`programs.starship.settings`へ共通データを渡す |
+| **starship / A / H+N** | L/R: `development/starship/home.nix`、D: `system/starship/home.nix`、S: `applications/starship/nixos.nix` | Gruvbox palette、format、言語表示、directory置換、time、character等の`settings`全体が同一。実装では`home/zsh.nix`と`nixos/zsh.nix`へ同梱し、`modules.zsh.enable`だけで有効化する | Hの`enableZshIntegration`はH adapterへ。SにはHMを入れずN側の`programs.starship.settings`に直接宣言する |
 | **pi / A / H+N** | L/D: `development/pi/{home,package,context-mode}.nix`、D: 同`nixos.nix`、S: `applications/pi/{nixos,package,context-mode}.nix` | Pi 1.0.2 overrideとcontext-mode 1.0.169 overrideは3 repoで完全一致。ponytail v4.10.3、context-mode登録、defaultTools、autoTitle refreshTurns、tmux/bunも共通 | Lはhost pkgs、S/Dは専用`pi-nixpkgs`。pi-sessionsはL/Dが`3f7cd30…`、Sが`80970d0…`で同一ではない。Sのユーザーhome/tmpfiles/可変JSON merge、DのPaseo向けoverlay、HMのconfigDirは各adapterへ。RにはPi featureがなく、新規導入しない |
 | **SSH client / A / H+N** | L/D/R: `networking/ssh/home.nix`、S: `applications/ssh/nixos.nix`。接続先データはSの`modules/nixos/core/public-hosts.nix` | ControlMaster/ControlPersist/ControlPath、keepalive、accept-new等の共通設定。L/D/Rのconfig生成・600で実ファイル配置・ssh wrapperはほぼ同じ。接続先の重複部分も共有データ候補 | Sはsystem設定からFQDN hostを生成、Hはaliasを持つ。SSH clientとsshdを別exportにする。全`public-hosts.nix`を移すのではなく必要なSSHデータだけを候補にする。実ファイル配置/owner-check回避を消さない |
 | **OpenSSH server / A / N** | S/D: `services/openssh/nixos.nix`、L/R: `networking/ssh/nixos.nix` | S/Dのenable、PasswordAuthentication=true、KbdInteractiveAuthentication=true、UseDns=falseはコメントとmodule引数の有無を除けば同一。ここはそのまま抽出できる | Lはenableだけ。RはAllowUsers、root禁止、keyboard-interactive無効、openFirewall=false、eth0だけ22許可。S/Dの認証policyをL/Rへ自動適用しない。共通のserver起動と認証policyは区別する |
@@ -38,13 +40,13 @@
 
 | module・優先度 | 比較した設定本体 | 共通化する内容 | ホスト側へ残す差分・注意 |
 | --- | --- | --- | --- |
-| **foot / A / H** | L/R: `desktop/foot/home.nix` | 完全一致。foot/server有効、Inconsolata 11、alpha=0.65 | font/size等は`mkDefault`でローカルoverride可能にする |
-| **fonts / A / N** | L/R: `system/fonts/nixos.nix` | 完全一致。Inconsolata Nerd Font、Noto CJK、fontconfigのsans/serif/monospace既定値 | D/Sへデスクトップ用fontを自動導入しない。package listもあるがdefaultFontsという設定があり、今回の対象 |
+| **foot / A / H（実装済み）** | L/R: `desktop/foot/home.nix` | 完全一致。foot/server有効、Inconsolata 11、alpha=0.65。共有側はHM Fontsをimportし、Foot有効時に自動有効化 | 独自APIは`modules.foot.enable`のみ（既定false）。font/alphaは`mkDefault`で、`programs.foot.settings.main.font` / `programs.foot.settings.colors-dark.alpha`によりoverride。host名やlauncher設定はローカル |
+| **fonts / A / H+N（実装済み）** | L/R: `system/fonts/nixos.nix` | 完全一致のN設定を抽出しHにも提供。Inconsolata Nerd Font、Noto CJK Sans/Serif、fontconfigのsans/serif/monospace既定値を`home/fonts.nix`と`nixos/fonts.nix`に個別に宣言 | 独自APIは両scopeとも`modules.fonts.enable`のみ（既定false）。Hはfontconfig有効、Nは`fonts.enableDefaultPackages = true`を既定値として維持。Footが自動有効化するのはHのみで、Nはsystem側で独立して有効化。D/Sへ無条件導入しない |
 | **floorp / A / H** | L/R: `networking/floorp/home.nix` | 完全一致。floorp-bin、Sync対象、password/autofill制限、検索、vertical tabs/gesture、拡張強制導入、Vaultwarden接続先 | OpenDeck拡張を含むので関連導入を確認。ユーザーのbrowser profileデータ自体は移さない |
 | **obs-studio / A / H** | L/R: `audio-video/obs-studio/home.nix` | 完全一致の`programs.obs-studio.enable` | 一行でもpackage列挙だけではないため対象。LのfeatureはPipeWire依存を明記、Rは明記しないがPipeWire feature自体は有効。依存機能を落とさない |
 | **pipewire / A / N** | L/R: `audio-video/pipewire/nixos.nix`、L: `hosts/attodesk/audio.nix` | rtkit、PipeWire、ALSA、Pulseの共通有効化 | Rの`99-sunshine-sink`はdesktop固有。LのKURO loopback/Scarlett設定はattodesk固有で既にhost側。device名、buffer値、仮想sinkは共通moduleへ混ぜない |
-| **desktop-theme / A / H** | L/R: `desktop/desktop-theme/{home,cursor}.nix` | `cursor.nix`は完全一致。Yanfei/Xcursor→Hyprcursor生成、size=48、GTK Adwaita-dark/Papirus-Dark、Fcitx/Qt/Wayland環境設定、xprofile/environment.d | Lは`pointerCursor.hyprcursor.enable`あり。Rはhome.sessionVariablesのcursor変数とXresources定義が追加されている。重複注入を整理できるが、現行HM対応とXWaylandで実効値を確認してから。cursor buildを2 repoに残さない |
-| **pcmanfm / A / H** | L/R: `desktop/pcmanfm/home.nix`と`pcmanfm.desktop` | desktop entry、Papirus iconのPNG生成、directory MIME default、XDG userDirsの基本形。`.desktop` assetは完全一致 | attodeskだけdataDirectory=/mnt/hdd1、attolap/desktopはhome配下。Screenshots/.keepはattolap/desktopだけ。共有設定からhostName分岐を取り除き、保存先とディレクトリ作成をローカルへ |
+| **desktop-theme / A / H** | L/R: `desktop/desktop-theme/{home,cursor}.nix` | `cursor.nix`は完全一致。カスタムカーソルのXcursor→Hyprcursor生成、size=48、GTK Adwaita-dark/Papirus-Dark、Fcitx/Qt/Wayland環境設定、xprofile/environment.d | Lは`pointerCursor.hyprcursor.enable`あり。Rはhome.sessionVariablesのcursor変数とXresources定義が追加されている。重複注入を整理できるが、現行HM対応とXWaylandで実効値を確認してから。cursor buildを2 repoに残さない |
+| **pcmanfm / userDirs / A / H（実装済み）** | L/R: `desktop/pcmanfm/home.nix`と`pcmanfm.desktop` | PCManFM本体、desktop entry、Papirus iconのPNG生成、directory MIME defaultを`home/pcmanfm.nix`へ。XDG userDirsと自動ディレクトリ作成は`home/userDirs.nix`へ分離 | PCManFMはenableのみ。userDirsはenable・homeDirectory・dataDirectoryを公開し、保存先はhome配下が既定。attodeskの/mnt/hdd1指定とScreenshots/.keepはローカル。hostName分岐なし、相互に自動有効化せず、consumer未適用 |
 | **discord / A / H** | L/R: `networking/discord/home.nix` | enable、fcitx起動待ち、start-minimized、graphical-sessionへの関連付け、restart設定 | Rだけ`--ozone-platform=wayland`のpackage overrideとKillMode=mixed。Lへ適用するなら挙動変更であり、抽出時には維持。遅れているrepo側の改善を消さない |
 | **thunderbird / A / H+N** | L/R: `networking/thunderbird/{home,nixos}.nix` | ESR、日本語、minimize addon、profile/settings、IMAP/SMTP/Gmail設定。Nのevolution-data-server/gnome-keyringは完全一致 | Lだけ`mail.shell.checkDefaultClient=false`。共通化後のポリシー追加候補だが抽出と分ける。認証情報・メールの実データは共有しない |
 | **OpenCloud client / A / H+N** | L/R: `networking/opencloud/{home,nixos}.nix` | 二重autostart抑止、desktop entry非表示、systemd user service、Wizard ServerUrl。N設定は完全一致 | Lはpkgs.opencloud-desktop、Rは専用opencloud-nixpkgsから供給。起動コマンドが選択packageを参照する形にする。Lはattodeskだけ、attolapは未導入。SのOpenCloud serverとは別module |
@@ -53,6 +55,8 @@
 | **hyprland / A / H+N** | L/R: `desktop/hyprland/{home,nixos}.nix`、L: 同`greeter.nix` | Lua config、UWSM、dconf/gvfs、装飾/blur/border/animation/input/gesture、window/workspace操作、アプリ起動・スクリーンショット・Noctalia操作keybind | attodeskの3画面/HDR、attolapのlid/neowall、実機power/logind/greeterはローカル。Rのseatd/VTBOUND=0/linger、bootstrap、headless moonlight出力、portal defaultはdesktop固有。Rの絶対package path指定とLのPATH依存は表記差でなく実行環境差もある |
 | **noctalia / A / H+N** | L/R: `desktop/noctalia/home.nix`、L: 同`nixos.nix`と録画script 2本 | Everforest palette、bar/order/表示、shell/panel、dock基本、天気/所在地、calendar/CalDAV、nightlight、screen_recorder基本、録画dir作成 | Lはnative programs.noctalia、Rは外部Noctalia HM module。LはHyprland startupから起動、Rはsystemd+headless-output待ち。dock editorはLがcode、RがZed。attodeskの追加ゲーム/HDR HEVC/focused録画/自動X用変換、その他のportal/h264を分ける。secret runtime pathとstandalone HMのnull対応も維持 |
 | **open-deck-desktop / A・供給方式は保留 / H(+N)** | L: `peripherals/open-deck-desktop/{home,nixos}.nix`、`update-open-deck-desktop.sh`、R: 同`{home,package}.nix`。両repoの`.desktop` | アイコンsource、desktop統合、OpenDeck用途の共通部分。用途は共通だが単純に本文をコピーできない | Lはactivation時にGitHub latest AppImageをhomeへ取得・appimage-run/binfmt使用、Rはv1.0.5+hash固定のwrapType2。desktop entryのExec/Icon/Versionも異なる。方式を選ぶまでは供給adapterを残す。L方式を「最新版だから正」とはしない |
+
+Footのserver modeはHyprlandの`uwsm app -t service -- footclient`やNoctaliaの`footclient`起動と整合するため維持する。これらのkeybind・pin設定は共有Footへ移さない。HM Fontsの依存は`osConfig`を使わず、standalone HMでも機能する。
 
 ## 3. NixOS基盤 / 同repo内の共有設定
 
@@ -73,8 +77,8 @@
 
 | module | 元ファイル | 設定内容 | 推奨 |
 | --- | --- | --- | --- |
-| **vscode** | L: `development/vscode/home.nix` | attodesk/attolap共通のkeybinding変更。Ctrl+J/Q/Spaceの解除、Ctrl+Alt+Spaceのsuggest操作 | 共通repoへ移す候補。RのZedやDのcode-serverと同一視しない |
-| **login-pin** | L: `system/login-pin/{module,nixos}.nix`、`check-login-pin.py`、`set-login-pin.sh` | 両実機の6桁PIN/PAM実装、ユーザー/services指定、通常password fallback | module実装とassetは移せる。有効化policyとSOPS/hashの対応はhost側。server/remoteへ自動適用しない。既存optionを再利用 |
+| **vscode** | L: `development/vscode/home.nix` | attodesk/attolap共通のkeybinding変更。Ctrl+J/Q/Spaceの解除、Ctrl+Alt+Spaceのsuggest操作 | `home/vscode.nix` 実装済み。独自optionはenableのみ、consumer未適用。RのZedやDのcode-serverと同一視しない |
+| **login-pin** | L: `system/login-pin/{module,nixos}.nix`、`check-login-pin.py`、`set-login-pin.sh` | 両実機の6桁PIN/PAM実装、ユーザー/services指定、通常password fallback | `nixos/login-pin.nix`とassetを実装済み。公開optionはenableのみ、attodao・greetd/login・password fallbackは固定。SOPS secret宣言はhost側、runtime path参照を維持。consumer未適用、server/remoteへ自動適用しない |
 | **wireguard-client** | L: `networking/wireguard-client/nixos.nix` | hostごとの暗号化conf検出、ファイル名検証、SOPS、NetworkManagerへの一時import/削除、autoconnect無効 | 汎用のimport service部分は移せる。元repo相対secretsRoot/hostName探索はローカルへ。実際のtunnelがないhostではserviceを作らない現行挙動を維持。SのVPN serverとは別 |
 | **docker** | S: `services/docker/nixos.nix` | 両server共通のDocker/OCI backend、weekly prune、latest imageのpull=always assertion、activation時restart | 共通repoへ移すなら設定本体をそのまま。新たなimage update policyは加えない。現時点ではS内の一箇所変更でも両hostへ反映可能 |
 | **service-storage** | S: `modules/nixos/core/service-storage.nix` | named storageの型、filesystem/tmpfiles生成、root/mountPoint整合性・重複検証 | 実装は共有できるが他repoにconsumerなし。初回は保留可。disk UUID、root、mount条件はSのhostsへ。サービス側RequiresMountsFor契約を壊さない |
@@ -89,12 +93,12 @@
 | featureと主なファイル | 有効host | 調査結果・残す理由 |
 | --- | --- | --- |
 | `audio-video/musescore-midi/home.nix` | attodesk | MIDI Throughへの接続bridgeとuser service。今は一台のみ |
-| `desktop/kando/home.nix` | attodesk | pie menu設定。共有moduleが存在しない他hostへ新規導入する必要なし |
+| `desktop/kando/home.nix` | attodesk | `home/solaar.nix`に同梱済み。Solaarのenableのみで導入・起動・Hyprland window ruleを設定。menu内容は管理しない。consumer未適用 |
 | `gaming/aagl-launchers/nixos.nix` | attodesk | 外部AAGL NixOS module、launcher有効化、cache設定。現在は一台のみ |
 | `gaming/linux-wallpaperengine/home.nix` | attodesk | Steam assetsと3画面のwallpaper設定。モニター依存が大きい |
-| `gaming/pandora-launcher/home.nix`とPython資産 | attodesk | launcherの取得/起動実装。現在は一台のみ。Lのjdk25導入とは別で扱う |
+| `gaming/pandora-launcher/home.nix`とPython資産 | attodesk | 共有実装済み: `home/pandora-launcher.nix`と`packages/{pandora-launcher,pandoragh}.nix`。enableのみで両packageを導入。consumer未適用、Lのjdk25導入とは別で扱う |
 | `gaming/pipeasio/{home,nixos,package}.nix`とPython/test資産 | attodesk | Wine/Steam環境のASIOとprefix登録。単一hostかつ既存testあり。移す必要が出た時もpackage・登録script・testを一体で扱う |
-| `peripherals/solaar/{home,nixos}.nix`、`config.yaml`、`rules.yaml` | attodesk | デバイス設定とKando/Noctalia操作。個体/入力ルールを全hostへ配布しない |
+| `peripherals/solaar/{home,nixos}.nix`、`config.yaml`、`rules.yaml` | attodesk | `home/solaar.nix`・`home/solaar/`・`nixos/solaar.nix`に実装済み。各scopeのenableのみ、Kando同梱、MX Master 4の個体設定と入力ルール固定。Noctalia有効化が前提。consumer未適用 |
 | `system/laptop-power/nixos.nix` | attolap | power-profiles-daemon/upower。ノートPC用途固有 |
 
 ### S: サービスの役割分担
