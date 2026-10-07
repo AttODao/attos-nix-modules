@@ -265,7 +265,7 @@ assert lib.all (service: !(invalidBackendOption service).success) [
   "opencloud"
   "mineos"
   "jellyfin"
-  "open-webui"
+  "ollama"
   "searxng"
 ];
 assert lib.all (a: a.assertion) directDns.assertions;

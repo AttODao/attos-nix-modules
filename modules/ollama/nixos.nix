@@ -1,15 +1,17 @@
 { config, lib, ... }:
 let
-  cfg = config.modules.ollama;
+  ps = import ../public-services/lib.nix { inherit lib; };
+  s = ps.select config "ollama";
+  cfg = s.cfg;
 in
 {
-  config = lib.mkIf cfg.enable {
+  config = lib.mkIf s.enabled {
     services.ollama = {
       enable = true;
       package = lib.mkDefault cfg.package;
       home = lib.mkDefault cfg.home;
       modelsDir = lib.mkDefault cfg.modelsDir;
-      host = lib.mkDefault cfg.host;
+      host = lib.mkDefault cfg.listenAddress;
       port = lib.mkDefault cfg.port;
       loadModels = lib.mkDefault cfg.loadModels;
       openFirewall = lib.mkDefault true;

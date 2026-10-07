@@ -20,7 +20,6 @@
     ./mineos
     ./ollama
     ./open-terminal
-    ./open-webui
     ./opencloud
     ./openssh
     ./searxng

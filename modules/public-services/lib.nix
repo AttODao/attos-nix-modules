@@ -10,7 +10,7 @@ let
     opencloud = "http://opencloud:9200";
     mineos = "http://web:3000";
     jellyfin = "http://jellyfin:8096";
-    open-webui = "http://open-webui:8080";
+    ollama = "http://open-webui:8080";
     searxng = "http://searxng:8080";
   };
 in
@@ -91,7 +91,10 @@ rec {
           })
           (
             lib.filterAttrs (
-              service: cfg: (cfg.enable or false) && (cfg.backendUrl or (httpBackends.${service} or null)) != null
+              service: cfg:
+              (cfg.enable or false)
+              && (service != "ollama" || cfg.webui)
+              && (cfg.backendUrl or (httpBackends.${service} or null)) != null
             ) services
           )
       ) (hosts config)

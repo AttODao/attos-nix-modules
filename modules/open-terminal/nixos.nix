@@ -10,7 +10,7 @@ let
   dataDir = ps.require "modules.open-terminal" "dataDir" cfg.dataDir;
   workspaceDir = "${dataDir}/workspace";
   environmentFile = ps.require "modules.open-terminal" "environmentFile" cfg.environmentFile;
-  web = ps.select config "open-webui";
+  web = ps.select config "ollama";
   allowedOrigins =
     config.virtualisation.oci-containers.containers.open-terminal.environment.OPEN_TERMINAL_CORS_ALLOWED_ORIGINS;
   uid = ps.require "modules.open-terminal" "uid" cfg.uid;
@@ -55,7 +55,7 @@ in
       environmentFiles = lib.mkDefault [ environmentFile ];
       environment = {
         OPEN_TERMINAL_CORS_ALLOWED_ORIGINS = lib.mkDefault (
-          if web.enabled then
+          if web.enabled && web.cfg.webui then
             "https://${web.hostname}"
           else
             throw "Open Terminal: enable a local Open WebUI registry entry or supply the native OCI CORS environment value."

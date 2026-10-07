@@ -33,12 +33,13 @@ let
   defaultDns = cfg [ { modules.dns.enable = true; } ];
   ollama = cfg [
     {
-      modules.ollama = {
+      modules.public-services."backend.example.test".ollama = {
         enable = true;
+        host = "nixos";
         package = pkgs.ollama-vulkan;
         home = "/srv/ollama";
         modelsDir = "/srv/model-store";
-        host = "192.0.2.1";
+        listenAddress = "192.0.2.1";
         port = 11435;
         loadModels = [
           "embeddinggemma"
@@ -53,8 +54,9 @@ let
   ];
   ollamaHome = cfg [
     {
-      modules.ollama = {
+      modules.public-services."backend.example.test".ollama = {
         enable = true;
+        host = "nixos";
         home = "/srv/other-ollama";
       };
     }
@@ -225,9 +227,10 @@ let
     {
       modules = {
         dns.listenAddresses = [ "192.0.2.1" ];
-        ollama = {
+        public-services."backend.example.test".ollama = {
+          host = "nixos";
           home = "/srv/unused";
-          host = "192.0.2.1";
+          listenAddress = "192.0.2.1";
         };
         incus = {
           inherit preseed;
@@ -238,12 +241,13 @@ let
     }
   ];
   opts = base.options.modules;
+  ollamaOpts = (opts.public-services.type.nestedTypes.elemType.getSubOptions [ ]).ollama;
   rangeOpts =
     opts.traefik.publishedPortRanges.type.nestedTypes.elemType.nestedTypes.elemType.getSubOptions
       [ ];
 in
 assert !base.config.modules.dns.enable && !base.config.services.dnsmasq.enable;
-assert !base.config.modules.ollama.enable && !base.config.services.ollama.enable;
+assert !(opts ? ollama) && !base.config.services.ollama.enable;
 assert !base.config.modules.incus.enable && !base.config.virtualisation.incus.enable;
 assert !(disabled.systemd.services ? dnsmasq) && !(disabled.systemd.services ? ollama);
 assert
@@ -279,8 +283,8 @@ assert
   !ollama.services.ollama.syncModels
   && ollamaHome.services.ollama.modelsDir == "/srv/other-ollama/models";
 assert
-  !opts.ollama.port.type.check 65536
-  && !opts.ollama.environmentVariables.type.nestedTypes.elemType.check 1;
+  !ollamaOpts.port.type.check 65536
+  && !ollamaOpts.environmentVariables.type.nestedTypes.elemType.check 1;
 assert good vpn && vpn.systemd.services.wireguard-peer-sync.serviceConfig.User == "operator";
 assert vpn.systemd.services.wireguard-peer-sync.serviceConfig.Group == "users";
 assert

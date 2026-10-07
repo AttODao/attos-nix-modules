@@ -13,7 +13,7 @@ let
     "opencloud"
     "mineos"
     "jellyfin"
-    "open-webui"
+    "ollama"
     "searxng"
   ];
   swarm = {
@@ -83,8 +83,9 @@ let
         dataDir = "/srv/media-server";
         mediaDir = "/srv/downloads";
       };
-      "chat.example.test".open-webui = {
+      "chat.example.test".ollama = {
         enable = true;
+        webui = true;
         host = "nixos";
         dataDir = "/srv/chat";
         ollamaUrl = "http://10.1.0.1:11434";
@@ -124,7 +125,8 @@ let
           enable = true;
           host = "remote";
           deploy = false;
-        };
+        }
+        // lib.optionalAttrs (service == "ollama") { webui = true; };
       }) services
     );
   };
@@ -169,8 +171,9 @@ let
     inputs
     {
       modules.public-services = {
-        "chat.example.test".open-webui = {
+        "chat.example.test".ollama = {
           enable = true;
+          webui = true;
           host = "nixos";
           dataDir = "/srv/chat";
           ollamaUrl = "http://10.1.0.1:11434";
@@ -188,8 +191,9 @@ let
     inputs
     {
       modules.public-services = {
-        "chat.example.test".open-webui = {
+        "chat.example.test".ollama = {
           enable = true;
+          webui = true;
           host = "nixos";
           dataDir = "/srv/chat";
           ollamaUrl = "http://10.1.0.1:11434";
@@ -207,8 +211,11 @@ let
       users = [ ];
       modules = [
         {
-          modules.ollama.enable = true;
-          services.ollama.home = "/srv/ollama";
+          modules.public-services."backend.example.test".ollama = {
+            enable = true;
+            host = "nixos";
+            home = "/srv/ollama";
+          };
         }
       ];
     }).config;
@@ -237,7 +244,8 @@ let
             modules.public-services."missing.example.test".${name} = {
               enable = true;
               host = "nixos";
-            };
+            }
+            // lib.optionalAttrs (name == "ollama") { webui = true; };
           }
         ]).virtualisation.oci-containers.containers
         true
@@ -279,12 +287,12 @@ in
 assert noContainers disabled && noContainers disabledWithHost && noContainers remote;
 assert !disabled.modules.docker.enable && !disabled.modules.swarm.enable;
 assert
-  !disabled.modules.ollama.enable
+  !disabled.services.ollama.enable
   && !disabled.modules.open-terminal.enable
   && !disabled.modules.ytdl-sub.enable;
 assert !remote.modules.docker.enable && !remote.modules.swarm.enable;
 assert
-  !remote.modules.ollama.enable
+  !remote.services.ollama.enable
   && !remote.modules.open-terminal.enable
   && !remote.modules.ytdl-sub.enable;
 assert
@@ -294,7 +302,7 @@ assert valid disabled && valid disabledWithHost && valid remote && valid active 
 assert headless.home-manager.users == { };
 assert active.modules.docker.enable && active.modules.swarm.enable;
 assert
-  active.modules.ollama.enable
+  active.services.ollama.enable
   && active.modules.open-terminal.enable
   && active.modules.ytdl-sub.enable;
 assert
@@ -388,7 +396,7 @@ assert !nativeOnly.hardware.graphics.enable;
 assert
   terminalOnly.modules.docker.enable
   && terminalOnly.modules.swarm.enable
-  && !terminalOnly.modules.ollama.enable;
+  && !terminalOnly.services.ollama.enable;
 assert o.vaultwarden.environment.TZ == "UTC";
 assert o.vaultwarden.autoRemoveOnStop;
 assert o.vaultwarden.extraOptions == [ "--restart=on-failure" ];

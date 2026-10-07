@@ -175,7 +175,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | paseo | HM | Pi |
 | public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | docker / swarm / traefik / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | Docker / Swarm等、詳細はサーバー設定 |
-| ytdl-sub / ollama / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
+| ytdl-sub / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM + 録画時NixOS | 任意のGPU screen recorder support |
 | open-deck-desktop | NixOS + HM | AppImage support |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / pi / userDirs / vscode / linux-wallpaperengine | HM | — |
@@ -262,7 +262,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 ```
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mineos`,
-`jellyfin`, `open-webui`, `searxng`, `mailserver`, `groupware`, `wireguard-server`,
+`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `mailserver`, `groupware`, `wireguard-server`,
 `paseo`, `ssh`, `code-server`, `sunshine`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
@@ -291,9 +291,10 @@ code-serverは既定password認証でruntime `environmentFile` が必須（`PASS
 へ公開 `code-server.packageSource` でstandalone releaseを渡せる。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
 SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
+OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。旧global`modules.ollama`と旧公開`open-webui`record・実装directoryは廃止し、保存先・モデル・unit名は保持する。
 公開するサービスの独自enable aliasは追加しない。既存Paseoは互換bridgeを保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
-サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、`ollama.{package,home,modelsDir,host,port,loadModels,environmentVariables}`、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules}`。
+サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
 Forgejo runnerの`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
