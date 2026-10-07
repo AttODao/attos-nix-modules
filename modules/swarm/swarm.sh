@@ -54,6 +54,31 @@ case "$1" in
     echo "Failed to ensure the traefik overlay network" >&2
     exit 1
     ;;
+  fetch)
+    url="$2"
+    source_address="$3"
+    token_file="$4"
+    umask 077
+    mkdir -p -- "$(dirname -- "$token_file")"
+    token_tmp="$(mktemp "${token_file}.XXXXXX")"
+    trap 'rm -f -- "$token_tmp"' EXIT
+    source_args=()
+    if [ -n "$source_address" ]; then source_args=(--interface "$source_address"); fi
+    for _ in $(seq 1 60); do
+      if curl --noproxy '*' "${source_args[@]}" -fsS --max-time 2 "$url" > "$token_tmp" 2>/dev/null; then
+        case "$(tr -d '\r\n' < "$token_tmp")" in
+          SWMTKN-1-*)
+            chmod 0600 "$token_tmp"
+            mv -f -- "$token_tmp" "$token_file"
+            exit 0
+            ;;
+        esac
+      fi
+      sleep 2
+    done
+    echo "Failed to fetch the Swarm worker token" >&2
+    exit 1
+    ;;
   wait)
     url="$2"
     for _ in $(seq 1 60); do
@@ -64,7 +89,7 @@ case "$1" in
     exit 1
     ;;
   *)
-    echo "Usage: swarm.sh manager|worker|network|wait ..." >&2
+    echo "Usage: swarm.sh manager|worker|network|fetch|wait ..." >&2
     exit 2
     ;;
 esac

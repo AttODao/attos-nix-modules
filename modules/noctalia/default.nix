@@ -7,6 +7,24 @@ in
 
   options.modules.noctalia = {
     enable = lib.mkEnableOption "shared Noctalia configuration";
+    package = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      description = "Optional Noctalia package from a separately pinned input; null retains the host package.";
+    };
+    systemd = {
+      enable = lib.mkEnableOption "Noctalia user service instead of direct compositor startup";
+      requires = lib.mkOption {
+        type = lib.types.listOf lib.types.nonEmptyStr;
+        default = [ ];
+        description = "User units required by the Noctalia service; applied only with the effective HM systemd launcher.";
+      };
+      after = lib.mkOption {
+        type = lib.types.listOf lib.types.nonEmptyStr;
+        default = [ ];
+        description = "User units ordered before the Noctalia service; does not create those units.";
+      };
+    };
     dock.pinned = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];

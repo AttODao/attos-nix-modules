@@ -73,10 +73,13 @@ in
     systemd.services.${container.serviceName} = {
       requires = [ "ytdl-sub-config.service" ];
       after = [ "ytdl-sub-config.service" ];
-      unitConfig.RequiresMountsFor = [
-        root
-        cookie
-      ];
+      unitConfig = {
+        ConditionPathExists = lib.mkIf (cfg.startConditionFile != null) cfg.startConditionFile;
+        RequiresMountsFor = [
+          root
+          cookie
+        ];
+      };
     };
 
     virtualisation.oci-containers.containers.ytdl-sub = {

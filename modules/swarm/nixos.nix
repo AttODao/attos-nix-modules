@@ -37,7 +37,7 @@ let
     else
       throw "modules.swarm.managerAddress must be an IPv4 address, hostname or bracketed hexadecimal IPv6 address, with an optional port from 1 to 65535.";
   managerAddress = builtins.seq managerHost (required "managerAddress");
-  networkReadyUrl = "http://${managerHost}:2378/traefik-network-ready";
+  networkReadyUrl = "http://${managerHost}:${toString cfg.readinessPort}/traefik-network-ready";
   swarm = pkgs.writeShellApplication {
     name = "attos-swarm";
     runtimeInputs = [
@@ -60,6 +60,16 @@ in
           {
             assertion = cfg.role != null;
             message = "modules.swarm.role must be manager or worker when enabled.";
+          }
+          {
+            assertion =
+              !cfg.tokenTransport.enable
+              || (manager && cfg.readinessAddress != null && cfg.tokenTransport.allowedAddresses != [ ]);
+            message = "modules.swarm.tokenTransport requires a manager, readinessAddress and nonempty allowedAddresses.";
+          }
+          {
+            assertion = !cfg.tokenFetch.enable || (!manager && cfg.tokenFetch.url != null);
+            message = "modules.swarm.tokenFetch requires a worker and an explicit private-link HTTP url.";
           }
         ];
         systemd.services.${joinUnit} = {
@@ -119,27 +129,75 @@ in
           };
         };
       }
+      (lib.mkIf (!manager && cfg.tokenFetch.enable) {
+        systemd.services.docker-swarm-token-fetch = {
+          description = "Fetch a private-link Swarm worker token atomically";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            RuntimeDirectory = "docker-swarm";
+            RuntimeDirectoryMode = "0700";
+            UMask = "0077";
+            ExecStart = "${swarm}/bin/attos-swarm fetch ${
+              lib.escapeShellArgs [
+                (ps.require "modules.swarm.tokenFetch" "url" cfg.tokenFetch.url)
+                (if cfg.tokenFetch.sourceAddress == null then "" else cfg.tokenFetch.sourceAddress)
+                (required "joinTokenFile")
+              ]
+            }";
+          };
+        };
+        # Fetch before systemd snapshots LoadCredential, including already joined workers.
+        systemd.services.docker-swarm-join = {
+          requires = [ "docker-swarm-token-fetch.service" ];
+          after = [ "docker-swarm-token-fetch.service" ];
+        };
+      })
       (lib.mkIf (manager && cfg.readinessAddress != null) {
         systemd.tmpfiles.rules = [ "d /run/docker-swarm-network-ready 0755 root root -" ];
         systemd.services.docker-swarm-network-server = {
-          description = "Serve the nonsecret overlay readiness marker (not the join token)";
+          description =
+            if cfg.tokenTransport.enable then
+              "Serve restricted private-link Swarm token and readiness"
+            else
+              "Serve the nonsecret overlay readiness marker (not the join token)";
           wantedBy = [ "multi-user.target" ];
-          after = [ "docker-network-traefik.service" ];
-          requires = [ "docker-network-traefik.service" ];
+          after = [
+            "docker-network-traefik.service"
+          ]
+          ++ lib.optional cfg.tokenTransport.enable "docker-swarm-init.service";
+          requires = [
+            "docker-network-traefik.service"
+          ]
+          ++ lib.optional cfg.tokenTransport.enable "docker-swarm-init.service";
           serviceConfig = {
-            ExecStart = "${pkgs.python3}/bin/python3 ${./readiness-server.py} ${
-              lib.escapeShellArgs [
-                cfg.readinessAddress
-                "2378"
-                marker
-              ]
-            }";
+            ExecStart =
+              if cfg.tokenTransport.enable then
+                "${pkgs.python3}/bin/python3 ${./token-server.py} ${
+                  lib.escapeShellArgs [
+                    cfg.readinessAddress
+                    (toString cfg.readinessPort)
+                  ]
+                } %d/worker-token ${lib.escapeShellArgs ([ marker ] ++ cfg.tokenTransport.allowedAddresses)}"
+              else
+                "${pkgs.python3}/bin/python3 ${./readiness-server.py} ${
+                  lib.escapeShellArgs [
+                    cfg.readinessAddress
+                    (toString cfg.readinessPort)
+                    marker
+                  ]
+                }";
             DynamicUser = true;
             Restart = "on-failure";
             RestartSec = "2s";
             NoNewPrivileges = true;
             ProtectSystem = "strict";
             ProtectHome = true;
+          }
+          // lib.optionalAttrs cfg.tokenTransport.enable {
+            LoadCredential = [ "worker-token:${cfg.tokenOutputFile}" ];
           };
         };
       })

@@ -17,7 +17,12 @@ in
     ps.common "shared Karakeep service"
     // {
       dataDir = ps.pathOption "Persistent root containing Karakeep data/ and meilisearch/ directories.";
-      environmentFile = ps.pathOption "Runtime environment file for Karakeep and Meilisearch; supply secrets and optional inference/embedding settings here.";
+      environmentFile = ps.pathOption "Runtime environment file for Karakeep and Meilisearch; supply secrets here.";
+      environment = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
+        description = "Nonsecret Karakeep application settings, including inference/embedding endpoints and models. Credentials belong in environmentFile, never here.";
+      };
       dataUid = ownership "UID owning Karakeep data and Meilisearch directories; must match the container images or standard OCI user overrides.";
       dataGid = ownership "GID owning Karakeep data and Meilisearch directories; must match the container images or standard OCI user overrides.";
     }

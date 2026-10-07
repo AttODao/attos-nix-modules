@@ -23,7 +23,13 @@ in
         [
           "tokenFile"
           "dataDir"
-        ];
+        ]
+      ++ [
+        {
+          assertion = !cfg.dynamicUser || dataDir == "/var/lib/gitea-runner/forgejo";
+          message = "Forgejo runner: dynamicUser requires the native /var/lib/gitea-runner/forgejo StateDirectory.";
+        }
+      ];
 
     services.gitea-actions-runner = {
       package = lib.mkDefault pkgs.forgejo-runner;
@@ -48,27 +54,37 @@ in
     # daemon paths. Bind the selected directory there without moving its state.
     # A static service identity avoids recycled DynamicUser ownership outside
     # systemd's managed StateDirectory.
-    users.groups.gitea-runner = { };
-    users.users.gitea-runner = {
+    users.groups.gitea-runner = lib.mkIf (!cfg.dynamicUser) { };
+    users.users.gitea-runner = lib.mkIf (!cfg.dynamicUser) {
       isSystemUser = true;
       group = lib.mkDefault "gitea-runner";
     };
 
-    systemd.tmpfiles.settings."10-forgejo-actions-runner".${dataDir}.d = {
-      mode = lib.mkDefault "0700";
-      user = lib.mkDefault "gitea-runner";
-      group = lib.mkDefault "gitea-runner";
+    systemd.tmpfiles.settings."10-forgejo-actions-runner" = lib.mkIf (!cfg.dynamicUser) {
+      ${dataDir}.d = {
+        mode = lib.mkDefault "0700";
+        user = lib.mkDefault "gitea-runner";
+        group = lib.mkDefault "gitea-runner";
+      };
     };
 
     systemd.services.gitea-runner-forgejo = {
+      wants = lib.optional (lib.any (
+        entry: ps.isLocal config entry.cfg
+      ) forgejo) "docker-forgejo.service";
+      after = lib.optional (lib.any (
+        entry: ps.isLocal config entry.cfg
+      ) forgejo) "docker-forgejo.service";
       unitConfig = {
         ConditionPathExists = lib.mkDefault [ tokenFile ];
-        RequiresMountsFor = lib.mkDefault [ dataDir ];
+        RequiresMountsFor = lib.mkDefault ([ dataDir ] ++ cfg.requiresMountsFor);
       };
       serviceConfig = {
-        # Storage plumbing must override the native ordinary assignment.
-        DynamicUser = lib.mkForce false;
-        BindPaths = lib.mkDefault [ "${dataDir}:/var/lib/gitea-runner/forgejo" ];
+        # The native ordinary assignment needs an override for the public choice.
+        DynamicUser = lib.mkForce cfg.dynamicUser;
+        BindPaths = lib.mkIf (!cfg.dynamicUser) (
+          lib.mkDefault [ "${dataDir}:/var/lib/gitea-runner/forgejo" ]
+        );
       };
     };
   };

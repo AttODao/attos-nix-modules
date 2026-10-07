@@ -70,7 +70,7 @@ let
     { modules.public-services."disabled.example.test".wireguard-server.enable = false; }
     {
       modules.incus.containers.unused.launchConfig = { };
-      virtualisation.incus.preseed.storage_pools = [ ];
+      modules.incus.preseed.storage_pools = [ ];
     }
   ];
   nativePort = evaluate [
@@ -105,32 +105,32 @@ let
           };
         };
       };
-    };
-    virtualisation.incus.preseed = {
-      storage_pools = [
-        {
-          name = "consumer-pool";
-          driver = "dir";
-          config.source = "/srv/incus/pool";
-        }
-      ];
-      profiles = [
-        {
-          name = "consumer";
-          config = { };
-          devices = { };
-        }
-      ];
+      preseed = {
+        storage_pools = [
+          {
+            name = "consumer-pool";
+            driver = "dir";
+            config.source = "/srv/incus/pool";
+          }
+        ];
+        profiles = [
+          {
+            name = "consumer";
+            config = { };
+            devices = { };
+          }
+        ];
+      };
     };
   };
   guests = evaluate [ incusModule ];
   nativeIncus = evaluate [ { modules.incus.enable = true; } ];
   nullPreseed = evaluate [
     incusModule
-    { virtualisation.incus.preseed = lib.mkForce null; }
+    { modules.incus.preseed = lib.mkForce null; }
   ];
   poolOverride = pools: {
-    virtualisation.incus.preseed.storage_pools = lib.mkForce pools;
+    modules.incus.preseed.storage_pools = lib.mkForce pools;
   };
   invalidPool =
     pools:
@@ -179,6 +179,7 @@ assert vpn.networking.wireguard.interfaces.wg0.peers == [ ];
 assert vpn.networking.wireguard.interfaces.wg0.listenPort == 51820;
 assert vpnManifest.interface == "wg0" && vpnManifest.clientEndpoint == "vpn.example.test:51820";
 assert vpnManifest.privateKeyFile == "/run/secrets/server-private";
+assert vpnManifest.clientConfigMode == "0600";
 assert !missingKey.success;
 assert lib.all
   (field: !(builtins.hasAttr field vpn.modules.public-services."vpn.example.test".wireguard-server))
@@ -305,7 +306,7 @@ assert lib.all
   ];
 assert bad [
   incusModule
-  { virtualisation.incus.preseed = lib.mkForce { }; }
+  { modules.incus.preseed = lib.mkForce { }; }
 ];
 assert !missingDownload.success;
 true

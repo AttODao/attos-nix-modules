@@ -145,6 +145,29 @@ let
       });
     };
   };
+  listenerPorts = [
+    "80/tcp"
+    "443/tcp"
+  ]
+  ++ map (entry: "${toString entry.port}/tcp") tcp
+  ++ map (entry: "${toString entry.port}/udp") udp;
+  publishedPorts =
+    if cfg.publishedPortRanges == null then
+      listenerPorts
+    else
+      lib.concatMap (
+        range: map (port: "${toString port}/${range.protocol}") (lib.range range.start range.end)
+      ) cfg.publishedPortRanges;
+  publishRange =
+    range:
+    let
+      ports =
+        if range.start == range.end then
+          toString range.start
+        else
+          "${toString range.start}-${toString range.end}";
+    in
+    "${ports}:${ports}" + lib.optionalString (range.protocol == "udp") "/udp";
   # JSON is a YAML subset: no extra renderer or evaluation-time build is needed.
   staticFile = pkgs.writeText "traefik.yml" (builtins.toJSON static);
   dynamicFile = pkgs.writeText "dynamic.yml" (builtins.toJSON dynamic);
@@ -157,6 +180,15 @@ in
       {
         assertion = !privateEnabled || cfg.privateNetworks != [ ];
         message = "modules.traefik.privateNetworks is required for private HTTP/TCP routes.";
+      }
+      {
+        assertion =
+          cfg.publishedPortRanges == null
+          || (
+            lib.all (range: range.start <= range.end) cfg.publishedPortRanges
+            && lib.sort builtins.lessThan publishedPorts == lib.sort builtins.lessThan listenerPorts
+          );
+        message = "modules.traefik.publishedPortRanges must cover exactly the generated listeners with ordered, non-overlapping ranges.";
       }
       {
         assertion =
@@ -256,12 +288,15 @@ in
         "--user=0:0"
       ];
       ports = lib.mkDefault (
-        [
-          "80:80"
-          "443:443"
-        ]
-        ++ map (entry: "${toString entry.port}:${toString entry.port}") tcp
-        ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
+        if cfg.publishedPortRanges != null then
+          map publishRange cfg.publishedPortRanges
+        else
+          [
+            "80:80"
+            "443:443"
+          ]
+          ++ map (entry: "${toString entry.port}:${toString entry.port}") tcp
+          ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
       );
       networks = lib.mkDefault [ "traefik" ];
       environmentFiles = lib.mkDefault [ "/run/traefik-acme/cloudflare.env" ];

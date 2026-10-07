@@ -86,6 +86,9 @@ def sync_peers(metadata):
 
 
 def sync_configs(metadata):
+    mode = metadata.get("clientConfigMode", "0600")
+    if mode not in ("0600", "0640", "0660"):
+        raise ValueError("Invalid client configuration file mode")
     entries = clients(metadata)
     dns = str(ipaddress.ip_address(metadata["clientDns"]))
     endpoint = checked_endpoint(metadata["clientEndpoint"])
@@ -110,6 +113,7 @@ def sync_configs(metadata):
             with tempfile.NamedTemporaryFile(mode="w", encoding="ascii", prefix="." + name + ".", dir=root, delete=False) as handle:
                 temporary = Path(handle.name)
                 handle.write(text)
+                os.fchmod(handle.fileno(), int(mode, 8))
             os.replace(temporary, root / (name + ".conf"))
         finally:
             if temporary is not None:

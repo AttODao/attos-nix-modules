@@ -3,7 +3,12 @@
   imports = [ ./nixos.nix ];
 
   options.modules.limine = {
-    enable = lib.mkEnableOption "shared quiet Limine boot configuration";
+    enable = lib.mkEnableOption "shared Limine boot configuration";
+    quietBoot = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Add Plymouth and quiet console/initrd/kernel defaults; false leaves diagnostics at native NixOS defaults without adding quiet parameters.";
+    };
     splashImage = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;

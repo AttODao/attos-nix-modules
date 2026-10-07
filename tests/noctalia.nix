@@ -40,6 +40,58 @@ let
   base = t.cfgFor [ ];
   enabledOS = t.cfgFor [ { modules.noctalia.enable = true; } ];
   enabled = t.hm enabledOS "test";
+  pinnedPackage = pkgs.noctalia.overrideAttrs {
+    version = "5.1.0";
+    __intentionallyOverridingVersion = true;
+  };
+  serviceOS =
+    (t.evalSystem {
+      users = [
+        "test"
+        "second"
+      ];
+      modules = [
+        {
+          modules.noctalia = {
+            enable = true;
+            package = pinnedPackage;
+            systemd = {
+              enable = true;
+              requires = [ "hyprland-headless-output.service" ];
+              after = [ "hyprland-headless-output.service" ];
+            };
+          };
+        }
+      ];
+    }).config;
+  disabledInputs = t.hmFor [
+    {
+      modules.noctalia = {
+        package = pinnedPackage;
+        systemd = {
+          enable = true;
+          requires = [ "unused.service" ];
+          after = [ "unused.service" ];
+        };
+      };
+    }
+  ];
+  launcherOverride = t.hmFor [
+    {
+      modules.noctalia = {
+        enable = true;
+        package = pinnedPackage;
+        systemd = {
+          enable = true;
+          requires = [ "unused.service" ];
+        };
+      };
+      home-manager.users.test.programs.noctalia = {
+        package = pkgs.noctalia;
+        systemd.enable = false;
+      };
+    }
+  ];
   recordingOS = t.cfgFor [
     {
       modules.noctalia = publicSettings;
@@ -141,6 +193,31 @@ let
     }
   ];
 in
+assert lib.all
+  (
+    user:
+    let
+      hm = t.hm serviceOS user;
+    in
+    hm.programs.noctalia.package.drvPath == pinnedPackage.drvPath
+    && hm.programs.noctalia.package.version == "5.1.0"
+    && hm.programs.noctalia.systemd.enable
+    && hm.systemd.user.services.noctalia.Unit.Requires == [ "hyprland-headless-output.service" ]
+    && lib.elem "hyprland-headless-output.service" hm.systemd.user.services.noctalia.Unit.After
+    && hm.systemd.user.services.noctalia.Service.ExecStart == [ (lib.getExe pinnedPackage) ]
+  )
+  [
+    "test"
+    "second"
+  ];
+assert !disabledInputs.programs.noctalia.enable;
+assert !(disabledInputs.systemd.user.services ? noctalia);
+assert !launcherOverride.programs.noctalia.systemd.enable;
+assert launcherOverride.programs.noctalia.package.drvPath == pkgs.noctalia.drvPath;
+assert !(launcherOverride.systemd.user.services ? noctalia);
+assert !(invalid { package = "not-a-package"; }).success;
+assert !(invalid { systemd.requires = [ 1 ]; }).success;
+assert !(invalid { systemd.after = [ "" ]; }).success;
 assert !base.modules.noctalia.enable && !base.home-manager.users.test.programs.noctalia.enable;
 assert !base.programs.gpu-screen-recorder.enable;
 assert base.modules.noctalia.location.address == null;

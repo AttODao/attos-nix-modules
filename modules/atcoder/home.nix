@@ -6,18 +6,40 @@
   attopkgs,
   ...
 }:
+let
+  cfg = osConfig.modules.atcoder;
+  projectAssets = pkgs.runCommand "atcoder-go-project-assets" { } ''
+    mkdir -p "$out/.atcoder"
+    cp -R ${lib.escapeShellArg "${cfg.projectAssets}/atcoder/."} "$out/.atcoder/"
+    cp ${lib.escapeShellArg "${cfg.projectAssets}/devenv.nix"} "$out/devenv.nix"
+    cp ${lib.escapeShellArg "${cfg.projectAssets}/devenv.yaml"} "$out/devenv.yaml"
+    cp ${lib.escapeShellArg "${cfg.projectAssets}/envrc"} "$out/.envrc"
+    cp ${lib.escapeShellArg "${cfg.projectAssets}/gitignore"} "$out/.gitignore"
+  '';
+  projectCommand = pkgs.writeShellApplication {
+    name = "atcoder-go";
+    runtimeInputs = [
+      cfg.projectGoPackage
+      pkgs.coreutils
+    ];
+    text = ''
+      export ATCODER_GO_BIN_DIR="${cfg.projectGoPackage}/bin"
+      export ATCODER_PROJECT_ASSETS="${projectAssets}"
+      exec ${pkgs.bash}/bin/bash -euo pipefail ${lib.escapeShellArg "${cfg.projectAssets}/atcoder/scripts/project"} "$@"
+    '';
+  };
+in
 {
   config = lib.mkIf osConfig.modules.atcoder.enable {
     programs.go = {
       enable = lib.mkDefault true;
-      # Project-specific toolchain pins use the standard HM package option.
-      package = lib.mkDefault pkgs.go;
+      package = lib.mkDefault cfg.goPackage;
     };
 
     programs.direnv = {
       enable = lib.mkDefault true;
       enableZshIntegration = lib.mkDefault true;
-      nix-direnv.enable = lib.mkDefault true;
+      nix-direnv.enable = lib.mkDefault cfg.nixDirenv.enable;
     };
 
     home.sessionVariables.GOTOOLCHAIN = lib.mkDefault "local";
@@ -32,6 +54,7 @@
         homeDirectory = config.home.homeDirectory;
         aclogin = attopkgs.atcoder-aclogin;
       })
-    ];
+    ]
+    ++ lib.optional (cfg.projectAssets != null) (lib.hiPrio projectCommand);
   };
 }

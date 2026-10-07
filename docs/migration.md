@@ -49,7 +49,8 @@ nix eval --no-write-lock-file --json '.#nixosConfigurations' --apply builtins.at
    旧HM revisionと異なる場合は差分を確認し、共有HMやnixpkgsをその場で更新して解消しない。
 4. HMが必要な既存NixOSユーザーだけを `modules.home-manager.users` または標準 `home-manager.users` で管理し、ユーザーごとの従来の `home.stateVersion` を明示する。
    ユーザー作成・home・UID/GID・shell・group/sudo・linger・`system.stateVersion` は利用側に保持する。HM既定値は既存値を上げる理由にならない。
-5. 旧設定を公開APIへ置換する。API外のホスト差分は標準NixOS、ユーザー差分は `home-manager.users.<name>` に残す。
+5. 旧設定を公開APIへ置換する。共有featureのunit/script/program/activationの実装をconsumerから書き換えず、不足する型付き入力を共有側へ追加し、disabled/remote・既存state・生成設定を回帰検査する。
+   identity/account/hardware/address/secret供給metadata、package-only・未対応外部program、API外のper-user差分は標準NixOS/HMへ残す。これらを減らすためだけのenableや汎用configuration passthroughは作らない。
    `mkDefault` は通常代入で上書きする。自動依存への通常のfalseは競合するので、依存の動作条件を確認する。
 
 共通HM設定は**全HMユーザー**へ適用される。追加ユーザーに固定account/deviceを配ったり、Paseo等の固定portで複数daemonを競合させたりしない。

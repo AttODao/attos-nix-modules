@@ -15,6 +15,25 @@ in
   options.modules.pipewire = {
     enable = lib.mkEnableOption "shared PipeWire audio support";
 
+    virtualSinks = mkOption {
+      default = { };
+      description = "Virtual stereo null sinks, keyed by configuration name (99-<key>-sink).";
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            name = mkOption {
+              type = types.nonEmptyStr;
+              description = "PipeWire node.name, also usable as Sunshine audio_sink.";
+            };
+            description = mkOption {
+              type = types.nonEmptyStr;
+              description = "Human-readable node.description.";
+            };
+          };
+        }
+      );
+    };
+
     alsaDevices = mkOption {
       default = { };
       description = "Consumer-owned ALSA device tuning, keyed by WirePlumber configuration name (20-<key>). Unset properties are omitted.";

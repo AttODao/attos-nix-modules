@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  attopkgs,
+  ...
+}:
 let
   ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "code-server";
@@ -14,6 +19,11 @@ in
   config = lib.mkIf selected.enabled {
     services.code-server = {
       enable = true;
+      package = lib.mkIf (cfg.packageSource != null) (
+        lib.mkDefault (attopkgs.code-server { src = cfg.packageSource; })
+      );
+      user = lib.mkDefault cfg.user;
+      group = lib.mkDefault cfg.group;
       host = lib.mkDefault "0.0.0.0";
       port = lib.mkDefault 4444;
       auth = lib.mkDefault "password";

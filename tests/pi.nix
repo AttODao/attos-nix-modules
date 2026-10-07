@@ -28,6 +28,8 @@ let
 in
 assert !base.programs.pi-coding-agent.enable;
 assert cfg.programs.pi-coding-agent.enable;
+assert cfg.home.file."${dir}/settings.json".enable;
+assert !(cfg.home.activation ? mergePiSettings);
 assert cfg.programs.pi-coding-agent.package.version == "1.0.2";
 assert
   cfg.programs.pi-coding-agent.settings.defaultTools == [

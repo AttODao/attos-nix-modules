@@ -1,18 +1,28 @@
 { config, lib, ... }:
+let
+  cfg = config.modules.ollama;
+in
 {
-  config = lib.mkIf config.modules.ollama.enable {
-    # Storage, bind address, models, package and GPU settings use the native
-    # services.ollama options and remain consumer-owned.
+  config = lib.mkIf cfg.enable {
     services.ollama = {
       enable = true;
+      package = lib.mkDefault cfg.package;
+      home = lib.mkDefault cfg.home;
+      modelsDir = lib.mkDefault cfg.modelsDir;
+      host = lib.mkDefault cfg.host;
+      port = lib.mkDefault cfg.port;
+      loadModels = lib.mkDefault cfg.loadModels;
       openFirewall = lib.mkDefault true;
       syncModels = lib.mkDefault false;
-      environmentVariables = {
-        OLLAMA_NO_CLOUD = lib.mkDefault "1";
-        OLLAMA_CONTEXT_LENGTH = lib.mkDefault "32768";
-        OLLAMA_NUM_PARALLEL = lib.mkDefault "1";
-        OLLAMA_KEEP_ALIVE = lib.mkDefault "10m";
-      };
+      environmentVariables = lib.mapAttrs (_: lib.mkDefault) (
+        {
+          OLLAMA_NO_CLOUD = "1";
+          OLLAMA_CONTEXT_LENGTH = "32768";
+          OLLAMA_NUM_PARALLEL = "1";
+          OLLAMA_KEEP_ALIVE = "10m";
+        }
+        // cfg.environmentVariables
+      );
     };
 
     systemd.services.ollama = {

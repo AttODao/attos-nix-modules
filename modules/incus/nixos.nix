@@ -38,27 +38,36 @@ let
     if singlePool then
       (builtins.head pools).name
     else
-      throw "modules.incus: supplied native preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";
+      throw "modules.incus: supplied preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";
 in
 {
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
-        virtualisation.incus.enable = true;
+        virtualisation.incus = {
+          enable = true;
+          preseed = lib.mkDefault cfg.preseed;
+        };
+        boot.initrd.kernelModules = cfg.initrdKernelModules;
         networking.nftables.enable = lib.mkDefault true;
         assertions = [
           {
             assertion = !preseed || singlePool;
-            message = "modules.incus: supplied native preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";
+            message = "modules.incus: supplied preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";
           }
         ];
       }
       (lib.mkIf preseed {
         systemd.services.incus-preseed = {
           restartIfChanged = false;
-          serviceConfig.ExecCondition = [
-            "${runner}/bin/attos-incus condition ${lib.escapeShellArg initializePool}"
-          ];
+          serviceConfig = {
+            ExecCondition = [
+              "${runner}/bin/attos-incus condition ${lib.escapeShellArg initializePool}"
+            ];
+            ExecStartPre = map (
+              module: "${pkgs.kmod}/bin/modprobe ${lib.escapeShellArg module}"
+            ) cfg.preseedKernelModules;
+          };
         };
       })
       (lib.mkIf (cfg.containers != { }) {
@@ -77,6 +86,9 @@ in
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
+            ExecStartPre = map (
+              module: "${pkgs.kmod}/bin/modprobe ${lib.escapeShellArg module}"
+            ) cfg.provisionKernelModules;
             ExecStart = "${runner}/bin/attos-incus provision ${manifest} ${
               lib.escapeShellArg (ps.require "modules.incus" "stateDir" cfg.stateDir)
             }";

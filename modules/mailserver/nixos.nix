@@ -63,7 +63,7 @@ in
             fqdn = lib.mkDefault selected.hostname;
             inherit domains accounts;
             systemDomain = lib.mkDefault primary;
-            systemName = lib.mkDefault "Mail system";
+            systemName = lib.mkDefault cfg.systemName;
             systemContact = lib.mkDefault "postmaster@${primary}";
             sendingFqdn = lib.mkDefault selected.hostname;
             x509.useACMEHost = lib.mkDefault selected.hostname;
@@ -91,6 +91,7 @@ in
           '';
           systemd.services = {
             "acme-order-renew-${acmeHost}".unitConfig.RequiresMountsFor = [ root ];
+            "acme-${acmeHost}".unitConfig.RequiresMountsFor = [ root ];
             dovecot.unitConfig.RequiresMountsFor = [ root ] ++ hashFiles;
             postfix.unitConfig.RequiresMountsFor = [ root ];
             rspamd = {
@@ -106,6 +107,18 @@ in
             ];
           };
         }
+        (lib.mkIf (cfg.acme.dnsProvider != null) {
+          security.acme = {
+            acceptTerms = lib.mkDefault cfg.acme.acceptTerms;
+            defaults.email = lib.mkIf (cfg.acme.email != null) (lib.mkDefault cfg.acme.email);
+            certs.${acmeHost} = {
+              dnsProvider = lib.mkDefault cfg.acme.dnsProvider;
+              environmentFile = lib.mkDefault (
+                ps.require "mailserver.acme" "environmentFile" cfg.acme.environmentFile
+              );
+            };
+          };
+        })
         (lib.mkIf (cfg.relayHost != null) {
           services.postfix = {
             mapFiles.sasl_passwd = require "relayPasswordMap";

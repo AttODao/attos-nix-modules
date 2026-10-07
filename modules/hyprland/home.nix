@@ -40,8 +40,8 @@ let
 
   startupCommands = [
     "${systemctl} --user start fcitx5-daemon.service xdg-desktop-portal.service xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service"
-    "uwsm app -t service -- noctalia"
   ]
+  ++ lib.optional (!config.programs.noctalia.systemd.enable) "uwsm app -t service -- noctalia"
   ++ lib.optional cfg.neowall.enable "uwsm app -t service -- neowall";
   startupHook = lua (
     "function()\n"

@@ -114,20 +114,23 @@ in
       karakeep = {
         image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.33.2";
         environmentFiles = lib.mkDefault [ environmentFile ];
-        environment = lib.mapAttrs (_: lib.mkDefault) {
-          DATA_DIR = "/data";
-          NEXTAUTH_URL = baseUrl;
-          MEILI_ADDR = "http://meilisearch:7700";
-          # DevTools rejects a DNS name in the Host header.
-          BROWSER_WEB_URL = "http://${chromeAddress}:9222";
-          LOG_LEVEL = "notice";
-          DB_WAL_MODE = "true";
-          RATE_LIMITING_ENABLED = "true";
-          CRAWLER_FULL_PAGE_ARCHIVE = "true";
-          CRAWLER_MONOLITH_TIMEOUT_SEC = "300";
-          CRAWLER_JOB_TIMEOUT_SEC = "900";
-          MONOLITH_FRAGMENT_NAVIGATION_PREFIX = "${baseUrl}/api/assets/";
-        };
+        environment = lib.mapAttrs (_: lib.mkDefault) (
+          {
+            DATA_DIR = "/data";
+            NEXTAUTH_URL = baseUrl;
+            MEILI_ADDR = "http://meilisearch:7700";
+            # DevTools rejects a DNS name in the Host header.
+            BROWSER_WEB_URL = "http://${chromeAddress}:9222";
+            LOG_LEVEL = "notice";
+            DB_WAL_MODE = "true";
+            RATE_LIMITING_ENABLED = "true";
+            CRAWLER_FULL_PAGE_ARCHIVE = "true";
+            CRAWLER_MONOLITH_TIMEOUT_SEC = "300";
+            CRAWLER_JOB_TIMEOUT_SEC = "900";
+            MONOLITH_FRAGMENT_NAVIGATION_PREFIX = "${baseUrl}/api/assets/";
+          }
+          // cfg.environment
+        );
         autoRemoveOnStop = lib.mkDefault false;
         extraOptions = lib.mkDefault [
           "--restart=unless-stopped"

@@ -17,11 +17,12 @@ let
     endpoint
     {
       networking.hostName = "development";
-      modules.public-services."code.example.test".code-server.environmentFile =
-        "/run/secrets/code-server.env";
-      services.code-server = {
+      modules.public-services."code.example.test".code-server = {
+        environmentFile = "/run/secrets/code-server.env";
         user = "test";
         group = "users";
+      };
+      services.code-server = {
         userDataDir = "/srv/code/data";
         extensionsDir = "/srv/code/extensions";
       };
@@ -31,7 +32,16 @@ let
     endpoint
     {
       networking.hostName = "development";
-      modules.public-services."code.example.test".code-server.deploy = false;
+      modules.public-services."code.example.test".code-server = {
+        deploy = false;
+        packageSource = "/does-not-exist/code-server-release";
+      };
+      _module.args.attopkgs = lib.mkForce (
+        t.attopkgs
+        // {
+          code-server = _: throw "Endpoint-only source must not be evaluated";
+        }
+      );
     }
   ];
   overridden = t.cfgFor [
@@ -47,6 +57,51 @@ let
       };
     }
   ];
+  sourcePackage = t.pkgs.writeShellScriptBin "code-server" "exit 0";
+  sourced = t.cfgFor [
+    endpoint
+    {
+      networking.hostName = "development";
+      modules.public-services."code.example.test".code-server = {
+        environmentFile = "/home/test/code-server/server.env";
+        packageSource = nixpkgs;
+        user = "test";
+        group = "users";
+      };
+      _module.args.attopkgs = lib.mkForce (
+        t.attopkgs
+        // {
+          code-server =
+            { src }:
+            assert toString src == toString nixpkgs;
+            sourcePackage;
+        }
+      );
+    }
+  ];
+  isolated = t.cfgFor [
+    endpoint
+    {
+      modules.public-services."code.example.test".code-server.packageSource =
+        "/does-not-exist/code-server-release";
+      _module.args.attopkgs = lib.mkForce (
+        t.attopkgs
+        // {
+          code-server = _: throw "Remote source must not be evaluated";
+        }
+      );
+    }
+  ];
+  invalidUser =
+    builtins.tryEval
+      (t.cfgFor [
+        { modules.public-services."code.example.test".code-server.user = ""; }
+      ]).modules.public-services."code.example.test".code-server.user;
+  invalidSource =
+    builtins.tryEval
+      (t.cfgFor [
+        { modules.public-services."code.example.test".code-server.packageSource = 42; }
+      ]).modules.public-services."code.example.test".code-server.packageSource;
   missing =
     builtins.tryEval
       (t.cfgFor [
@@ -73,6 +128,15 @@ assert !registrationOnly.services.code-server.enable;
 assert !(registrationOnly.systemd.services ? code-server);
 assert local.modules.public-services."code.example.test".code-server.deploy;
 assert local.services.code-server.enable;
+assert local.services.code-server.package == t.pkgs.code-server;
+assert local.services.code-server.user == "test" && local.services.code-server.group == "users";
+assert sourced.services.code-server.package == sourcePackage;
+assert sourced.services.code-server.extraEnvironment.HOME == "/home/test";
+assert sourced.systemd.services.code-server.serviceConfig.User == "test";
+assert sourced.systemd.services.code-server.serviceConfig.Group == "users";
+assert isolated.services.code-server.package == t.pkgs.code-server;
+assert !isolated.services.code-server.enable;
+assert !invalidUser.success && !invalidSource.success;
 assert local.services.code-server.auth == "password";
 assert local.services.code-server.disableTelemetry && local.services.code-server.disableUpdateCheck;
 assert local.services.code-server.extraEnvironment.HOME == "/home/test";

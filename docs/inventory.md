@@ -9,12 +9,11 @@
 | 優先度 | 対象 | 残る作業・完了条件 |
 | --- | --- | --- |
 | P0 | 次に移行する利用側repo | repo/branch/HEAD/lockと稼働構成を確認し、対象OS・guest・HM・image出力、許可範囲を確定。昔の調査checkoutを現在の構成と思い込まない |
-| P1 | `server-dotfiles` / attofort・attoboxと対象guest | 旧設定の置換表を作り、共有入口・公開APIへ移行。全出力のソフト・生成設定・起動経路を比較して評価。実hostnameで所有OSを指定し、非所有OSに実体を作らない |
 | P1 | 上記サービスのstate・秘密・接続 | mount/volume・UID/GID・両stateVersion・復号順序・Swarm role/network・DNS/gateway・mail/TLS/DKIM・VPN・Incus・HM/Paseoを照合。既存データ/guest/cluster/鍵とSSH復旧経路を保持 |
 | P1 | 移行対象の全ホスト・guest | NixOS/HM・必要なpackage/imageをbuild。既存guestへの適用はimage生成/初回bootstrapと分けて手順を確認 |
 | P1 | `.dotfiles` / attodesk・attolap | 両ホストの全体build、許可後の段階適用とboot/PIN/GUI/user service・HDR録画・音声/機器・rollbackを確認 |
 | P1 | 各利用側の実機適用 | backupと復旧経路を確認し、明示許可後に一台ずつ適用。起動・認証・サービス・外部到達性・データとrollbackを検証し、未適用を完了扱いにしない |
-| P2 | 各利用側の旧実装 | 全出力の参照置換と同等性確認後にresolver・featureMatrix・wrapper・二重HM経路を削除。ホスト固有設定・未移行機能は残す |
+| P2 | 未移行利用側の旧実装 | 全出力の参照置換と同等性確認後にresolver・featureMatrix・wrapper・二重HM経路を削除。ホスト固有設定・未移行機能は残す |
 
 ## 対象を決めてから進める作業
 

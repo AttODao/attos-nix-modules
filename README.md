@@ -168,6 +168,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | wireguard-client | NixOS | NetworkManager |
 | limine | NixOS | — |
 | atcoder | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin同梱 |
+| zed | HM | 任意のcodex-acp npm policy |
 | discord | HM | Fcitx5 |
 | foot | HM | Fonts |
 | ssh | NixOS + HM（clientのみ） | — |
@@ -187,12 +188,13 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 `modules.public-services.<FQDN>.<service>` に指定する。
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
-- `hyprland.{monitors,neowall.enable,lidSwitch.enable}`: モニター・壁紙shader起動・蓋イベント。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
+- `hyprland.{monitors,neowall.enable,lidSwitch.enable,headless}`: モニター・壁紙shader起動・蓋イベント。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
 - `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
-- `noctalia.{dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`、`convertToX.enable` は既定false。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
-- `pipewire.{alsaDevices,loopbacks}`: 既定 `{}` / `[]`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
+- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`、`convertToX.enable` は既定false。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
+- `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
-- `desktop-theme.cursor`: 既定nullの取得済みarchive package。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
+- `desktop-theme.{cursor,cursorName,cursorSize}`: archiveは既定null、nameは`Custom-Cursors`、sizeは48。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
 - `steam.firewall.{remotePlay,dedicatedServer,localNetworkGameTransfers}`: 各既定false。必要な開放をconsumerが選択する。Steam enableだけでこれらのportは開かない。
 - `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
 - `open-deck-desktop.binfmt`: 既定false。Open-Deck有効時だけAppImage binfmtへ転送する。
@@ -203,13 +205,15 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
 ユーザーごとに別packageを使う場合も標準HMで上書きできる。archiveのURL/hash・licenseはconsumerに残す。
-GTK/icon・カーソル名/サイズ等、公開API外の調整は標準NixOS/HM optionを使う。
+カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。GTK/icon等の公開API外のユーザー差分は標準NixOS/HM optionを使う。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
 Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。
-AtCoderはホストのGoを既定とし、toolchain固定は標準HM `programs.go.package` に指定する。
-プロジェクト固有のテンプレート・ライブラリ・devenv定義や認証状態は配布しない。
+AtCoderはホストのGoを既定とし、`atcoder.{goPackage,nixDirenv.enable,projectAssets,projectGoPackage}`でtoolchain・direnv・consumer所有の完全なproject scaffoldを選択できる。projectAssetsは既定null（共有の最小initializer）。認証は配布しない。
+`discord.{commandLineArgs,service.killMode}`、`zed.{userSettings,codexAcp.npmPolicy}`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。
+`pi.{settingsMode,piSessionsSource,systemWide}`で宣言的/既存優先merge、extension source、全system userへのCLI導入を選ぶ。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
+`openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。
 
-その他のデスクトップ独自optionはenableのみ。サーバーの入力・運用条件は
+Noctaliaのsystemd launcher、Hyprlandのheadless bootstrap/input/seatd、PipeWire virtual sink、Sunshineのheadless依存は共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
 [Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。詳細の調整には標準NixOS / HM optionも使う。
 
 ### SSH client
@@ -284,12 +288,15 @@ code-server / Sunshineも `enable = true; host = "<所有OS>";` でnative実体�
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
 `HASHED_PASSWORD`）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 旧Nerd Font組み込みpackageは `attopkgs.code-server { src = <固定したstandalone release>; }`
-を標準 `services.code-server.package` に渡せる。
-SunshineはHyprland・Steamも有効にするが、headless出力・音声sink・pairing状態・
-streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
+へ公開 `code-server.packageSource` でstandalone releaseを渡せる。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
+SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
 公開するサービスの独自enable aliasは追加しない。既存Paseoは互換bridgeを保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
+サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、`ollama.{package,home,modelsDir,host,port,loadModels,environmentVariables}`、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules}`。
+WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
+Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
+Forgejo runnerの`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
 localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの
@@ -318,6 +325,7 @@ sourceの取得・実体化が必要な評価には `--read-write-mode` を追�
 python3 modules/login-pin/test-check-login-pin.py
 python3 modules/pipeasio/test-register-steam-prefixes.py
 python3 modules/noctalia/test-recording.py
+python3 modules/pi/test-merge-settings.py /path/to/nixpkgs /path/to/home-manager
 python3 modules/cloudflare-ddns/test-sync-dns.py
 python3 modules/swarm/test-swarm.py
 python3 modules/forgejo/test-networks.py

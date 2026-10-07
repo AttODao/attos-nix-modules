@@ -45,6 +45,16 @@ with tempfile.TemporaryDirectory() as directory:
     old = target.read_bytes()
     assert b"Address = 10.252.0.2/32" in old and b"Endpoint = vpn.example.test:51820" in old
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    wg.sync_configs({**metadata, "clientConfigMode": "0660"})
+    assert stat.S_IMODE(target.stat().st_mode) == 0o660
+    wg.sync_configs({**metadata, "clientConfigMode": "0640"})
+    assert stat.S_IMODE(target.stat().st_mode) == 0o640
+    for mode in ("0644", "0777", "bad", 0o600):
+        rejected(lambda: wg.sync_configs({**metadata, "clientConfigMode": mode}))
+        assert target.read_bytes() == old
+        assert stat.S_IMODE(target.stat().st_mode) == 0o640
+    wg.sync_configs(metadata)
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
     assert not (configs / "stale.conf").exists() and (configs / "unmanaged.txt").read_text() == "keep"
     keys["client-private"].write_text("invalid")
     rejected(lambda: wg.sync_configs(metadata))

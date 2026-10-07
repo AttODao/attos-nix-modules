@@ -11,6 +11,7 @@ let
   hostname = if selected.enabled then selected.hostname else "";
   dataDir = ps.require "groupware" "dataDir" cfg.dataDir;
   radicale = config.services.radicale;
+  productName = lib.replaceStrings [ "\\" "'" ] [ "\\\\" "\\'" ] cfg.productName;
   accounts = lib.filterAttrs (_: account: !(account.sendOnly or false)) config.mailserver.accounts;
   hashFiles = lib.mapAttrsToList (_: account: account.hashedPasswordFile) accounts;
   accountArgs = lib.concatLists (
@@ -73,7 +74,7 @@ in
         $config['smtp_host'] = 'tls://${hostname}:587';
         $config['smtp_user'] = '%u';
         $config['smtp_pass'] = '%p';
-        $config['product_name'] = 'Mail';
+        $config['product_name'] = '${productName}';
       '';
     };
 

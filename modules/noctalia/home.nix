@@ -56,8 +56,17 @@ in
       ''
     );
 
+    systemd.user.services = lib.mkIf config.programs.noctalia.systemd.enable {
+      noctalia.Unit = {
+        Requires = cfg.systemd.requires;
+        After = cfg.systemd.after;
+      };
+    };
+
     programs.noctalia = {
       enable = true;
+      package = lib.mkIf (cfg.package != null) (lib.mkDefault cfg.package);
+      systemd.enable = lib.mkDefault cfg.systemd.enable;
       customPalettes.Everforest = ./Everforest.json;
 
       settings = {

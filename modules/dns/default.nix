@@ -28,6 +28,11 @@ in
 {
   options.modules.dns = {
     enable = lib.mkEnableOption "shared dnsmasq records generated from public-services";
+    listenAddresses = lib.mkOption {
+      type = lib.types.listOf lib.types.nonEmptyStr;
+      default = [ "127.0.0.1" ];
+      description = "Consumer-selected dnsmasq listen addresses; firewall policy remains consumer-owned.";
+    };
     ingressAddresses = lib.mkOption {
       type = lib.types.listOf lib.types.nonEmptyStr;
       default = [ ];
@@ -55,7 +60,7 @@ in
     services.dnsmasq = {
       enable = true;
       settings = {
-        listen-address = lib.mkDefault [ "127.0.0.1" ];
+        listen-address = lib.mkDefault cfg.listenAddresses;
         bind-dynamic = lib.mkDefault true;
         localise-queries = lib.mkDefault true;
         addn-hosts = [ "/etc/dnsmasq-public-services" ];

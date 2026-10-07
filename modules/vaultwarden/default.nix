@@ -16,6 +16,11 @@ in
     // {
       dataDir = ps.pathOption "Service root containing the existing vw-data directory.";
       environmentFile = ps.pathOption "Runtime environment file containing Vaultwarden credentials and mail configuration.";
+      extraHosts = lib.mkOption {
+        type = lib.types.attrsOf lib.types.nonEmptyStr;
+        default = { };
+        description = "Additional container hostname-to-address mappings, for example an SMTP gateway on a private link.";
+      };
     }
   );
 
@@ -44,7 +49,10 @@ in
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment.TZ = lib.mkDefault "Asia/Tokyo";
         autoRemoveOnStop = lib.mkDefault false;
-        extraOptions = lib.mkDefault [ "--restart=unless-stopped" ];
+        extraOptions = lib.mkDefault (
+          [ "--restart=unless-stopped" ]
+          ++ lib.mapAttrsToList (host: address: "--add-host=${host}:${address}") s.cfg.extraHosts
+        );
         volumes = lib.mkDefault [ "${root}/vw-data:/data" ];
         networks = lib.mkDefault [ "traefik" ];
       };

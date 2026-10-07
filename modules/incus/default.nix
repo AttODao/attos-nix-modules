@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  lib,
+  options,
+  pkgs,
+  ...
+}:
 let
   json = pkgs.formats.json { };
   ps = import ../public-services/lib.nix { inherit lib; };
@@ -8,6 +13,25 @@ in
 
   options.modules.incus = {
     enable = lib.mkEnableOption "shared Incus create-only provisioning";
+    preseed = lib.mkOption {
+      inherit (options.virtualisation.incus.preseed) type default;
+      description = "Native Incus bootstrap configuration. Exactly one named storage pool is required; an existing pool skips all bootstrap, without reconciliation.";
+    };
+    initrdKernelModules = lib.mkOption {
+      type = options.boot.initrd.kernelModules.type;
+      default = [ ];
+      description = "Kernel modules loaded in initrd when Incus is enabled.";
+    };
+    preseedKernelModules = lib.mkOption {
+      type = lib.types.listOf lib.types.nonEmptyStr;
+      default = [ ];
+      description = "Kernel modules loaded with modprobe before a non-skipped Incus preseed run.";
+    };
+    provisionKernelModules = lib.mkOption {
+      type = lib.types.listOf lib.types.nonEmptyStr;
+      default = [ ];
+      description = "Kernel modules loaded with modprobe before container provisioning.";
+    };
     stateDir = ps.pathOption "Persistent image-source stamp directory; required when containers are declared. Existing directories are never cleared.";
 
     containers = lib.mkOption {

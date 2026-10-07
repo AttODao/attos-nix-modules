@@ -29,6 +29,7 @@
     ./vaultwarden
     ./wireguard-server
     ./ytdl-sub
+    ./zed
     ./atcoder
     ./desktop-theme
     ./discord

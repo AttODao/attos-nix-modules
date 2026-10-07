@@ -40,6 +40,21 @@ in
         nullable (options.mailserver.accounts.type or lib.types.attrs)
           "Accounts using the standard upstream mailserver.accounts interface. Supply runtime hashedPasswordFile paths, not inline credentials.";
       stateVersion = nullable lib.types.int "Existing simple-nixos-mailserver stateVersion; the consumer owns migrations.";
+      systemName = lib.mkOption {
+        type = lib.types.nonEmptyStr;
+        default = "Mail system";
+        description = "Human-readable mail system name.";
+      };
+      acme = {
+        dnsProvider = nullable lib.types.nonEmptyStr "Optional DNS-01 provider for the mail hostname certificate; null leaves native ACME configuration untouched.";
+        environmentFile = ps.pathOption "Runtime ACME environment file for the DNS provider, never credential contents.";
+        email = nullable lib.types.nonEmptyStr "Contact email used when the mail DNS-01 provider is configured.";
+        acceptTerms = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Accept ACME terms when configuring the mail DNS-01 certificate.";
+        };
+      };
       dataDir = ps.pathOption "Mail data directory containing vmail, index and dkim subdirectories.";
       dkimDomains = nullable (options.mailserver.dkim.domains.type or lib.types.attrs
       ) "Upstream DKIM domain/selector definitions with consumer-provided runtime keyFile paths.";

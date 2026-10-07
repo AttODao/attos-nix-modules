@@ -67,6 +67,28 @@ elif args[:2] == ["network", "create"]:
     assert run("wait", "http://manager/traefik-network-ready").returncode == 0
     assert run("wait", "http://manager/traefik-network-ready", FAKE_CURL="bad").returncode != 0
 
+    # Fetch never publishes a failed/invalid response over the existing credential.
+    curl = root / "curl"
+    curl.write_text('''#!/bin/sh
+printf '%s\\n' "$@" > "$FAKE_LOG"
+printf '%s\\n' "$FAKE_FETCH_TOKEN"
+[ "$FAKE_CURL" = ok ]
+''')
+    fetched = root / "fetched" / "worker-token"
+    fetched.parent.mkdir()
+    fetched.write_text("old-token")
+    for value, status in (("not-a-token", "ok"), ("SWMTKN-1-fake", "bad")):
+        assert run("fetch", "http://manager:2378/worker-token", "10.250.0.2", fetched, FAKE_FETCH_TOKEN=value, FAKE_CURL=status).returncode != 0
+        assert fetched.read_text() == "old-token"
+        assert list(fetched.parent.glob("worker-token.*")) == []
+    result = run("fetch", "http://manager:2378/worker-token", "10.250.0.2", fetched, FAKE_FETCH_TOKEN="SWMTKN-1-fake")
+    assert result.returncode == 0 and "SWMTKN" not in result.stdout + result.stderr
+    assert fetched.read_text() == "SWMTKN-1-fake\n"
+    assert stat.S_IMODE(fetched.stat().st_mode) == 0o600
+    assert log.read_text().splitlines() == ["--noproxy", "*", "--interface", "10.250.0.2", "-fsS", "--max-time", "2", "http://manager:2378/worker-token"]
+    assert run("fetch", "http://manager:2378/worker-token", "", fetched, FAKE_FETCH_TOKEN="SWMTKN-1-fake").returncode == 0
+    assert "--interface" not in log.read_text().splitlines()
+
     spec = importlib.util.spec_from_file_location("readiness", scripts / "readiness-server.py")
     readiness = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(readiness)
@@ -93,4 +115,38 @@ elif args[:2] == ["network", "create"]:
         server.shutdown()
         server.server_close()
         thread.join()
-print("swarm operations and nonsecret readiness: OK")
+    spec = importlib.util.spec_from_file_location("transport", scripts / "token-server.py")
+    transport = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(transport)
+    server = transport.ThreadingHTTPServer(("127.0.0.1", 0), transport.TokenHandler)
+    server.token = fetched
+    server.marker = marker
+    server.allowed_addresses = ["127.0.0.1"]
+    marker.touch()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    def request(path):
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+        connection.request("GET", path)
+        response = connection.getresponse()
+        result = response.status, response.read(), response.getheader("Cache-Control")
+        connection.close()
+        return result
+    try:
+        assert request("/worker-token") == (200, b"SWMTKN-1-fake\n", "no-store")
+        assert request("/traefik-network-ready") == (200, b"", "no-store")
+        for path in ("/", "/worker-token?x=1", "/../worker-token", "/worker-token/"):
+            status, body, _ = request(path)
+            assert status == 404 and b"SWMTKN" not in body
+        fetched.unlink()
+        assert request("/worker-token")[0] == 503
+        marker.unlink()
+        assert request("/traefik-network-ready")[0] == 503
+        server.allowed_addresses = ["192.0.2.1"]
+        for path in ("/worker-token", "/traefik-network-ready", "/"):
+            assert request(path)[0] == 403
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+print("swarm operations, atomic fetch, safe readiness and restricted token transport: OK")

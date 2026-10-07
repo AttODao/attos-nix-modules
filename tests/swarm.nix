@@ -47,6 +47,50 @@ let
       cfg = worker address;
     in
     !(builtins.tryEval (waitCommand cfg)).success && !(builtins.tryEval (joinCommand cfg)).success;
+  fetching =
+    (evaluate [
+      {
+        modules.swarm = {
+          enable = true;
+          role = "worker";
+          managerAddress = "10.250.0.1:2377";
+          joinTokenFile = "/run/docker-swarm/worker-token";
+          readinessPort = 12378;
+          tokenFetch = {
+            enable = true;
+            url = "http://10.250.0.1:12378/worker-token";
+            sourceAddress = "10.250.0.2";
+          };
+        };
+      }
+    ]).config;
+  transporting =
+    (evaluate [
+      {
+        modules.swarm = {
+          enable = true;
+          role = "manager";
+          advertiseAddress = "10.250.0.1";
+          networkSubnet = "10.251.0.0/24";
+          networkGateway = "10.251.0.1";
+          readinessAddress = "10.250.0.1";
+          tokenTransport = {
+            enable = true;
+            allowedAddresses = [ "10.250.0.2" ];
+          };
+        };
+      }
+    ]).config;
+  badTransport =
+    (evaluate [
+      {
+        modules.swarm = {
+          enable = true;
+          role = "manager";
+          tokenTransport.enable = true;
+        };
+      }
+    ]).config;
   manager =
     (evaluate [
       {
@@ -63,7 +107,10 @@ let
 in
 assert !base.config.modules.swarm.enable && !base.config.modules.docker.enable;
 assert !(base.config.systemd.services ? docker-network-traefik);
-assert !(base.options.modules.swarm ? readinessPort);
+assert base.config.modules.swarm.readinessPort == 2378;
+assert !base.config.modules.swarm.tokenTransport.enable;
+assert !base.config.modules.swarm.tokenFetch.enable;
+assert !(base.config.systemd.services ? docker-swarm-token-fetch);
 assert !(base.options.modules.swarm ? networkReadyUrl);
 assert valid "10.250.0.1:2377" "10.250.0.1";
 assert valid "10.250.0.1" "10.250.0.1";
@@ -117,4 +164,34 @@ assert !(manager.systemd.services ? docker-swarm-token-server);
 assert
   !lib.hasInfix "worker-token" manager.systemd.services.docker-swarm-network-server.serviceConfig.ExecStart;
 assert lib.all (a: a.assertion) manager.assertions;
+assert lib.all (a: a.assertion) fetching.assertions;
+assert lib.all (a: a.assertion) transporting.assertions;
+assert lib.any (a: !a.assertion) badTransport.assertions;
+assert lib.hasInfix "http://10.250.0.1:12378/traefik-network-ready" (waitCommand fetching);
+assert lib.hasSuffix (
+  " fetch "
+  + lib.escapeShellArgs [
+    "http://10.250.0.1:12378/worker-token"
+    "10.250.0.2"
+    "/run/docker-swarm/worker-token"
+  ]
+) fetching.systemd.services.docker-swarm-token-fetch.serviceConfig.ExecStart;
+assert lib.elem "docker-swarm-token-fetch.service"
+  fetching.systemd.services.docker-swarm-join.requires;
+assert lib.elem "docker-swarm-token-fetch.service"
+  fetching.systemd.services.docker-swarm-join.after;
+assert
+  fetching.systemd.services.docker-swarm-join.serviceConfig.LoadCredential
+  == [ "join-token:/run/docker-swarm/worker-token" ];
+assert
+  transporting.systemd.services.docker-swarm-network-server.serviceConfig.LoadCredential
+  == [ "worker-token:/run/docker-swarm/worker-token" ];
+assert transporting.systemd.services.docker-swarm-network-server.serviceConfig.DynamicUser;
+assert lib.elem "docker-swarm-init.service"
+  transporting.systemd.services.docker-swarm-network-server.requires;
+assert lib.hasInfix "%d/worker-token"
+  transporting.systemd.services.docker-swarm-network-server.serviceConfig.ExecStart;
+assert lib.hasSuffix "10.250.0.2"
+  transporting.systemd.services.docker-swarm-network-server.serviceConfig.ExecStart;
+assert !(manager.systemd.services.docker-swarm-network-server.serviceConfig ? LoadCredential);
 true

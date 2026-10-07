@@ -31,7 +31,7 @@
           };
           "Groups/0/Items/1" = {
             "Name" = "keyboard-us";
-            "Layout" = "";
+            "Layout" = osConfig.modules.fcitx5.keyboardLayout;
           };
         };
       };

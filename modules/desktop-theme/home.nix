@@ -31,8 +31,8 @@ in
         else
           throw "desktop-theme: supply modules.desktop-theme.cursor or home.pointerCursor.package for every HM user."
       );
-      name = lib.mkDefault "Custom-Cursors";
-      size = lib.mkDefault 48;
+      name = lib.mkDefault osConfig.modules.desktop-theme.cursorName;
+      size = lib.mkDefault osConfig.modules.desktop-theme.cursorSize;
       gtk.enable = true;
       x11.enable = true;
       hyprcursor.enable = true;

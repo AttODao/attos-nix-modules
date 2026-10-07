@@ -13,19 +13,21 @@ in
     boot = {
       # Neither desktop Zen nor server XanMod is universal; select those on the host.
       kernelPackages = lib.mkDefault pkgs.linuxPackages;
-      plymouth = {
-        enable = lib.mkDefault true;
-      }
-      // lib.optionalAttrs (cfg.splashImage != null) {
-        theme = lib.mkDefault "centered-logo";
-        themePackages = lib.mkDefault [
-          (attopkgs.centered-plymouth-theme { image = cfg.splashImage; })
-        ];
-      };
-      consoleLogLevel = lib.mkDefault 3;
-      initrd.verbose = lib.mkDefault false;
-      # Add to NixOS/Plymouth parameters rather than losing these to their normal-priority lists.
-      kernelParams = [
+      plymouth = lib.mkIf cfg.quietBoot (
+        {
+          enable = lib.mkDefault true;
+        }
+        // lib.optionalAttrs (cfg.splashImage != null) {
+          theme = lib.mkDefault "centered-logo";
+          themePackages = lib.mkDefault [
+            (attopkgs.centered-plymouth-theme { image = cfg.splashImage; })
+          ];
+        }
+      );
+      consoleLogLevel = lib.mkIf cfg.quietBoot (lib.mkDefault 3);
+      initrd.verbose = lib.mkIf cfg.quietBoot (lib.mkDefault false);
+      # Add to NixOS/Plymouth parameters rather than replacing their lists.
+      kernelParams = lib.mkIf cfg.quietBoot [
         "quiet"
         "udev.log_level=3"
         "rd.systemd.show_status=auto"

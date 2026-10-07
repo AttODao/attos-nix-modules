@@ -46,9 +46,31 @@ in
       wireplumber.extraConfig = lib.mapAttrs' (
         key: device: lib.nameValuePair "20-${key}" { "monitor.alsa.rules" = [ (deviceRule device) ]; }
       ) cfg.alsaDevices;
-      extraConfig.pipewire = lib.mkIf (cfg.loopbacks != [ ]) {
-        "99-loopbacks"."context.modules" = map loopbackModule cfg.loopbacks;
-      };
+      extraConfig.pipewire =
+        lib.mapAttrs' (
+          key: sink:
+          lib.nameValuePair "99-${key}-sink" {
+            "context.objects" = [
+              {
+                factory = "adapter";
+                args = {
+                  "factory.name" = "support.null-audio-sink";
+                  "node.name" = sink.name;
+                  "node.description" = sink.description;
+                  "media.class" = "Audio/Sink";
+                  "object.linger" = true;
+                  "audio.position" = [
+                    "FL"
+                    "FR"
+                  ];
+                };
+              }
+            ];
+          }
+        ) cfg.virtualSinks
+        // lib.optionalAttrs (cfg.loopbacks != [ ]) {
+          "99-loopbacks"."context.modules" = map loopbackModule cfg.loopbacks;
+        };
     };
   };
 }

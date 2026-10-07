@@ -46,6 +46,30 @@ let
     }
   ];
   desktop = t.hm desktopCfg "test";
+  headless = t.cfgFor [
+    {
+      modules.hyprland = {
+        enable = true;
+        headless = {
+          enable = true;
+          outputName = "custom-output";
+          seatGroup = "video";
+          inputGroup = "events";
+        };
+      };
+      modules.noctalia.systemd.enable = true;
+    }
+  ];
+  inactive = t.cfgFor [
+    { modules.hyprland.headless.enable = true; }
+  ];
+  headlessHM = t.hm headless "test";
+  nativeLauncher = t.hmFor [
+    {
+      modules.hyprland.enable = true;
+      home-manager.users.test.programs.noctalia.systemd.enable = true;
+    }
+  ];
   laptopCfg = t.cfgFor [
     {
       modules.hyprland = {
@@ -120,6 +144,43 @@ let
     builtins.tryEval
       (t.cfgFor [ { modules.hyprland.extraConfig = ""; } ]).modules.hyprland.enable;
 in
+assert !inactive.services.seatd.enable;
+assert !(inactive.systemd.services ? container-udevd);
+assert !(inactive.systemd.user.services ? hyprland-bootstrap);
+assert !(inactive.systemd.user.services ? hyprland-headless-output);
+assert !(desktopCfg.systemd.user.services ? hyprland-bootstrap);
+assert !(desktopCfg.systemd.services ? container-udevd);
+assert headless.services.seatd.enable && headless.services.seatd.group == "video";
+assert headless.systemd.services.seatd.environment.SEATD_VTBOUND == "0";
+assert headless.systemd.services.container-udevd.serviceConfig.Type == "notify-reload";
+assert headless.systemd.services.container-udevd.serviceConfig.FileDescriptorStoreMax == 512;
+assert headless.systemd.services.container-udevd.after == [ "systemd-tmpfiles-setup.service" ];
+assert lib.elem "c /dev/input/event0 0660 root events - 13:64" headless.systemd.tmpfiles.rules;
+assert lib.elem "c /dev/input/event63 0660 root events - 13:127" headless.systemd.tmpfiles.rules;
+assert !(lib.any (rule: lib.hasInfix "/dev/input/event" rule) inactive.systemd.tmpfiles.rules);
+assert headless.systemd.user.services.hyprland-bootstrap.wantedBy == [ "default.target" ];
+assert !headless.systemd.user.services.hyprland-bootstrap.restartIfChanged;
+assert
+  headless.systemd.user.services.hyprland-bootstrap.serviceConfig.Environment == [
+    "LIBSEAT_BACKEND=seatd"
+    "XDG_SEAT=seat0"
+    "XDG_SESSION_ID=headless"
+    "XDG_VTNR=1"
+  ];
+assert lib.hasInfix "start -F -e -D Hyprland"
+  headless.systemd.user.services.hyprland-bootstrap.serviceConfig.ExecStart;
+assert headless.systemd.user.services.hyprland-headless-output.serviceConfig.Type == "oneshot";
+assert headless.systemd.user.services.hyprland-headless-output.serviceConfig.RemainAfterExit;
+assert lib.hasInfix "custom-output"
+  headless.systemd.user.services.hyprland-headless-output.serviceConfig.ExecStart;
+assert lib.hasInfix "custom-output"
+  headless.systemd.user.services.hyprland-headless-output.serviceConfig.ExecStop;
+assert headless.xdg.portal.config.common.default == "hyprland;gtk";
+assert !(lib.hasInfix "uwsm app -t service -- noctalia" (luaConfig headlessHM));
+assert !(lib.hasInfix "uwsm app -t service -- noctalia" (luaConfig nativeLauncher));
+assert lib.hasInfix "fcitx5-daemon.service" (luaConfig headlessHM);
+assert lib.all (a: a.assertion) headless.assertions;
+assert headlessHM.home.activationPackage.drvPath != "";
 assert desktop.wayland.windowManager.hyprland.configType == "lua";
 assert !desktop.wayland.windowManager.hyprland.systemd.enable;
 assert (settings desktop).monitor == map (monitor: monitor // { scale = 1; }) desktopMonitors;
