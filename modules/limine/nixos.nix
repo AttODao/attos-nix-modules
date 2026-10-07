@@ -2,15 +2,26 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
+let
+  cfg = config.modules.limine;
+in
 {
-  config = lib.mkIf config.modules.limine.enable {
+  config = lib.mkIf cfg.enable {
     boot = {
       # Neither desktop Zen nor server XanMod is universal; select those on the host.
       kernelPackages = lib.mkDefault pkgs.linuxPackages;
-      plymouth.enable = lib.mkDefault true;
-      # Use upstream's theme by default; branded assets belong to the consumer.
+      plymouth = {
+        enable = lib.mkDefault true;
+      }
+      // lib.optionalAttrs (cfg.splashImage != null) {
+        theme = lib.mkDefault "centered-logo";
+        themePackages = lib.mkDefault [
+          (attopkgs.centered-plymouth-theme { image = cfg.splashImage; })
+        ];
+      };
       consoleLogLevel = lib.mkDefault 3;
       initrd.verbose = lib.mkDefault false;
       # Add to NixOS/Plymouth parameters rather than losing these to their normal-priority lists.

@@ -1,10 +1,10 @@
 # 共通化・移行の作業台帳
 
-更新: 2026-10-06。commit済み共有実装の基準は `f7a38da`。以下は追加実装と共有側の検証記録。利用側移行・実機適用は未実施。
+更新: 2026-10-07。初回導入時の共有基準は歴史的pin `8e6a223`。公開API・資産共通化と`.dotfiles`のコード移行・回帰評価は完了。実際の共有revisionは利用側の`flake.lock`を参照する。実機適用は未実施。過去の検証記録は各日付の状態を示す。
 現在のAPIは[root README](../README.md)と[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)、実装は[modules](../modules)を参照する。
 この台帳は残作業と移行時の差分を管理し、moduleの設定リファレンスはWikiへ集約する。
 
-**共有側の実装・公開は完了。次は移行対象repo/revisionを確定し、各dotfilesの移行と実機検証を進める。**
+**`.dotfiles` は追加公開APIへのコード移行・回帰評価済み。残るrepoの移行、各ホストの全体build・実機検証は別工程。**
 共有moduleがあること、利用側のコードを移行したこと、実機へ適用したことは別の状態として扱う。
 以下の未実装候補をすべて作るまで移行を待つ必要はない。
 
@@ -40,6 +40,28 @@
 - WireGuard clientはnative libnmで自動接続false・最終interface名を設定してからIN_MEMORY | BLOCK_AUTOCONNECTで登録する。従来のnmcli import後に無効化する競合を排除し、作成時点のregressionを追加。実NetworkManagerへの登録・routing/DNSは未検証。
 - attodesk/attolap相当の評価はmonitor/HDR/lid/録画・選択の分離、通常のper-user override、activation/toplevel drvPathを確認する。実機同等性の保証ではない。利用側lock更新・rebuild・switchは行っていない。
 
+### 2026-10-07: `.dotfiles` 導入と構成の簡素化
+
+- 移行元HEAD `68c1ab04de84c0dd4975e60a246b6834bef5a204` の作業ツリーを移行。共有inputはremote `main` の `8e6a223b9a1cce1b136559e074d40941cac51f14` にlock。既存nixpkgs・SOPS・AAGLとその依存のpin、HM revisionは保持した。
+- rootの `common.nix`・`attodesk.nix`・`attolap.nix` へ機能選択と標準設定を集約。生成hardwareは `hardware/`、Plymouth・HDR録画資産は `assets/` へ移動。旧feature管理・resolver・standalone HM・二重HM import・nested input flakeを削除。
+- 両ホストの全既存ソフトを共有enableまたは標準package/program optionで保持。sshd・AppImage binfmt、shell/group/stateVersion、暗号化secretとruntime path/権限、mount・Scarlett/KURO音声、HDR/lid/neowall・保存先・機能分離を保持。WireGuardは既定のactivation復号を保持し、SOPSのsystemd activationを選ぶ場合だけ実在する復号unitへの順序を追加。rotation時再起動も指定した。
+- 設定比較でmount・音声・firewall・ユーザー・PAM・secrets・system service一覧・Noctalia・Hyprlandが一致（store path・同じarchiveのcursor theme名を正規化）。Open-Deckの実行時latest updaterを固定1.0.6 packageへ置換し、既存AppImage/可変データは削除しない。HM CLIは標準ホストpackageへ変更。
+- 利用側 `nix flake check --no-build --no-write-lock-file` が両NixOS・両HM activation・移行assertを評価。共有 `tests/desktop-hosts.nix`・`tests/integrated.nix` は固定sourceで `true`。HDRスクリプトのmock実行テストを追加。build・switch・boot/PAM/GUI/機器の実機確認は未実施。
+- READMEとWiki working treeへmodule共通の導入・適用方法を追加。remoteがHEADを広告しないため、Git URLは `?ref=main` を明示する。WireGuard option説明・Wikiへ、SOPS既定モードには復号unitがないことを明記。Wiki checkoutは `/home/attodao/attos-nix-modules.wiki`、未commit・未push。
+
+### 2026-10-07: 追加の公開API・資産共通化
+
+- Limineの `splashImage` と汎用 `attopkgs.centered-plymouth-theme { image = ...; }` を追加。旧consumer画像をそのまま使い、黒背景・中央配置・最大960x360を維持する。consumer資産は `assets/boot-logo.png` だけとし、Plymouth descriptor/scriptは共有側へ移す。
+- Noctaliaの `location.address`・typed `calendar.accounts` と録画の `source`・`codec`・`convertToX.enable` を公開。HDR変換script・保存先導出・高優先度wrapper・mockテストを共有側へ移し、テストは共有repoで `python3 modules/noctalia/test-recording.py` を実行する。runtime passwordFileの復号・権限はconsumer所有。
+- PipeWireの `alsaDevices`・`loopbacks` を公開。汎用設定生成は共有側、Scarlett/KURO等の物理identity・latency校正はconsumerの入力として維持する。
+- `desktop-theme.cursor` は取得済みarchive packageを受け取り全HMユーザー向けに汎用 `Custom-Cursors` を生成。標準per-user pointerCursor上書きも維持する。`steam.firewall`・`home-manager.backupFileExtension`・`open-deck-desktop.binfmt` を公開し、sshd有効化は既存 `modules.openssh.enable` を使う。
+- WireGuardの `secretService` で既存復号unitへの順序を指定する。SOPS既定activationではnull、systemd activationのときだけservice名を渡す。秘密・key provisioning・rotationのrestartUnitsはconsumerに残す。
+- Hyprlandの `ensureHyprlandScreenshotsDir` activationで全HMユーザーの設定済みPictures配下にScreenshotsを作成。laptopの空 `.keep` は不要となる。既存の画像・録画・ユーザーデータは上書きしない。
+- 通常のconsumer選択には公開APIを推奨し、標準NixOS/HMはAPI外の入力・per-user override用escape hatchとして維持する。ユーザー・hardware・両stateVersion・secret管理・package-onlyアプリ・標準OBS・外部AAGLはconsumer所有。
+- Wikiはlocal master `5ca1e31` の変更を `stash -u` → `main`（`origin/main` の `168114b` を追跡）→ `stash pop` で保持。mainの所有OS guidanceとlocal導入draftを両方保持し、重複sidebar linkを除く。advertised HEADのmasterは移行先としない。
+
+今回の検証: 利用側固定nixpkgsと共有固定HMで全37評価テストが`true`。両ホストのNixOS/HM・移行assert評価と、Noctalia録画・PIN・PipeASIO・WireGuardの4スクリプトsuiteが成功。変更前後のpackage（優先度も含む）・録画script・Hyprland・Noctalia・PAM・secret・service・firewall・mount・音声設定が一致（store pathを正規化、loopback設定ファイル名のみ汎用化）。Plymouth旧/新テーマをbuildし、変換済みPNGがbyte単位で一致、中央配置・背景scriptも画像名以外一致した。意図した差分は汎用theme名と音声設定ファイル名、および`.keep`に代わるScreenshots作成activation。全ホストbuild・switch・boot/PAM/GUI/録画/機器の実機動作は未検証。公開状態は各repoのGit履歴、最終pinはconsumerのlockを正とする。
+
 ## 2. 優先して進める残作業
 
 | 優先度 | 作業 | 完了条件 |
@@ -58,7 +80,7 @@
 
 | repo / 対象 | コード移行 | 主な確認事項 |
 | --- | --- | --- |
-| `.dotfiles` / attodesk・attolap | **未移行（確認済み）** | 一般ユーザー・shell・stateVersion、モニター/HDR、蓋・電源、PIN、録画、保存先。attodeskだけの機能をattolapへ広げない |
+| `.dotfiles` / attodesk・attolap | **コード移行・追加API回帰評価済み（実機未適用）** | 両ホストのbuild、PIN/boot/GUI/user service・HDR録画・機器、既存stateとrollbackの実機確認 |
 | `server-dotfiles` / attofort・attobox | **未移行（サービス構成のcheckoutを確認済み）** | 対象確認後にstate/ownership・secret順序、Swarm role、DNS/gateway、mail/TLS/DKIM、VPN、Incus、Paseo用HMユーザーを照合 |
 | `dev-dotfiles` → `server-dotfiles` / development（devcon） | **統合未実施（移植元確認済み）** | devユーザー、Pi/Paseo、SSH、code-server、SDK/JDK、containerのsandbox/device設定を保持 |
 | `remote-dotfiles` → `server-dotfiles` / desktop | **統合未実施（移植元確認済み）** | headless/seatd/linger、Sunshine/仮想音声、認証/firewall、Noctalia起動、Zed、専用package setを保持 |
@@ -84,7 +106,7 @@
 - [ ] 既存設定、package供給元、stateVersion、生成設定を記録し、永続データ・認証情報をバックアップする。
 - [ ] 共有inputを固定して `nixosModules.default` を一度importし、利用側の手動HM読み込み・共通package引数供給の二重化を解消する。
 - [ ] HM対象の既存ユーザーを指定し、従来の `home.stateVersion` を明示する。ユーザー作成・shell・権限・lingerは利用側に残す。
-- [ ] 旧設定を機能enableへ置換し、旧featureと共有moduleの依存を比較して必要なアプリを明示的に選択する。ユーザー差分は標準 `home-manager.users.<name>`、ホスト差分は標準NixOS optionへ残す。旧Zsh featureにあるログインshell指定も利用側へ移す。
+- [ ] 旧設定を機能enable・公開入力optionへ置換し、旧featureと共有moduleの依存を比較して必要なアプリを明示的に選択する。公開API外のユーザー差分は標準 `home-manager.users.<name>`、ホスト差分は標準NixOS optionへ残す。旧Zsh featureにあるログインshell指定も利用側へ移す。
 - [ ] サーバー/guestでは公開登録を共通namespaceへ移し、所有OSを `host` に実hostnameで指定する。管理外endpointは `deploy = false` にする。ホスト台帳の他用途も確認してから旧 `public-hosts.nix` 参照を整理する。
 - [ ] 必須のruntime secret/path、保存先・UID/GID、Swarm role/network等を指定し、既存stateを上書きしないこととsecretの供給順・rotation時の再起動を確認する。
 - [ ] ホスト全体と全HMユーザーのactivationを評価・buildし、旧生成設定・起動経路と比較する。
@@ -101,7 +123,7 @@
 | SSH client / sshd | 旧repoごとにalias/FQDN、`IdentitiesOnly`、鍵指定が異なる。生成後の `ssh -G` を比較し、600のユーザー所有config・owner-check回避を維持。認証policy・server port・鍵配布はclient共有とは別 |
 | Fcitx5 / SKK | 旧remoteのkeyboard-us Layoutは `us`、共有側は空文字。実ファイル配置と `ExitType=cgroup` による後発修正、GUI再起動、日本語入力を確認 |
 | Noctalia / Hyprland | 旧localのNoctalia依存で入っていた各アプリは、共有側の依存に含まれるとは限らないため選択を保持。旧remoteの外部HM module・systemd/headless待ちはnative moduleと起動hookへ照合し、二重起動を避ける。dockのeditor差・calendar secret・HDR録画変換・portal/GPU権限も保持 |
-| PCManFM / userDirs | attodeskの `/mnt/hdd1` と各ユーザーの保存先、attolapの `Pictures/Screenshots/.keep` を保持。共有userDirsを有効にするだけでホスト固有directory資産がすべて移ると思わない |
+| PCManFM / userDirs | attodeskの `/mnt/hdd1` と各ユーザーの保存先を保持。Screenshotsは共有Hyprland activationが作成し、旧attolapの空 `.keep` は不要。userDirsだけではこの子directoryは作られない。他のホスト固有directory資産は別途確認 |
 | Discord | 旧remoteだけのWayland package override・`KillMode=mixed` は共有実装にはない。必要な差分を標準optionで残して起動・終了・入力を検証 |
 | Open-Deck | 旧localのactivation時latest取得、旧remoteの固定AppImageから、共有の固定packageへ移行。旧更新scriptを二重実行しない。x86_64制約・upstreamの `--no-sandbox` を確認 |
 | OpenCloud client | 旧remoteの専用package setと共有のホスト `pkgs` を照合。二重autostartを避け、選択packageの起動・接続先を確認。serverとは別機能 |
@@ -124,7 +146,7 @@
 
 - package導入だけのfeature（旧調査ではL 27 / S 9 / D 7 / R 16、計59定義）は、利用側の `home.packages` / `environment.systemPackages` へ整理する候補。`python3.withPackages` やMoonlightのVPN依存は消さない。
 - locale、Nix基本設定、NetworkManager/networkd等は標準optionを使う。共通化する必要が出るまではホスト側に残す。unfree・trusted-users・sandbox・NIC/IP/NAT/firewallを共有baseへ押し込まない。
-- Plymouthの独自素材、Bluetooth/thermal/firmware、service-storage、container baseはconsumer側の保留項目。Limineの共通loader設定は今回追加済み。複数consumerで同じ契約が必要になるまでは残りの共有APIを作らない。
+- Plymouthの画像素材、Bluetooth/thermal/firmware、service-storage、container baseはconsumer側の入力・保留項目。Limineの共通loaderと汎用centered-logo実装は共有側に置く。複数consumerで同じ契約が必要になるまでは残りの共有APIを作らない。
 - floating tag・実行時latest取得の固定化は任意の別変更。移行中に更新policyまで同時変更しない。
 
 ## 5. 意図してホスト側に残すもの
@@ -134,7 +156,7 @@
 - hardware・GPU/device割当、disk UUID/mount、ユーザー・group・authorizedKeys・sudo、shell、linger、stateVersion。
 - secret集合・復号方法・owner/group/restartUnits・Age鍵path。秘密の内容をNix式やstoreへ入れない。
 - 保存先、hostname/NIC/IP/route/NAT/firewall、公開FQDN、Swarm role/address、WireGuard clients、Incus image/instance/device定義。
-- attodeskの音声loopback/Scarlett、HDR録画変換、Steam/Wallpaper Engine assets、AAGL、attolapの電源管理。旧調査のMIDI bridgeは現在のlocalから削除済みであり、残作業として復活させない。
+- attodeskの音声loopback選択・Scarlett/KURO物理identityとlatency校正、HDR録画source/codecと変換の選択、Steam firewall policy・Wallpaper Engine assets、AAGL、attolapの電源管理。loopback設定生成・録画変換実装は共有側。旧調査のMIDI bridgeは現在のlocalから削除済みであり、残作業として復活させない。
 - developmentのAndroid SDK/USB・AtCoder/project固有資産・JDK固定、desktopのZed・headless出力・仮想音声。code-server/Sunshineの共通実体は追加済みだが、保存先・実行ユーザー・runtime認証・devices・firewallはconsumer。
 - guest image生成と既存guestへの適用の区別。code-server/Sunshineも `enable` と `host` で所有OSに起動するが、ユーザー・device・秘密の初期供給は自動化しない。Incusのimage更新で既存rootfsを再作成しない。
 

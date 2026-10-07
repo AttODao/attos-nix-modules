@@ -11,13 +11,44 @@ let
   recordingsDirectory =
     config.programs.noctalia.settings.plugin_settings."noctalia/screen_recorder".directory;
   recorderPackage = osConfig.programs.gpu-screen-recorder.package;
+  recordingToX = pkgs.writeShellApplication {
+    name = "recording-to-x";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.ffmpeg-full
+    ];
+    text =
+      builtins.replaceStrings
+        [ "@RECORDINGS_DIRECTORY@" ]
+        [
+          (lib.escapeShellArg recordingsDirectory)
+        ]
+        (builtins.readFile ./recording-to-x.sh);
+  };
+  recorder = pkgs.writeShellApplication {
+    name = "gpu-screen-recorder";
+    runtimeInputs = [ pkgs.coreutils ];
+    text =
+      builtins.replaceStrings
+        [ "@GPU_SCREEN_RECORDER@" "@RECORDING_TO_X@" "@RECORDINGS_DIRECTORY@" ]
+        [
+          (lib.escapeShellArg "${recorderPackage}/bin/gpu-screen-recorder")
+          (lib.escapeShellArg "${recordingToX}/bin/recording-to-x")
+          (lib.escapeShellArg recordingsDirectory)
+        ]
+        (builtins.readFile ./gpu-screen-recorder-auto-x.sh);
+  };
 in
 {
   config = lib.mkIf cfg.enable {
     home.packages = [
       pkgs.wl-clipboard
     ]
-    ++ lib.optional cfg.screenRecorder.enable recorderPackage;
+    ++ lib.optional cfg.screenRecorder.enable recorderPackage
+    ++ lib.optionals (cfg.screenRecorder.enable && cfg.screenRecorder.convertToX.enable) [
+      recordingToX
+      (lib.hiPrio recorder)
+    ];
 
     home.activation.ensureNoctaliaRecordingsDir = lib.mkIf cfg.screenRecorder.enable (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -34,8 +65,8 @@ in
         plugin_settings = lib.mkIf cfg.screenRecorder.enable {
           "noctalia/screen_recorder" = {
             directory = lib.mkDefault defaultRecordingsDirectory;
-            video_source = lib.mkDefault "portal";
-            video_codec = lib.mkDefault "h264";
+            video_source = lib.mkDefault cfg.screenRecorder.source;
+            video_codec = lib.mkDefault cfg.screenRecorder.codec;
           };
         };
         widget = lib.mkIf cfg.screenRecorder.enable {
@@ -120,10 +151,31 @@ in
         calendar = {
           enabled = true;
           refresh_minutes = 15;
-          account = lib.mkDefault { };
+          account = lib.mapAttrs (
+            _: account:
+            lib.mapAttrs (_: lib.mkDefault) (
+              {
+                type = "caldav";
+                provider = "custom";
+                inherit (account)
+                  name
+                  color
+                  username
+                  calendars
+                  ;
+                server_url = account.serverUrl;
+              }
+              // lib.optionalAttrs (account.passwordFile != null) {
+                credential_source = "file";
+                password_file = account.passwordFile;
+              }
+            )
+          ) cfg.calendar.accounts;
         };
 
-        location = lib.mkDefault { };
+        location = lib.optionalAttrs (cfg.location.address != null) {
+          address = lib.mkDefault cfg.location.address;
+        };
 
         nightlight = {
           enabled = true;

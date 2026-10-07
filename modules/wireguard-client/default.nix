@@ -13,6 +13,12 @@ in
 
   options.modules.wireguard-client = {
     enable = lib.mkEnableOption "temporary NetworkManager WireGuard client profiles";
+    secretService = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "[-a-zA-Z0-9@_.:]+[.]service");
+      default = null;
+      example = "sops-install-secrets.service";
+      description = "Existing decryption unit to require and order before importing tunnels. Leave null for activation-script decryption (the sops-nix default).";
+    };
     tunnels = lib.mkOption {
       type = tunnelsType;
       default = { };
@@ -23,8 +29,10 @@ in
         "WireGuard: <interface>" and imported temporarily with autoconnect disabled.
         Secret discovery, decryption, permissions and rotation belong to the consumer.
         Files are read with systemd LoadCredential at service start; order decryption
-        using standard systemd.services.wireguard-client-import.requires and after
-        (for example sops-install-secrets.service), and restart this unit on rotation.
+        using secretService only when the decryption service exists. With sops-nix, order against
+        sops-install-secrets.service only if sops.useSystemdActivation is true;
+        its default activation-script mode installs secrets before services restart.
+        Restart the import unit on rotation.
         An empty mapping creates no import unit.
       '';
     };

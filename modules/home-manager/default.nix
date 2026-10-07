@@ -9,6 +9,12 @@ let
   users = config.modules.home-manager.users;
 in
 {
+  options.modules.home-manager.backupFileExtension = lib.mkOption {
+    type = lib.types.nullOr lib.types.nonEmptyStr;
+    default = null;
+    description = "Suffix for Home Manager backups of existing files; null disables backups.";
+  };
+
   options.modules.home-manager.users = lib.mkOption {
     type = lib.types.listOf lib.types.nonEmptyStr;
     default = [ ];
@@ -36,6 +42,7 @@ in
     home-manager = {
       useGlobalPkgs = true;
       useUserPackages = true;
+      backupFileExtension = lib.mkDefault config.modules.home-manager.backupFileExtension;
       extraSpecialArgs = { inherit attopkgs; };
       users = lib.genAttrs users (_: { });
       sharedModules = [

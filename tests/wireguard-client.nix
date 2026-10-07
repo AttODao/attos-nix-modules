@@ -24,6 +24,22 @@ let
     }
   ];
   service = enabled.systemd.services.wireguard-client-import;
+  decrypt = cfgFor [
+    {
+      modules.wireguard-client = {
+        enable = true;
+        tunnels.wg0 = "/run/secrets/wg0.conf";
+        secretService = "decrypt.service";
+      };
+    }
+  ];
+  invalidService =
+    builtins.tryEval
+      (cfgFor [
+        {
+          modules.wireguard-client.secretService = "path/invalid.service";
+        }
+      ]).modules.wireguard-client.secretService;
   python = t.pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
   invalidName =
     builtins.tryEval
@@ -79,6 +95,17 @@ assert service.description == "Import runtime WireGuard profiles into NetworkMan
 assert service.requires == [ "NetworkManager.service" ];
 assert service.after == [ "NetworkManager.service" ];
 assert service.partOf == [ "NetworkManager.service" ];
+assert
+  decrypt.systemd.services.wireguard-client-import.requires == [
+    "NetworkManager.service"
+    "decrypt.service"
+  ];
+assert
+  decrypt.systemd.services.wireguard-client-import.after == [
+    "NetworkManager.service"
+    "decrypt.service"
+  ];
+assert !invalidService.success;
 assert service.serviceConfig.Type == "oneshot";
 assert service.serviceConfig.RuntimeDirectory == "wireguard-client";
 assert service.serviceConfig.RuntimeDirectoryPreserve == "yes";

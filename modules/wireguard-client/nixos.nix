@@ -25,8 +25,11 @@ in
     systemd.services.wireguard-client-import = lib.mkIf (cfg.tunnels != { }) {
       description = "Import runtime WireGuard profiles into NetworkManager";
       wantedBy = [ "multi-user.target" ];
-      requires = [ "NetworkManager.service" ];
-      after = [ "NetworkManager.service" ];
+      requires = [
+        "NetworkManager.service"
+      ]
+      ++ lib.optional (cfg.secretService != null) cfg.secretService;
+      after = [ "NetworkManager.service" ] ++ lib.optional (cfg.secretService != null) cfg.secretService;
       partOf = [ "NetworkManager.service" ];
       path = [ pkgs.networkmanager ];
       environment = {

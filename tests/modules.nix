@@ -14,6 +14,13 @@ let
     noto-fonts-cjk-serif
   ];
   base = t.cfgFor [ ];
+  backups = t.cfgFor [ { modules.home-manager.backupFileExtension = "backup"; } ];
+  nativeBackups = t.cfgFor [
+    {
+      modules.home-manager.backupFileExtension = "backup";
+      home-manager.backupFileExtension = "previous";
+    }
+  ];
   footCfg = t.cfgFor [ { modules.foot.enable = true; } ];
   foot = t.hm footCfg "test";
   fontsCfg = t.cfgFor [ { modules.fonts.enable = true; } ];
@@ -42,6 +49,9 @@ let
         }
       ]).modules.fonts.enable;
 in
+assert base.home-manager.backupFileExtension == null;
+assert backups.home-manager.backupFileExtension == "backup";
+assert nativeBackups.home-manager.backupFileExtension == "previous";
 assert !base.modules.foot.enable && !base.modules.fonts.enable;
 assert !base.home-manager.users.test.programs.foot.enable;
 assert footCfg.modules.foot.enable && footCfg.modules.fonts.enable;

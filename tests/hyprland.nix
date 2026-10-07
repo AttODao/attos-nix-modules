@@ -139,6 +139,11 @@ assert lib.hasInfix "switch:on:Lid Switch" (luaConfig laptop);
 assert lib.hasInfix "fcitx5-daemon.service" (luaConfig desktop);
 assert lib.hasInfix "uwsm app -t service -- noctalia" (luaConfig desktop);
 assert lib.hasInfix "/home/test/Pictures/Screenshots" (luaConfig desktop);
+assert desktop.home.activation.ensureHyprlandScreenshotsDir.after == [ "writeBoundary" ];
+assert lib.hasInfix "/home/test/Pictures/Screenshots"
+  desktop.home.activation.ensureHyprlandScreenshotsDir.data;
+assert lib.hasInfix "'/home/test/My Pictures/Screenshots'"
+  tuned.home.activation.ensureHyprlandScreenshotsDir.data;
 assert laptop.xdg.configFile."neowall/config.vibe".enable;
 assert lib.elem pkgs.hyprshot desktop.home.packages;
 assert lib.elem pkgs.neowall laptop.home.packages;

@@ -64,6 +64,23 @@ let
   alice = t.hm multiCfg.config "alice";
   bob = t.hm multiCfg.config "bob";
 
+  archive = pkgs.writeText "test-cursor.zip" "";
+  publicCursor = t.hmFor [
+    {
+      modules.desktop-theme = {
+        enable = true;
+        cursor = archive;
+      };
+    }
+  ];
+  invalidArchive =
+    builtins.tryEval
+      (t.cfgFor [
+        {
+          modules.desktop-theme.cursor = "not-a-package";
+        }
+      ]).modules.desktop-theme.cursor;
+
   missingCursor = builtins.tryEval (
     builtins.deepSeq (t.hmFor [ { modules.desktop-theme.enable = true; } ]).home.pointerCursor.package
       true
@@ -115,5 +132,7 @@ assert alice.home.pointerCursor.package == cursorPackage;
 assert alice.home.pointerCursor.name == "Custom-Cursors";
 assert bob.home.pointerCursor.package == otherCursorPackage;
 assert bob.home.pointerCursor.name == "Custom-Cursors";
+assert publicCursor.home.pointerCursor.package == t.attopkgs.custom-cursors { cursor = archive; };
+assert !invalidArchive.success;
 assert !missingCursor.success;
 true

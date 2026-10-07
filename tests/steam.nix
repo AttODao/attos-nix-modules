@@ -28,6 +28,20 @@ let
     }
   ];
 
+  publicFirewall = t.cfgFor [
+    {
+      modules.steam = {
+        enable = true;
+        firewall = {
+          remotePlay = true;
+          dedicatedServer = true;
+          localNetworkGameTransfers = true;
+        };
+      };
+    }
+  ];
+  disabledFirewall = t.cfgFor [ { modules.steam.firewall.remotePlay = true; } ];
+
   multiCfg = t.evalSystem {
     users = [
       "alice"
@@ -51,6 +65,10 @@ assert !enabledCfg.programs.steam.localNetworkGameTransfers.openFirewall;
 assert enabled.xdg.mimeApps.enable;
 assert enabled.xdg.mimeApps.defaultApplications."x-scheme-handler/steam" == [ "steam.desktop" ];
 assert enabled.xdg.mimeApps.defaultApplications."x-scheme-handler/steamlink" == [ "steam.desktop" ];
+assert !disabledFirewall.programs.steam.remotePlay.openFirewall;
+assert publicFirewall.programs.steam.remotePlay.openFirewall;
+assert publicFirewall.programs.steam.dedicatedServer.openFirewall;
+assert publicFirewall.programs.steam.localNetworkGameTransfers.openFirewall;
 assert firewallCfg.programs.steam.remotePlay.openFirewall;
 assert firewallCfg.programs.steam.dedicatedServer.openFirewall;
 assert firewallCfg.programs.steam.localNetworkGameTransfers.openFirewall;

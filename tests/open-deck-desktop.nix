@@ -11,6 +11,14 @@ let
   disabled = t.cfgFor [ ];
   enabledCfg = t.cfgFor [ { modules.open-deck-desktop.enable = true; } ];
   enabled = t.hm enabledCfg "test";
+  binfmt = t.cfgFor [
+    {
+      modules.open-deck-desktop = {
+        enable = true;
+        binfmt = true;
+      };
+    }
+  ];
   package = lib.findFirst (p: lib.getName p == "open-deck-desktop") null enabled.home.packages;
   invalidType =
     builtins.tryEval
@@ -19,6 +27,7 @@ in
 assert !disabled.modules.open-deck-desktop.enable;
 assert enabledCfg.programs.appimage.enable;
 assert enabledCfg.programs.appimage.binfmt == false;
+assert binfmt.programs.appimage.binfmt;
 assert enabled.home.activationPackage.drvPath != "";
 assert package.pname == "open-deck-desktop" && package.version == "1.0.6";
 assert package.src.outputHash == "sha256-khOQQ9HJYxveg6LO+AwLKUwkghSj3jelNtLNZUoH+iY=";

@@ -4,54 +4,105 @@ AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機�
 
 各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
 
-## 使い方
+## 導入・適用方法（共通）
 
-利用側のflakeで、このrepoの `nixosModules.default` をNixOS moduleリストへ一度追加する。
-`nixos.default` は同じ入口の別名。Home Managerを利用側で別途importする必要はない。
+個別moduleの説明ではなく、どのホストでも必要な導入手順。
+詳しい構成例とチェックリストは[Wikiの導入・適用方法](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
+
+### 1. inputを固定し、入口を一度importする
+
+利用側のflakeへcanonical URLを追加し、各NixOS構成で `nixosModules.default` を一度だけ読み込む。
+`nixos.default` は同じ入口の別名で、両方のimportは不要。
 
 ```nix
-# flake.nix
+# flake.nixのinputsへ追加（既存nixpkgs inputは保持）
 inputs.shared.url =
-  "git+https://forgejo.attodao.cc/AttODao/attos-nix-modules.git";
+  "git+https://forgejo.attodao.cc/AttODao/attos-nix-modules.git?ref=main";
 
-# nixosSystemのmodulesに追加
+# outputsの引数にsharedを受け取り、各nixosSystemのmodulesへ追加
 modules = [
   shared.nixosModules.default
-  ./configuration.nix
+  ./common.nix
+  ./attodesk.nix # attolap構成では ./attolap.nix
 ];
 ```
 
+利用側ルートの `common.nix` に共通の機能選択・ユーザー差分、`attodesk.nix` / `attolap.nix` に
+ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストから従来どおりimportする。
+機能別import、独自resolver、利用側のHM module import・standalone HM出力は不要。
+
+初回は意図した導入作業として `nix flake lock` を実行し、利用側の `flake.lock` にsharedとその依存を固定する。
+取得済みのrevisionを確認してlockを版管理する。URL末尾に `&rev=<40桁のcommit>` を追加する固定方法も使える。
+remoteのHEADに依存しないよう、URLの `?ref=main` は省略しない。
+更新は利用側で `nix flake update shared` を明示的に実行し、lock差分を確認する（URLにrevを指定した場合はその値も変更）。
+通常評価では `--no-write-lock-file` を使い、nixpkgs更新を同時に混ぜない。
+
+共有flakeはnixpkgsを持たず、通常package・HMともホストの `pkgs` を使う。
+利用側のnixpkgs pin・overlay・unfree許可を維持する。unfreeが必要ならホストの
+`nixpkgs.config.allowUnfreePredicate` 等で許可し、全許可を導入の必須条件にしない。
+HMは共有flakeがrevision固定したraw source（`flake = false`）から読み込む。
+別のHM input/importや `home-manager.inputs.nixpkgs.follows` は追加しない。
+
+### 2. ユーザー・互換性・利用側の入力を残す
+
 ```nix
-# configuration.nix
+# common.nix（名前・stateVersionは利用側の既存値に置換）
 { pkgs, ... }:
 {
   users.users.attodao.isNormalUser = true;
-  modules.home-manager.users = [ "attodao" ];
-
-  modules.thunderbird.enable = true;
-  modules.foot.enable = true;
-  modules.zsh.enable = true;
-
-  # ユーザー作成・権限・ログインシェルは利用側。
   users.users.attodao.shell = pkgs.zsh;
+  modules.home-manager.users = [ "attodao" ];
+  modules.zsh.enable = true;
+  modules.foot.enable = true;
+
+  system.stateVersion = "25.11"; # 既存値を保持。更新に合わせて上げない
+  home-manager.users.attodao = {
+    home.stateVersion = "25.11"; # HMの既存値を別に保持
+    programs.foot.settings.main.font = "monospace:size=13";
+  };
 }
 ```
 
-これだけでThunderbirdのHM設定とNixOS側のEvolution Data Server・GNOME Keyring、
-Footと依存するFontsの両scope、Zsh / Starshipの両scopeが有効になる。
-`modules.home-manager.users` の既定値は `[]`。ユーザー作成は行わず、重複や未宣言ユーザーを拒否する。
+- `modules.home-manager.users` は既定 `[]`。ユーザーを作成せず、重複・未宣言ユーザーを拒否する。
+  共通HM設定は標準 `home-manager.users` に直接追加したユーザーも含め、全HMユーザーへ適用される。
+- ユーザー作成・shell・group/sudo・linger、hardware、保存先、機器/ネットワーク固有値は利用側の責務。
+- secretsは復号後の `"/run/secrets/..."` のようなruntimeパス文字列を渡す。
+  内容をNix式・パスリテラル・`builtins.readFile` でstoreへ取り込まない。
+  配置、owner/group/mode、読取権限、起動順、rotation時の再起動は利用側で管理する。
+  復号unitへの依存はそのunitが存在する場合だけ指定する（SOPSの既定はactivation script）。
+  認証・履歴・既存の可変データを宣言的設定で上書きしない。
+- 通常の機能選択・共通入力は各moduleの公開 `modules.*` optionを優先する。
+  公開APIで表さないホスト差分・ユーザーごとの差分は標準NixOS option / `home-manager.users.<name>` へ書く（上書き用escape hatch）。
+  `mkDefault` の値は通常代入で上書きでき、通常優先度の共通値の変更に限り `lib.mkForce` を検討する。
+  自動依存への通常代入のfalseは競合するため、無条件に強制無効化しない。
+- カーソル等の取得可能なassetsは利用側でURL/hashを固定する。壁紙・ゲーム資産・保存先も利用側で維持する。
+  custom package引数 `attopkgs` は共有側が供給するため、別のpackage供給経路は不要。
 
-HMの差分がある場合だけ、標準optionを使う。
+### 3. 移行を比較し、評価・buildしてから適用する
 
-```nix
-home-manager.users.attodao = {
-  home.stateVersion = "25.11"; # 移行前の値があれば保持する
-  programs.foot.settings.main.font = "monospace:size=13";
-};
+既存のアプリ・package供給元・生成設定・起動経路を記録し、永続データをバックアップする。
+旧featureの依存が共有側でも同じとは限らないため、必要なソフトはenableまたは
+標準 `home.packages` / `environment.systemPackages` で明示的に保持する。
+全参照を置換し、ホストごとの機能・全HMユーザーの設定の同等性を確認してから、
+旧resolver・featureMatrix・wrapper・重複HM import・不要なstandalone HM経路を削除する。
+
+利用側ルートで実行する例（`HOST` / `USER` は対象に置換）:
+
+```sh
+# 評価のみ
+nix eval --no-write-lock-file --raw '.#nixosConfigurations.HOST.config.system.build.toplevel.drvPath'
+nix eval --no-write-lock-file --raw '.#nixosConfigurations.HOST.config.home-manager.users.USER.home.activationPackage.drvPath'
+# buildのみ。実機へ適用しない
+nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.system.build.toplevel'
+nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.home-manager.users.USER.home.activationPackage'
 ```
 
-共通設定が通常優先度で指定する値の変更には `lib.mkForce` が必要。
-Footのfont / alphaやFontsの既定fontは `mkDefault` のため通常代入で上書きできる。
+共有側の[評価テスト](#検証)も別途実行する。`nix flake check` だけでは `tests/*.nix` は実行されない。
+評価成功・build成功・実機動作は別の確認。生成設定の比較後、利用者の判断で一台ずつ
+`sudo nixos-rebuild switch --flake .#HOST` を実行し、boot/PAM/desktop/user service/機器を確認する。
+失敗時は前のgenerationへ `sudo nixos-rebuild switch --rollback`、起動不能時はboot menuから戻す。
+再評価用にinput指定・lock・設定も元へ戻す。データ変更はgenerationのrollbackでは戻らず、バックアップから復旧する。
+導入手順の記載だけではホストに適用されない。
 
 ## Home Managerの管理
 
@@ -121,7 +172,9 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | docker / swarm / traefik / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | Docker / Swarm等、詳細はサーバー設定 |
 | ytdl-sub / ollama / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
-| fcitx5 / floorp / noctalia / open-deck-desktop / pandora-launcher / pcmanfm / pi / userDirs / vscode / linux-wallpaperengine | HM | Open-DeckはNixOS AppImage supportも有効化 |
+| noctalia | HM + 録画時NixOS | 任意のGPU screen recorder support |
+| open-deck-desktop | NixOS + HM | AppImage support |
+| fcitx5 / floorp / pandora-launcher / pcmanfm / pi / userDirs / vscode / linux-wallpaperengine | HM | — |
 
 依存先を通常代入でfalseにすると競合する。依存を切る変更は、動作条件を確認した上で行う。
 
@@ -133,16 +186,23 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 
 - `hyprland.{monitors,neowall.enable,lidSwitch.enable}`: モニター・壁紙shader起動・蓋イベント。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
 - `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
-- `noctalia.{dock.pinned,screenRecorder.enable}`: account/locationはユーザーごとの標準HM設定へ。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `noctalia.{dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`、`convertToX.enable` は既定false。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `pipewire.{alsaDevices,loopbacks}`: 既定 `{}` / `[]`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
+- `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
+- `desktop-theme.cursor`: 既定nullの取得済みarchive package。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
+- `steam.firewall.{remotePlay,dedicatedServer,localNetworkGameTransfers}`: 各既定false。必要な開放をconsumerが選択する。Steam enableだけでこれらのportは開かない。
+- `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
+- `open-deck-desktop.binfmt`: 既定false。Open-Deck有効時だけAppImage binfmtへ転送する。
 - `paseo.{hostname,environmentFile}`: hostnameは有効時必須。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: monitor / wallpaperのリスト。scalingの既定はfill。assetsやユーザーごとの調整は標準HM設定を使う。
-- `wireguard-client.tunnels`: interface名から復号済みruntime絶対パス文字列へのattrset。既定 `{}`。秘密の取得・復号・起動順序・rotationはconsumerが管理する。
+- `wireguard-client.{tunnels,secretService}`: tunnelsはinterface名から復号済みruntime絶対パス文字列へのattrset、既定 `{}`。secretServiceは既存復号service名またはnull（既定）で、非空tunnels時だけrequires/afterへ追加。SOPSでは `sops.useSystemdActivation` がtrueの場合だけ指定する。秘密の取得・復号・権限・rotationはconsumerが管理する。
 
-`desktop-theme` は各HMユーザーの標準 `home.pointerCursor.package` が必須。
-既存 `attopkgs.custom-cursors { cursor = <取得済みarchive>; }` を渡し、URL/hashはconsumerに残す。
-GTK/icon・カーソル名/サイズは標準HM optionで、Steamのfirewallは標準 `programs.steam.*` で調整する。
-Limineは共通のquiet bootだけを設定し、kernel・GPU・mitigation・Plymouth素材はホストが選択する。
+`desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
+ユーザーごとに別packageを使う場合も標準HMで上書きできる。archiveのURL/hash・licenseはconsumerに残す。
+GTK/icon・カーソル名/サイズ等、公開API外の調整は標準NixOS/HM optionを使う。
+Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
+Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。
 AtCoderはホストのGoを既定とし、toolchain固定は標準HM `programs.go.package` に指定する。
 プロジェクト固有のテンプレート・ライブラリ・devenv定義や認証状態は配布しない。
 
@@ -232,7 +292,9 @@ localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[W
 ## ホスト側に残すもの
 
 hardware、ユーザー作成・権限・linger、secrets、stateVersion、保存先、機器固有の音声設定、
-Steamのfirewall、Wallpaper Engine assets、unfree licenseの許可は利用側で管理する。
+Steamのfirewall policy、Wallpaper Engine assets、unfree licenseの許可は利用側で管理する。
+公開APIがある機能はそのoptionで選択し、package導入だけのアプリ、標準OBS設定、外部AAGLは利用側に残す。
+`modules.openssh.enable` はserver有効化、`modules.ssh.enable` はclient設定で別の選択。
 greeterのカーソルアーカイブも利用側で取得する。login-pinは従来どおりattodaoのgreetd / TTYに限定する。
 Pi等の認証・履歴・可変データは管理しない。
 Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron sandboxは無効。
@@ -252,6 +314,7 @@ sourceの取得・実体化が必要な評価には `--read-write-mode` を追�
 ```sh
 python3 modules/login-pin/test-check-login-pin.py
 python3 modules/pipeasio/test-register-steam-prefixes.py
+python3 modules/noctalia/test-recording.py
 python3 modules/cloudflare-ddns/test-sync-dns.py
 python3 modules/swarm/test-swarm.py
 python3 modules/forgejo/test-networks.py
@@ -264,5 +327,8 @@ python3 modules/atcoder/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsou
 python3 packages/code-server/test-install.py
 ```
 
-共有側の実装のみ変更しており、各dotfilesへの移行・lock更新・rebuildは別作業。
-完了済みの共有実装、利用側の移行手順、未実装候補は[作業台帳](docs/inventory.md)を参照。
+`.dotfiles` のattodesk / attolapは共有input・公開APIへのコード移行と回帰評価済み（実機未適用）。
+共有側全37評価、利用側の両NixOS/HM評価、生成設定比較と関連scriptテストを確認。
+現在の固定revisionは利用側の `flake.lock` を参照する。
+各ホストのbuild・rebuildと実機動作の確認は別工程。
+共有実装、利用側の移行状況、未実装候補は[作業台帳](docs/inventory.md)を参照。

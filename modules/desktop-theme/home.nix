@@ -3,6 +3,7 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
 let
@@ -24,9 +25,11 @@ in
   config = lib.mkIf osConfig.modules.desktop-theme.enable {
     home.pointerCursor = {
       enable = true;
-      # Supply the package per HM user; the archive URL/hash stays with the consumer.
       package = lib.mkDefault (
-        throw "desktop-theme: set home.pointerCursor.package for every HM user (for example attopkgs.custom-cursors { cursor = pkgs.fetchurl { ... }; })."
+        if osConfig.modules.desktop-theme.cursor != null then
+          attopkgs.custom-cursors { cursor = osConfig.modules.desktop-theme.cursor; }
+        else
+          throw "desktop-theme: supply modules.desktop-theme.cursor or home.pointerCursor.package for every HM user."
       );
       name = lib.mkDefault "Custom-Cursors";
       size = lib.mkDefault 48;
