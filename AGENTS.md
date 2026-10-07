@@ -1,14 +1,18 @@
-# Module作成の作業手順
+# 共有moduleの作成・利用側の移行
 
-この文書は、`attos-nix-modules`で機能moduleを追加・変更するエージェント向けの手順です。
-共有repoの実装と、利用側dotfilesの移行・lock更新・実機への適用は別作業として扱います。
+利用側dotfilesの移行を依頼された場合は、まず[利用側dotfilesの移行手順](docs/migration.md)を読み、その手順で対象checkout・全構成（guest/image/HMを含む）・許可範囲を確定する。
+[残作業台帳](docs/inventory.md)は次の作業を探すためのもので、稼働状態や採用revisionのAPIの根拠にはしない。
+移行には共有入口と既存の公開APIを使い、共有実装の変更・他repo統合・pin更新・build・実機適用・commit/pushを無断で追加しない。
+
+以下は、`attos-nix-modules`で機能moduleを追加・変更するときの手順。
+共有repoの実装、利用側のコード移行・lock更新、build、実機適用は別の完了条件として扱う。
 
 ## 1. 既存実装と責務を確認する
 
 - 最初に`git status --short`を確認し、既存のユーザー変更を保持する。
 - `README.md`、`docs/inventory.md`、[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の対象moduleページを読む。
 - `modules/default.nix`、対象・依存module、`tests/`の関連テストを確認する。
-- 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。残作業と移行時の差分は`docs/inventory.md`を参照し、現在の設計・APIはREADME・Wiki・実装を優先する。
+- 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。比較・保護・検証は`docs/migration.md`、残作業は`docs/inventory.md`を参照し、現在の設計・APIは採用revisionのREADME・Wiki・実装を確認する。
 - 類似実装や標準NixOS / Home Manager optionを再利用し、独自resolver、ホスト台帳、不要なwrapperを追加しない。
 
 ### 共有側と利用側の境界
@@ -120,6 +124,6 @@ python3 modules/pipeasio/test-register-steam-prefixes.py
 ## 7. ドキュメントと差分を確認する
 
 - `README.md`の機能一覧、scope、依存、独自option、利用側の前提を更新する。
-- moduleのpackage/version・設定項目・設定例・運用上の制約はWikiの対応ページへ記載し、重複する機能別docsを増やさない。custom packageの実装・供給契約は`packages/README.md`へ、残作業は`docs/inventory.md`へ記載する。
+- moduleのpackage/version・設定項目・設定例・運用上の制約はWikiの対応ページへ記載し、重複する機能別docsを増やさない。custom packageの実装・供給契約は`packages/README.md`へ、未完了の作業だけを`docs/inventory.md`へ記載する。完了した項目・成功ログは台帳から削除し、Git履歴/PR等へ残す。
 - `git diff --check`と対象ファイルのdiffを確認し、無関係な変更やcredentialがないことを確認する。新規ファイルは未追跡の内容も確認する。
 - 完了報告には、変更した機能・ファイル、実行した検証、未検証事項を短く記す。利用側の移行や実機適用を行っていない場合は明示する。

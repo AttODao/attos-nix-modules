@@ -3,6 +3,9 @@
 AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機能ごとのenableでシステム設定と全HMユーザーの設定をまとめて有効化する。
 
 各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
+既存構成を移行するエージェントは、編集前に[利用側dotfilesの移行手順](docs/migration.md)を読む。
+対象checkout・全OS/guest/HM/imageの確認から、秘密・永続データの保護、変更前後の比較、評価・適用の区別までを扱う。
+未完了の作業は[残作業台帳](docs/inventory.md)、完了済みの履歴はGit履歴/PR等へ残す。
 
 ## 導入・適用方法（共通）
 
@@ -23,11 +26,11 @@ inputs.shared.url =
 modules = [
   shared.nixosModules.default
   ./common.nix
-  ./attodesk.nix # attolap構成では ./attolap.nix
+  ./node-a.nix # 別の構成ではそのホスト用ファイル
 ];
 ```
 
-利用側ルートの `common.nix` に共通の機能選択・ユーザー差分、`attodesk.nix` / `attolap.nix` に
+利用側ルートの `common.nix` に共通の機能選択・ユーザー差分、`node-a.nix` 等に
 ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストから従来どおりimportする。
 機能別import、独自resolver、利用側のHM module import・standalone HM出力は不要。
 
@@ -327,8 +330,6 @@ python3 modules/atcoder/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsou
 python3 packages/code-server/test-install.py
 ```
 
-`.dotfiles` のattodesk / attolapは共有input・公開APIへのコード移行と回帰評価済み（実機未適用）。
-共有側全37評価、利用側の両NixOS/HM評価、生成設定比較と関連scriptテストを確認。
 現在の固定revisionは利用側の `flake.lock` を参照する。
-各ホストのbuild・rebuildと実機動作の確認は別工程。
-共有実装、利用側の移行状況、未実装候補は[作業台帳](docs/inventory.md)を参照。
+利用側の全構成を比較・評価し、buildと実機確認は別工程として扱う。
+完了条件は[移行手順](docs/migration.md)、次に行う作業は[残作業台帳](docs/inventory.md)を参照。
