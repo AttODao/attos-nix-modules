@@ -154,6 +154,8 @@ assert
   mail.mailserver.storage.path == "/srv/mail/vmail" && mail.mailserver.indexDir == "/srv/mail/index";
 assert
   mail.mailserver.accounts."alice@example.test".hashedPasswordFile == "/run/secrets/mail-alice";
+assert mail.mailserver.accounts."alice@example.test".name == "alice@example.test";
+assert builtins.deepSeq mail.mailserver.accounts true;
 assert
   mail.mailserver.dkim.domains."example.test".selectors.mail.keyFile == "/run/secrets/mail-dkim";
 assert !mail.mailserver.openFirewall && mail.networking.firewall.allowedTCPPorts == [ ];

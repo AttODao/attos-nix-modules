@@ -20,7 +20,9 @@ let
     then
       throw "mailserver: account credentials must be supplied as absolute runtime path strings, never inline hashes or Nix path literals."
     else
-      account
+      # The public option evaluates the upstream schema once; native accounts
+      # must derive their internal read-only name again rather than receive it.
+      builtins.removeAttrs account [ "name" ]
   ) (require "accounts");
   dkimDomains = lib.mapAttrs (
     _: domain:
