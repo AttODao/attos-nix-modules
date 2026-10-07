@@ -16,7 +16,6 @@ let
     {
       monitor = "HDMI-A-1";
       wallpaper = "/home/test/wallpapers/a 'quoted' wallpaper";
-      scaling = "fit";
     }
   ];
   base = t.cfgFor [ ];
@@ -29,11 +28,76 @@ let
     }
   ];
   service = cfg.systemd.user.services.linux-wallpaperengine;
+  enable = {
+    modules.linux-wallpaperengine = {
+      enable = true;
+      inherit wallpapers;
+    };
+  };
+  package = pkgs.linux-wallpaperengine.overrideAttrs (_: {
+    version = "test";
+  });
+  overridden =
+    map
+      (
+        settings:
+        t.hmFor [
+          enable
+          {
+            home-manager.users.test.services.linux-wallpaperengine = settings;
+          }
+        ]
+      )
+      [
+        { inherit package; }
+        { assetsPath = "/home/test/My Assets"; }
+        { assetsPath = null; }
+        {
+          audio = {
+            silent = false;
+            processing = true;
+            automute = false;
+          };
+        }
+        {
+          fps = 30;
+          extraOptions = [ "--no-fullscreen-pause" ];
+        }
+        {
+          wallpapers = [
+            {
+              monitor = "HDMI-A-2";
+              wallpaper = "different";
+              scaling = "fit";
+              extraOptions = [ "--disable-particles" ];
+            }
+          ];
+        }
+        {
+          wallpapers = [
+            {
+              monitor = "DP-1";
+              playlist = "My Playlist";
+            }
+          ];
+        }
+      ];
+  cursor = t.hmFor [
+    enable
+    {
+      home-manager.users.test.home.pointerCursor = {
+        name = "Adwaita";
+        size = 24;
+        package = pkgs.adwaita-icon-theme;
+      };
+    }
+  ];
   invalidScaling = builtins.tryEval (
     builtins.deepSeq
-      (t.cfgFor [
+      (t.hmFor [
+        enable
         {
-          modules.linux-wallpaperengine.wallpapers = [
+          home-manager.users.test.services.linux-wallpaperengine.wallpapers = [
             {
               monitor = "DP-1";
               wallpaper = "123";
@@ -41,7 +105,7 @@ let
             }
           ];
         }
-      ]).modules.linux-wallpaperengine.wallpapers
+      ]).services.linux-wallpaperengine.wallpapers
       true
   );
 in
@@ -59,7 +123,10 @@ assert (builtins.head cfg.services.linux-wallpaperengine.wallpapers).scaling == 
 assert
   (builtins.elemAt cfg.services.linux-wallpaperengine.wallpapers 1).wallpaper
   == "/home/test/wallpapers/a 'quoted' wallpaper";
-assert (builtins.elemAt cfg.services.linux-wallpaperengine.wallpapers 1).scaling == "fit";
+assert (builtins.elemAt cfg.services.linux-wallpaperengine.wallpapers 1).scaling == "fill";
+assert
+  (builtins.head (builtins.elemAt overridden 5).services.linux-wallpaperengine.wallpapers).scaling
+  == "fit";
 assert lib.hasSuffix "/bin/linux-wallpaperengine-commands" (
   builtins.head service.Service.ExecStart
 );
@@ -72,5 +139,18 @@ assert
   ];
 assert service.Install.WantedBy == [ "graphical-session.target" ];
 assert cfg.home.activationPackage.drvPath != "";
+# The launcher derivation must reflect each effective HM override, not only the NixOS API.
+assert lib.all (
+  home:
+  home.systemd.user.services.linux-wallpaperengine.Service.ExecStart != service.Service.ExecStart
+) overridden;
+assert lib.elem package (builtins.head overridden).home.packages;
+assert
+  cursor.systemd.user.services.linux-wallpaperengine.Service.Environment == [
+    "XCURSOR_THEME=Adwaita"
+    "XCURSOR_SIZE=24"
+    "HYPRCURSOR_THEME=Adwaita"
+    "HYPRCURSOR_SIZE=24"
+  ];
 assert !invalidScaling.success;
 true

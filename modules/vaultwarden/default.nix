@@ -12,7 +12,7 @@ in
   ];
 
   options.modules.public-services = ps.option "vaultwarden" (
-    ps.common "Vaultwarden password manager" "http://vaultwarden:80"
+    ps.common "Vaultwarden password manager"
     // {
       dataDir = ps.pathOption "Service root containing the existing vw-data directory.";
       environmentFile = ps.pathOption "Runtime environment file containing Vaultwarden credentials and mail configuration.";
@@ -41,12 +41,12 @@ in
       virtualisation.oci-containers.containers.vaultwarden = {
         image = lib.mkDefault "vaultwarden/server:latest";
         pull = lib.mkDefault "always";
-        environmentFiles = [ environmentFile ];
+        environmentFiles = lib.mkDefault [ environmentFile ];
         environment.TZ = lib.mkDefault "Asia/Tokyo";
-        autoRemoveOnStop = false;
-        extraOptions = [ "--restart=unless-stopped" ];
-        volumes = [ "${root}/vw-data:/data" ];
-        networks = [ "traefik" ];
+        autoRemoveOnStop = lib.mkDefault false;
+        extraOptions = lib.mkDefault [ "--restart=unless-stopped" ];
+        volumes = lib.mkDefault [ "${root}/vw-data:/data" ];
+        networks = lib.mkDefault [ "traefik" ];
       };
     })
   ];

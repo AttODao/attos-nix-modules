@@ -14,7 +14,7 @@ let
   overridden = t.hmFor [
     { modules.ssh.enable = true; }
     {
-      modules.ssh = {
+      home-manager.users.test.programs.ssh.settings = {
         extra = {
           HostName = "extra.example.org";
           User = "other";
@@ -32,17 +32,42 @@ let
       modules = [
         {
           modules.ssh.enable = true;
-          modules.ssh.extra.HostName = "multi.example.org";
+          modules.public-services."multi.example.org".ssh = {
+            enable = true;
+            host = "remote";
+            address = "10.0.0.2";
+            user = "remote";
+          };
           users.users.alice.home = "/srv/alice";
           users.users.bob = {
             isNormalUser = true;
             home = "/srv/bob";
           };
-          home-manager.users.bob = { };
+          home-manager.users.bob.programs.ssh.settings."multi.example.org".User = "bob-remote";
         }
       ];
     }).config;
-  disabled = t.hmFor [ { modules.ssh.extra.HostName = "disabled.example.org"; } ];
+  disabled = t.hmFor [
+    {
+      modules.public-services."disabled.example.org".ssh = {
+        enable = true;
+        host = "remote";
+        address = "10.0.0.3";
+        user = "remote";
+      };
+    }
+  ];
+  registry = t.hmFor [
+    {
+      modules.ssh.enable = true;
+      modules.public-services."git.attodao.cc".ssh = {
+        enable = true;
+        host = "remote";
+        address = "10.0.0.4";
+        user = "registry-git";
+      };
+    }
+  ];
   invalidHost = builtins.tryEval (t.cfgFor [ { modules.ssh.extra = "invalid"; } ]).modules.ssh.extra;
 in
 assert !invalidHost.success;
@@ -55,7 +80,16 @@ assert base.programs.ssh.systemd-ssh-proxy.enable;
 assert ssh.programs.ssh.enable && !ssh.programs.ssh.enableDefaultConfig;
 assert !cfg.programs.ssh.systemd-ssh-proxy.enable;
 assert !cfg.services.openssh.enable;
-assert builtins.attrNames settings == [ "*" "attobox" "attofort" "desktop" "devcon" "git" "github" ];
+assert
+  builtins.attrNames settings == [
+    "*"
+    "attobox"
+    "attofort"
+    "desktop"
+    "devcon"
+    "git"
+    "github"
+  ];
 assert settings.attofort.data.HostName == "attofort.attodao.cc";
 assert settings.attobox.data.HostName == "attobox.attodao.cc";
 assert settings.devcon.data.HostName == "dev.attodao.cc";
@@ -79,8 +113,17 @@ assert lib.hasInfix "Host extra" overridden.home.file.".ssh/config".text;
 assert overridden.programs.ssh.settings.attobox.data.HostName == "attobox.attodao.cc";
 assert multi.home-manager.users.alice.programs.ssh.enable;
 assert multi.home-manager.users.bob.programs.ssh.enable;
-assert multi.home-manager.users.alice.programs.ssh.settings.extra.data.HostName == "multi.example.org";
-assert multi.home-manager.users.bob.programs.ssh.settings.extra.data.HostName == "multi.example.org";
-assert lib.hasInfix "/srv/alice/.ssh" multi.home-manager.users.alice.home.activation.installSshConfig.data;
-assert lib.hasInfix "/srv/bob/.ssh" multi.home-manager.users.bob.home.activation.installSshConfig.data;
+assert
+  multi.home-manager.users.alice.programs.ssh.settings."multi.example.org".data.HostName
+  == "multi.example.org";
+assert
+  multi.home-manager.users.alice.programs.ssh.settings."multi.example.org".data.User == "remote";
+assert
+  multi.home-manager.users.bob.programs.ssh.settings."multi.example.org".data.User == "bob-remote";
+assert registry.programs.ssh.settings."git.attodao.cc".data.User == "registry-git";
+assert lib.elem "git" registry.programs.ssh.settings."git.attodao.cc".before;
+assert lib.hasInfix "/srv/alice/.ssh"
+  multi.home-manager.users.alice.home.activation.installSshConfig.data;
+assert lib.hasInfix "/srv/bob/.ssh"
+  multi.home-manager.users.bob.home.activation.installSshConfig.data;
 true

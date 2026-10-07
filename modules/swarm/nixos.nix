@@ -8,6 +8,36 @@ let
   cfg = config.modules.swarm;
   ps = import ../public-services/lib.nix { inherit lib; };
   required = field: ps.require "modules.swarm" field cfg.${field};
+  managerHost =
+    let
+      address = required "managerAddress";
+      parts = builtins.match "([a-zA-Z0-9.-]+|[[][0-9a-fA-F:]+[]])(:([0-9]+))?" address;
+      host = builtins.head parts;
+      port = builtins.elemAt parts 2;
+      ipv6 = lib.removeSuffix "]" (lib.removePrefix "[" host);
+      validHost =
+        if lib.hasPrefix "[" host then
+          lib.all (piece: builtins.stringLength piece <= 4) (lib.splitString ":" ipv6)
+          && (builtins.tryEval (builtins.deepSeq (lib.network.ipv6.fromString ipv6) true)).success
+        else if builtins.match "[0-9.]+" host != null then
+          builtins.match "[0-9]{1,3}([.][0-9]{1,3}){3}" host != null
+          && lib.all (octet: builtins.match "0|[1-9][0-9]{0,2}" octet != null && lib.toInt octet <= 255) (
+            lib.splitString "." host
+          )
+        else
+          builtins.stringLength host <= 253
+          &&
+            builtins.match "[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*[.]?" host
+            != null;
+      validPort =
+        port == null || (builtins.match "[1-9][0-9]{0,4}" port != null && lib.toInt port <= 65535);
+    in
+    if parts != null && validHost && validPort then
+      host
+    else
+      throw "modules.swarm.managerAddress must be an IPv4 address, hostname or bracketed hexadecimal IPv6 address, with an optional port from 1 to 65535.";
+  managerAddress = builtins.seq managerHost (required "managerAddress");
+  networkReadyUrl = "http://${managerHost}:2378/traefik-network-ready";
   swarm = pkgs.writeShellApplication {
     name = "attos-swarm";
     runtimeInputs = [
@@ -55,7 +85,7 @@ in
                   ]
                 }"
               else
-                "${swarm}/bin/attos-swarm worker ${lib.escapeShellArg (required "managerAddress")} %d/join-token";
+                "${swarm}/bin/attos-swarm worker ${lib.escapeShellArg managerAddress} %d/join-token";
           }
           // lib.optionalAttrs (!manager) {
             LoadCredential = [ "join-token:${required "joinTokenFile"}" ];
@@ -85,7 +115,7 @@ in
                   ]
                 }"
               else
-                "${swarm}/bin/attos-swarm wait ${lib.escapeShellArg (required "networkReadyUrl")}";
+                "${swarm}/bin/attos-swarm wait ${lib.escapeShellArg networkReadyUrl}";
           };
         };
       }
@@ -100,7 +130,7 @@ in
             ExecStart = "${pkgs.python3}/bin/python3 ${./readiness-server.py} ${
               lib.escapeShellArgs [
                 cfg.readinessAddress
-                (toString cfg.readinessPort)
+                "2378"
                 marker
               ]
             }";

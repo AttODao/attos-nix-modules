@@ -35,7 +35,6 @@ let
       };
       uid = 1200;
       gid = 1201;
-      cronFile = "/run/operations/download-cron";
     };
     modules.open-terminal = {
       dataDir = "/srv/terminal";
@@ -58,11 +57,13 @@ let
     modules.public-services = {
       "vault.example.test".vaultwarden = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/passwords";
         environmentFile = "/run/credentials/vault.env";
       };
       "cloud.example.test".opencloud = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/cloud";
         environmentFile = "/run/credentials/cloud.env";
         uid = 1400;
@@ -70,6 +71,7 @@ let
       };
       "mine.example.test".mineos = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/minecraft";
         environmentFile = "/run/credentials/mine.env";
         uid = 1500;
@@ -77,16 +79,19 @@ let
       };
       "media.example.test".jellyfin = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/media-server";
         mediaDir = "/srv/downloads";
       };
       "chat.example.test".open-webui = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/chat";
         ollamaUrl = "http://10.1.0.1:11434";
       };
       "search.example.test".searxng = {
         enable = true;
+        host = "nixos";
         private = true;
         environmentFile = "/run/credentials/search.env";
       };
@@ -117,8 +122,8 @@ let
         name = "${service}.remote.example.test";
         value.${service} = {
           enable = true;
+          host = "remote";
           deploy = false;
-          backendUrl = "https://remote-backend.example.test";
         };
       }) services
     );
@@ -133,7 +138,11 @@ let
     ++ [
       {
         virtualisation.oci-containers.containers = {
-          vaultwarden.environment.TZ = "UTC";
+          vaultwarden = {
+            environment.TZ = "UTC";
+            autoRemoveOnStop = true;
+            extraOptions = [ "--restart=on-failure" ];
+          };
           opencloud.environment.OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD = "true";
           mineos-api.environment.Host__OwnerUid = "1600";
           mineos-web.environment.BODY_SIZE_LIMIT = "1G";
@@ -146,7 +155,8 @@ let
           searxng.environment.SEARXNG_LIMITER = "true";
           open-terminal.environment.OPEN_TERMINAL_MAX_SESSIONS = "8";
         };
-        modules.open-terminal.allowedOrigins = "https://other.example.test";
+        virtualisation.oci-containers.containers.open-terminal.environment.OPEN_TERMINAL_CORS_ALLOWED_ORIGINS =
+          "https://other.example.test";
         services.ollama = {
           port = 11435;
           environmentVariables.OLLAMA_CONTEXT_LENGTH = "8192";
@@ -158,11 +168,18 @@ let
     swarm
     inputs
     {
-      modules.public-services."chat.example.test".open-webui = {
-        enable = true;
-        dataDir = "/srv/chat";
-        ollamaUrl = "http://10.1.0.1:11434";
-        searxngUrl = "https://external-search.example.test/search";
+      modules.public-services = {
+        "chat.example.test".open-webui = {
+          enable = true;
+          host = "nixos";
+          dataDir = "/srv/chat";
+          ollamaUrl = "http://10.1.0.1:11434";
+        };
+        "search.example.test".searxng = {
+          enable = true;
+          host = "nixos";
+          environmentFile = "/run/credentials/search.env";
+        };
       };
     }
   ];
@@ -173,13 +190,14 @@ let
       modules.public-services = {
         "chat.example.test".open-webui = {
           enable = true;
+          host = "nixos";
           dataDir = "/srv/chat";
           ollamaUrl = "http://10.1.0.1:11434";
         };
         "search.remote.test".searxng = {
           enable = true;
+          host = "remote";
           deploy = false;
-          backendUrl = "https://search-backend.example.test/";
         };
       };
     }
@@ -201,10 +219,9 @@ let
         swarm
         inputs
         {
-          modules.open-terminal = {
-            enable = true;
-            allowedOrigins = "https://terminal-client.example.test";
-          };
+          modules.open-terminal.enable = true;
+          virtualisation.oci-containers.containers.open-terminal.environment.OPEN_TERMINAL_CORS_ALLOWED_ORIGINS =
+            "https://terminal-client.example.test";
         }
       ];
     }).config;
@@ -216,7 +233,12 @@ let
       builtins.deepSeq
         (t.cfgFor [
           swarm
-          { modules.public-services."missing.example.test".${name}.enable = true; }
+          {
+            modules.public-services."missing.example.test".${name} = {
+              enable = true;
+              host = "nixos";
+            };
+          }
         ]).virtualisation.oci-containers.containers
         true
     );
@@ -238,11 +260,13 @@ let
       modules.public-services = {
         "one.example.test".vaultwarden = {
           enable = true;
+          host = "nixos";
           dataDir = "/srv/one";
           environmentFile = "/run/one.env";
         };
         "two.example.test".vaultwarden = {
           enable = true;
+          host = "nixos";
           dataDir = "/srv/two";
           environmentFile = "/run/two.env";
         };
@@ -366,6 +390,13 @@ assert
   && terminalOnly.modules.swarm.enable
   && !terminalOnly.modules.ollama.enable;
 assert o.vaultwarden.environment.TZ == "UTC";
+assert o.vaultwarden.autoRemoveOnStop;
+assert o.vaultwarden.extraOptions == [ "--restart=on-failure" ];
+assert o.vaultwarden.image == c.vaultwarden.image && o.vaultwarden.pull == c.vaultwarden.pull;
+assert
+  o.vaultwarden.volumes == c.vaultwarden.volumes
+  && o.vaultwarden.environmentFiles == c.vaultwarden.environmentFiles
+  && o.vaultwarden.networks == c.vaultwarden.networks;
 assert o.opencloud.environment.OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD == "true";
 assert o.mineos-api.environment.Host__OwnerUid == "1600";
 assert o.mineos-web.environment.BODY_SIZE_LIMIT == "1G";
@@ -381,13 +412,15 @@ assert overrides.services.ollama.port == 11435;
 assert overrides.services.ollama.environmentVariables.OLLAMA_CONTEXT_LENGTH == "8192";
 assert
   explicitSearch.virtualisation.oci-containers.containers.open-webui.environment.SEARXNG_QUERY_URL
-  == "https://external-search.example.test/search";
+  == "http://searxng:8080/search";
 assert
-  explicitSearch.virtualisation.oci-containers.containers.open-webui.dependsOn == [ "open-terminal" ];
-assert !(explicitSearch.virtualisation.oci-containers.containers ? searxng);
+  explicitSearch.virtualisation.oci-containers.containers.open-webui.dependsOn == [
+    "open-terminal"
+    "searxng"
+  ];
 assert
   remoteSearch.virtualisation.oci-containers.containers.open-webui.environment.SEARXNG_QUERY_URL
-  == "https://search-backend.example.test/search";
+  == "http://searxng:8080/search";
 assert
   remoteSearch.virtualisation.oci-containers.containers.open-webui.dependsOn == [ "open-terminal" ];
 assert lib.all (name: !(missing name).success) services;

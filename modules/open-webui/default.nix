@@ -4,22 +4,12 @@ let
   s = ps.select config "open-webui";
   root = ps.require "open-webui" "dataDir" s.cfg.dataDir;
   environmentFile =
-    ps.require "open-webui" "environmentFile or modules.open-terminal.environmentFile"
-      (
-        if s.cfg.environmentFile != null then
-          s.cfg.environmentFile
-        else
-          config.modules.open-terminal.environmentFile
-      );
+    ps.require "open-webui" "modules.open-terminal.environmentFile"
+      config.modules.open-terminal.environmentFile;
   ollamaUrl = ps.require "open-webui" "ollamaUrl" s.cfg.ollamaUrl;
-  searchEntries = ps.entries config "searxng";
-  searxngUrl = ps.require "open-webui" "searxngUrl (or exactly one enabled SearXNG hostname)" (
-    if s.cfg.searxngUrl != null then
-      s.cfg.searxngUrl
-    else if builtins.length searchEntries == 1 then
-      "${lib.removeSuffix "/" (builtins.head searchEntries).cfg.backendUrl}/search"
-    else
-      null
+  searchRoutes = lib.filter (route: route.service == "searxng") (ps.routes config);
+  searxngUrl = ps.require "open-webui" "an enabled SearXNG registry entry" (
+    if searchRoutes == [ ] then null else "${(builtins.head searchRoutes).cfg.backendUrl}/search"
   );
   localSearch = ps.select config "searxng";
 in
@@ -33,19 +23,13 @@ in
   ];
 
   options.modules.public-services = ps.option "open-webui" (
-    ps.common "Open WebUI" "http://open-webui:8080"
+    ps.common "Open WebUI"
     // {
       dataDir = ps.pathOption "Service root containing the existing data directory and persistent authentication state.";
-      environmentFile = ps.pathOption "Runtime Open WebUI environment file; defaults to modules.open-terminal.environmentFile.";
       ollamaUrl = lib.mkOption {
         type = lib.types.nullOr lib.types.nonEmptyStr;
         default = null;
         description = "Consumer-selected Ollama HTTP endpoint reachable from the container; the consumer configures the native listener/network.";
-      };
-      searxngUrl = lib.mkOption {
-        type = lib.types.nullOr lib.types.nonEmptyStr;
-        default = null;
-        description = "SearXNG query URL reachable from the container. If unset, use the backendUrl plus /search of the sole enabled SearXNG registry entry (local or remote).";
       };
     }
   );
@@ -57,7 +41,6 @@ in
       modules.swarm.enable = true;
       modules.ollama.enable = true;
       modules.open-terminal.enable = true;
-      modules.open-terminal.allowedOrigins = lib.mkDefault "https://${s.hostname}";
 
       systemd.tmpfiles.rules = [
         "d ${builtins.toJSON root} 0700 root root -"
@@ -81,7 +64,7 @@ in
       };
       virtualisation.oci-containers.containers.open-webui = {
         image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.11.4";
-        environmentFiles = [ environmentFile ];
+        environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) {
           WEBUI_URL = "https://${s.hostname}";
           OLLAMA_BASE_URL = ollamaUrl;
@@ -123,17 +106,17 @@ in
           CONTEXT_COMPACTION_TOKEN_CAP = "32000";
           CONTEXT_COMPACTION_RETENTION_PERCENTAGE = "40";
         };
-        autoRemoveOnStop = false;
-        extraOptions = [
+        autoRemoveOnStop = lib.mkDefault false;
+        extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
           "--network-alias=open-webui"
         ];
-        volumes = [
+        volumes = lib.mkDefault [
           "${root}/data:/app/backend/data"
           "/etc/localtime:/etc/localtime:ro"
         ];
         dependsOn = [ "open-terminal" ] ++ lib.optional localSearch.enabled "searxng";
-        networks = [ "traefik" ];
+        networks = lib.mkDefault [ "traefik" ];
       };
     })
   ];

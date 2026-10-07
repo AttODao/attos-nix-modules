@@ -43,8 +43,12 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = cfg.ingressAddresses != [ ] || hosts == { };
-        message = "modules.dns.ingressAddresses must be supplied when service hostnames are registered.";
+        assertion =
+          cfg.ingressAddresses != [ ]
+          || lib.all (
+            services: (services.ssh.enable or false) || (services.wireguard-server.enable or false)
+          ) (lib.attrValues hosts);
+        message = "modules.dns.ingressAddresses must be supplied for ordinary service hostnames.";
       }
     ];
     environment.etc."dnsmasq-public-services".source = hostsFile;

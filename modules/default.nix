@@ -3,6 +3,8 @@
   imports = [
     ./home-manager
     ./public-services
+    ./code-server
+    ./sunshine
     ./cloudflare-ddns
     ./cloudflare-public-cnames
     ./dns
@@ -27,6 +29,8 @@
     ./vaultwarden
     ./wireguard-server
     ./ytdl-sub
+    ./atcoder
+    ./desktop-theme
     ./discord
     ./fcitx5
     ./floorp
@@ -36,6 +40,7 @@
     ./hyprland
     ./linux-wallpaperengine
     ./login-pin
+    ./limine
     ./noctalia
     ./open-deck-desktop
     ./opencloud-client
@@ -47,9 +52,11 @@
     ./pipewire
     ./solaar
     ./ssh
+    ./steam
     ./thunderbird
     ./userDirs
     ./vscode
+    ./wireguard-client
     ./zsh
   ];
 }

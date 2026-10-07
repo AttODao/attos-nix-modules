@@ -25,8 +25,8 @@ in
       mimeApps = {
         enable = true;
         defaultApplications = {
-          "inode/directory" = "pcmanfm.desktop";
-          "x-directory/normal" = "pcmanfm.desktop";
+          "inode/directory" = lib.mkDefault [ "pcmanfm.desktop" ];
+          "x-directory/normal" = lib.mkDefault [ "pcmanfm.desktop" ];
         };
       };
     };

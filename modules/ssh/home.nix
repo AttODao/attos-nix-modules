@@ -6,6 +6,22 @@
   ...
 }:
 let
+  ps = import ../public-services/lib.nix { inherit lib; };
+  registrySettings = builtins.listToAttrs (
+    map (entry: {
+      name = entry.hostname;
+      # Specific registry hosts must precede legacy alias blocks matching the same FQDN.
+      value = lib.hm.dag.entryBefore [ "attobox" "attofort" "desktop" "devcon" "git" "github" ] (
+        lib.mapAttrs (_: lib.mkDefault) (
+          {
+            HostName = entry.hostname;
+            IdentityFile = "~/.ssh/id_ed25519";
+          }
+          // lib.optionalAttrs (entry.cfg.user != null) { User = entry.cfg.user; }
+        )
+      );
+    }) (ps.entries osConfig "ssh")
+  );
   sshDir = "${config.home.homeDirectory}/.ssh";
   sshConfig = pkgs.writeText "ssh-config" config.home.file.".ssh/config".text;
 in
@@ -65,7 +81,7 @@ in
             IdentitiesOnly = true;
           };
         }
-        (builtins.removeAttrs osConfig.modules.ssh [ "enable" ])
+        registrySettings
       ];
     };
 

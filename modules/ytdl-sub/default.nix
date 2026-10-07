@@ -32,7 +32,6 @@ in
       default = null;
       description = "Consumer-supplied numeric group and container PGID.";
     };
-    cronFile = configFile "Optional caller cron script. Default runs YouTube then Twitch on the legacy three-hour OCI schedule; it intentionally retains the legacy last-command exit status and permits overlapping invocations.";
   };
 
   config = lib.mkIf config.modules.ytdl-sub.enable {

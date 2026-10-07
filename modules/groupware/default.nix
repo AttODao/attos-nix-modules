@@ -2,25 +2,13 @@
 let
   ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "groupware";
-  mailHost =
-    if !selected.enabled then
-      ""
-    else if selected.cfg.mailserverHostName == null then
-      selected.hostname
-    else
-      selected.cfg.mailserverHostName;
-  serviceOptions = ps.common "shared Roundcube and Radicale groupware" "http://localhost" // {
+  serviceOptions = ps.common "shared Roundcube and Radicale groupware" // {
     backendUrl = lib.mkOption {
       type = lib.types.nullOr lib.types.nonEmptyStr;
       default = null;
       description = "Native nginx upstream reachable by the gateway; required when Traefik forwards this service. Do not use Docker's own loopback address.";
     };
     dataDir = ps.pathOption "Consumer-owned Radicale data directory (collections and generated runtime authentication).";
-    mailserverHostName = lib.mkOption {
-      type = lib.types.nullOr lib.types.nonEmptyStr;
-      default = null;
-      description = "Hostname of an enabled local mailserver. Null enables the same-hostname mailserver dependency; other hostnames must be enabled explicitly.";
-    };
   };
 in
 {
@@ -31,9 +19,10 @@ in
         { config, ... }: {
           options.groupware = serviceOptions;
           # Keep the dependency inside each hostname submodule, not a root registry scan.
-          config.mailserver.enable = lib.mkIf (
-            config.groupware.enable && config.groupware.deploy && config.groupware.mailserverHostName == null
-          ) true;
+          config.mailserver = lib.mkIf (config.groupware.enable && config.groupware.deploy) {
+            enable = true;
+            host = lib.mkDefault config.groupware.host;
+          };
         }
       )
     );
@@ -44,9 +33,9 @@ in
       assertions = [
         {
           assertion =
-            lib.attrByPath [ mailHost "mailserver" "enable" ] false config.modules.public-services
-            && lib.attrByPath [ mailHost "mailserver" "deploy" ] false config.modules.public-services;
-          message = "groupware: mailserverHostName must refer to an enabled local mailserver deployment.";
+            lib.attrByPath [ selected.hostname "mailserver" "enable" ] false config.modules.public-services
+            && ps.isLocal config config.modules.public-services.${selected.hostname}.mailserver;
+          message = "groupware: the same hostname must have an enabled local mailserver deployment.";
         }
       ];
     })

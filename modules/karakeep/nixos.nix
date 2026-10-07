@@ -13,9 +13,9 @@ let
   environmentFile = ps.require "karakeep" "environmentFile" cfg.environmentFile;
   dataUid = toString (ps.require "karakeep" "dataUid" cfg.dataUid);
   dataGid = toString (ps.require "karakeep" "dataGid" cfg.dataGid);
-  networkSubnet = ps.require "karakeep" "networkSubnet" cfg.networkSubnet;
-  networkGateway = ps.require "karakeep" "networkGateway" cfg.networkGateway;
-  chromeAddress = ps.require "karakeep" "chromeAddress" cfg.chromeAddress;
+  networkSubnet = "172.20.0.0/24";
+  networkGateway = "172.20.0.1";
+  chromeAddress = "172.20.0.3";
   baseUrl = "https://${s.hostname}";
 
   ensureNetwork = lib.replaceStrings [ "@docker@" "@subnet@" "@gateway@" ] (map lib.escapeShellArg [

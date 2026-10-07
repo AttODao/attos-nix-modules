@@ -13,7 +13,7 @@ in
   ];
 
   options.modules.public-services = ps.option "jellyfin" (
-    ps.common "Jellyfin media server" "http://jellyfin:8096"
+    ps.common "Jellyfin media server"
     // {
       dataDir = ps.pathOption "Service root containing the existing cache, config, fonts, music and video directories.";
       mediaDir = ps.pathOption "Consumer-selected ytdl-sub media root containing YouTube and Twitch; mounted read-only at /ytdl-sub.";
@@ -51,12 +51,12 @@ in
           TZ = "Asia/Tokyo";
           JELLYFIN_PublishedServerUrl = "https://${s.hostname}";
         };
-        autoRemoveOnStop = false;
-        extraOptions = [
+        autoRemoveOnStop = lib.mkDefault false;
+        extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
           "--add-host=host.docker.internal:host-gateway"
         ];
-        volumes = [
+        volumes = lib.mkDefault [
           "/etc/localtime:/etc/localtime:ro"
           "${root}/config:/config"
           "${root}/cache:/cache"
@@ -65,7 +65,7 @@ in
           "${mediaDir}:/ytdl-sub:ro"
           "${root}/fonts:/usr/local/share/fonts/custom:ro"
         ];
-        networks = [ "traefik" ];
+        networks = lib.mkDefault [ "traefik" ];
       };
     })
   ];

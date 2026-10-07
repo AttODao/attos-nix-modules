@@ -19,7 +19,7 @@ in
   ];
 
   options.modules.public-services = ps.option "mailserver" (
-    ps.common "shared simple-nixos-mailserver integration" null
+    ps.common "shared simple-nixos-mailserver integration"
     // {
       domains = nullable (lib.types.listOf lib.types.nonEmptyStr) "Consumer-owned mail domains; the first is the system domain.";
       backendAddress = nullable lib.types.nonEmptyStr "Native mail upstream address reachable by Traefik (without a port); required on the gateway when mail forwarding is enabled.";
@@ -41,7 +41,6 @@ in
           "Accounts using the standard upstream mailserver.accounts interface. Supply runtime hashedPasswordFile paths, not inline credentials.";
       stateVersion = nullable lib.types.int "Existing simple-nixos-mailserver stateVersion; the consumer owns migrations.";
       dataDir = ps.pathOption "Mail data directory containing vmail, index and dkim subdirectories.";
-      acmeHost = nullable lib.types.nonEmptyStr "Name of the consumer-managed security.acme.certs certificate used for mail TLS. Its provider, credentials, paths, terms and contact stay with the consumer.";
       dkimDomains = nullable (options.mailserver.dkim.domains.type or lib.types.attrs
       ) "Upstream DKIM domain/selector definitions with consumer-provided runtime keyFile paths.";
       relayHost = nullable lib.types.nonEmptyStr "Optional upstream Postfix relayhost, for example [smtp.example.org]:587. Null sends directly.";

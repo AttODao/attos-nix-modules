@@ -7,14 +7,17 @@
 }:
 let
   cfg = osConfig.modules.noctalia;
-  recordingsDirectory = "${config.xdg.userDirs.videos}/Recordings";
+  defaultRecordingsDirectory = "${config.xdg.userDirs.videos}/Recordings";
+  recordingsDirectory =
+    config.programs.noctalia.settings.plugin_settings."noctalia/screen_recorder".directory;
+  recorderPackage = osConfig.programs.gpu-screen-recorder.package;
 in
 {
   config = lib.mkIf cfg.enable {
     home.packages = [
       pkgs.wl-clipboard
     ]
-    ++ lib.optional cfg.screenRecorder.enable pkgs.gpu-screen-recorder;
+    ++ lib.optional cfg.screenRecorder.enable recorderPackage;
 
     home.activation.ensureNoctaliaRecordingsDir = lib.mkIf cfg.screenRecorder.enable (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -30,9 +33,9 @@ in
         plugins.enabled = lib.optional cfg.screenRecorder.enable "noctalia/screen_recorder";
         plugin_settings = lib.mkIf cfg.screenRecorder.enable {
           "noctalia/screen_recorder" = {
-            directory = recordingsDirectory;
-            video_source = "portal";
-            video_codec = "h264";
+            directory = lib.mkDefault defaultRecordingsDirectory;
+            video_source = lib.mkDefault "portal";
+            video_codec = lib.mkDefault "h264";
           };
         };
         widget = lib.mkIf cfg.screenRecorder.enable {
@@ -100,7 +103,7 @@ in
           active_monitor_only = false;
           show_running = true;
           show_dots = true;
-          pinned = cfg.dock.pinned;
+          pinned = lib.mkDefault cfg.dock.pinned;
         };
 
         theme = {
@@ -117,10 +120,10 @@ in
         calendar = {
           enabled = true;
           refresh_minutes = 15;
-          account = cfg.calendar.account;
+          account = lib.mkDefault { };
         };
 
-        location = cfg.location;
+        location = lib.mkDefault { };
 
         nightlight = {
           enabled = true;

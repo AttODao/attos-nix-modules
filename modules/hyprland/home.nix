@@ -1,6 +1,7 @@
 {
   osConfig,
   config,
+  options,
   lib,
   pkgs,
   ...
@@ -8,13 +9,19 @@
 let
   cfg = osConfig.modules.hyprland;
   mod = "SUPER";
-  cursorTheme = "Custom-Cursors";
-  cursorSize = "48";
+  # Home Manager defaults pointerCursor to an empty submodule, not null.
+  cursor =
+    if options.home.pointerCursor.highestPrio == (lib.mkOptionDefault { }).priority then
+      null
+    else
+      config.home.pointerCursor;
+  cursorTheme = if cursor != null then cursor.name else "Custom-Cursors";
+  cursorSize = if cursor != null then toString cursor.size else "48";
   systemctl = "${pkgs.systemd}/bin/systemctl";
   noctalia = cmd: "noctalia msg ${cmd}";
   powerButtonCommand = "${noctalia "session lock"} && sleep 1 && ${noctalia "monitors off"}";
   lidMonitorCommand = action: "sleep 1 && ${noctalia "monitors ${action}"}";
-  screenshotDirectory = "${config.xdg.userDirs.pictures}/Screenshots";
+  screenshotDirectory = lib.escapeShellArg "${config.xdg.userDirs.pictures}/Screenshots";
   lua = lib.generators.mkLuaInline;
 
   luaBind = keys: dispatcher: options: {
@@ -62,12 +69,15 @@ in
 
     wayland.windowManager.hyprland = {
       enable = true;
+      package = lib.mkDefault osConfig.programs.hyprland.package;
+      portalPackage = lib.mkDefault osConfig.programs.hyprland.portalPackage;
       configType = "lua";
 
       systemd.enable = false;
       xwayland.enable = true;
 
-      settings = {
+      # Default individual leaves/lists, keeping Lua marker attrsets atomic.
+      settings = lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault) {
         mod._var = mod;
 
         config = {
@@ -185,7 +195,9 @@ in
           }
         ];
 
-        monitor = map (monitor: lib.filterAttrs (_: value: value != null) monitor) cfg.monitors;
+        monitor = map (
+          monitor: lib.filterAttrs (_: value: value != null) monitor // { scale = 1; }
+        ) cfg.monitors;
 
         curve = [
           {

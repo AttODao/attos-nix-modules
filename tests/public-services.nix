@@ -61,39 +61,47 @@ let
   registry.modules.public-services = {
     "vault.example.test".vaultwarden = {
       enable = true;
+      host = "remote";
       deploy = false;
-      backendUrl = "http://vaultwarden:80";
     };
     "search.example.test".searxng = {
       enable = true;
+      host = "remote";
       deploy = false;
       private = true;
     };
     "code.example.test".code-server = {
       enable = true;
+      host = "remote";
+      deploy = false;
       backendUrl = "http://10.88.0.10:4444";
       private = true;
     };
     "sun.example.test".sunshine = {
       enable = true;
+      host = "remote";
+      deploy = false;
       backendUrl = "https://10.88.0.11:47990";
       private = true;
-      insecureSkipVerify = true;
     };
     "ssh.example.test" = {
       ssh = {
         enable = true;
+        host = "remote";
+        deploy = false;
         address = "10.88.0.10";
         user = "dev";
       };
       paseo = {
         enable = true;
+        host = "remote";
         deploy = false;
         private = true;
       };
     };
     "wg.example.test".wireguard-server = {
       enable = true;
+      host = "remote";
       deploy = false;
     };
     "disabled.example.test".opencloud.enable = false;
@@ -112,23 +120,20 @@ let
     modules.public-services."collision.example.test" = {
       vaultwarden = {
         enable = true;
+        host = "remote";
         deploy = false;
       };
       opencloud = {
         enable = true;
+        host = "remote";
         deploy = false;
       };
     };
   };
   protocolRegistry.modules.public-services = {
-    "mine.example.test".mineos = {
-      enable = true;
-      deploy = false;
-      tcpPorts = [ 25565 ];
-      udpPorts = [ 19132 ];
-    };
     "mail.example.test".mailserver = {
       enable = true;
+      host = "remote";
       deploy = false;
       backendAddress = "10.250.0.2";
     };
@@ -145,7 +150,6 @@ let
         role = "worker";
         managerAddress = "10.250.0.1:2377";
         joinTokenFile = "/run/secrets/swarm-token";
-        networkReadyUrl = "http://10.250.0.1:2378/traefik-network-ready";
       };
     }
   ];
@@ -162,10 +166,53 @@ let
       };
     }
   ];
+  directDns = evaluate [
+    {
+      modules.dns = {
+        enable = true;
+        wireguardAddress = "192.168.0.100";
+      };
+      modules.public-services = {
+        "ssh-only.example.test".ssh = {
+          enable = true;
+          host = "remote";
+          address = "10.88.0.10";
+        };
+        "wg-only.example.test".wireguard-server = {
+          enable = true;
+          host = "remote";
+          deploy = false;
+        };
+      };
+    }
+  ];
+  invalidBackendOption =
+    service:
+    builtins.tryEval (
+      builtins.deepSeq
+        (evaluate [
+          {
+            modules.public-services."fixed.example.test".${service}.backendUrl =
+              "http://elsewhere.example.test";
+          }
+        ]).modules.public-services
+        true
+    );
   invalidType =
     builtins.tryEval
       (evaluate [ { modules.public-services."bad.example.test".vaultwarden.enable = "yes"; } ])
       .modules.public-services."bad.example.test".vaultwarden.enable;
+  invalidTlsOption =
+    service:
+    builtins.tryEval (
+      builtins.deepSeq
+        (evaluate [
+          {
+            modules.public-services."tls.example.test".${service}.insecureSkipVerify = true;
+          }
+        ]).modules.public-services
+        true
+    );
   wrongScope =
     builtins.tryEval
       (evaluate [ { modules.vaultwarden.enable = true; } ]).modules.vaultwarden.enable;
@@ -174,7 +221,11 @@ let
     registry
     {
       systemd.timers.cloudflare-ddns.timerConfig.OnCalendar = "hourly";
-      virtualisation.oci-containers.containers.traefik.image = "traefik:test";
+      virtualisation.oci-containers.containers.traefik = {
+        image = "traefik:test";
+        autoRemoveOnStop = true;
+        ports = [ "8443:443" ];
+      };
     }
   ];
 in
@@ -199,7 +250,29 @@ assert dynamic.http.middlewares.private.ipAllowList.sourceRange == [ "10.252.0.0
 assert
   dynamic.http.services."code.example.test".loadBalancer.servers
   == [ { url = "http://10.88.0.10:4444"; } ];
-assert dynamic.http.serversTransports."sun.example.test".insecureSkipVerify;
+assert builtins.attrNames dynamic.http.serversTransports == [ "sun.example.test" ];
+assert dynamic.http.services."sun.example.test".loadBalancer.serversTransport == "sun.example.test";
+assert !(dynamic.http.services."code.example.test".loadBalancer ? serversTransport);
+assert lib.all (service: !(invalidTlsOption service).success) [
+  "code-server"
+  "sunshine"
+];
+assert lib.all (service: !(invalidBackendOption service).success) [
+  "forgejo"
+  "immich"
+  "karakeep"
+  "vaultwarden"
+  "opencloud"
+  "mineos"
+  "jellyfin"
+  "open-webui"
+  "searxng"
+];
+assert lib.all (a: a.assertion) directDns.assertions;
+assert lib.hasInfix "10.88.0.10 ssh-only.example.test"
+  directDns.environment.etc."dnsmasq-public-services".source.text;
+assert lib.hasInfix "192.168.0.100 wg-only.example.test"
+  directDns.environment.etc."dnsmasq-public-services".source.text;
 assert static.entryPoints.web.http.redirections.entryPoint.scheme == "https";
 assert
   cname.records == [
@@ -230,19 +303,14 @@ assert lib.hasInfix "%d/join-token"
   worker.systemd.services.docker-swarm-join.serviceConfig.ExecStart;
 assert
   protocolsDynamic.tcp.services."mail-25".loadBalancer.servers == [ { address = "10.250.0.2:25"; } ];
-assert
-  protocolsDynamic.tcp.services."minecraft-25565".loadBalancer.servers
-  == [ { address = "api:25565"; } ];
-assert
-  protocolsDynamic.udp.services."minecraft-bedrock-19132".loadBalancer.servers
-  == [ { address = "api:19132"; } ];
-assert protocols.networking.firewall.allowedUDPPorts == [ 19132 ];
+assert protocols.networking.firewall.allowedUDPPorts == [ ];
 assert bad [ collision ];
 assert bad [ { modules.public-services."bad_name".vaultwarden.enable = false; } ];
 assert bad [
   {
-    modules.public-services."bad.example.test".vaultwarden = {
+    modules.public-services."bad.example.test".code-server = {
       enable = true;
+      host = "remote";
       deploy = false;
       backendUrl = "file:///tmp/data";
     };
@@ -253,27 +321,19 @@ assert bad [
   registry
   { modules.traefik.privateNetworks = lib.mkForce [ ]; }
 ];
-assert bad [
-  infrastructure
-  {
-    modules.public-services."private.example.test".mineos = {
-      enable = true;
-      deploy = false;
-      private = true;
-    };
-  }
-];
 assert bad [ { modules.public-services."code.example.test".code-server.enable = true; } ];
 assert bad [
   {
     modules.public-services = {
       "private.example.test".vaultwarden = {
         enable = true;
+        host = "remote";
         deploy = false;
         private = true;
       };
       "public.example.test".vaultwarden = {
         enable = true;
+        host = "remote";
         deploy = false;
       };
     };
@@ -286,4 +346,15 @@ assert lib.hasInfix "try-restart docker-sample"
 assert !invalidType.success && !wrongScope.success;
 assert override.systemd.timers.cloudflare-ddns.timerConfig.OnCalendar == "hourly";
 assert override.virtualisation.oci-containers.containers.traefik.image == "traefik:test";
+assert override.virtualisation.oci-containers.containers.traefik.autoRemoveOnStop;
+assert override.virtualisation.oci-containers.containers.traefik.ports == [ "8443:443" ];
+assert
+  override.virtualisation.oci-containers.containers.traefik.volumes
+  == gateway.virtualisation.oci-containers.containers.traefik.volumes;
+assert
+  override.virtualisation.oci-containers.containers.traefik.networks
+  == gateway.virtualisation.oci-containers.containers.traefik.networks;
+assert
+  override.virtualisation.oci-containers.containers.traefik.environmentFiles
+  == gateway.virtualisation.oci-containers.containers.traefik.environmentFiles;
 true

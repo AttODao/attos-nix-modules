@@ -1,6 +1,18 @@
 { lib }:
 let
   inherit (lib) mkOption types;
+  # OCI service names/ports are implementation constants, not consumer endpoints.
+  httpBackends = {
+    forgejo = "http://forgejo:3000";
+    immich = "http://immich-server:2283";
+    karakeep = "http://karakeep:3000";
+    vaultwarden = "http://vaultwarden:80";
+    opencloud = "http://opencloud:9200";
+    mineos = "http://web:3000";
+    jellyfin = "http://jellyfin:8096";
+    open-webui = "http://open-webui:8080";
+    searxng = "http://searxng:8080";
+  };
 in
 rec {
   absolutePath = types.addCheck types.str (
@@ -33,28 +45,24 @@ rec {
       );
     };
 
-  common =
-    description: backendUrl:
-    {
-      enable = lib.mkEnableOption description;
-      deploy = mkOption {
-        type = types.bool;
-        default = true;
-        description = "Run this service on this machine. Set false to register a remote backend without deploying it here.";
-      };
-      private = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Exclude this hostname from public CNAMEs and restrict HTTP access to the configured private networks.";
-      };
-    }
-    // lib.optionalAttrs (backendUrl != null) {
-      backendUrl = mkOption {
-        type = types.nonEmptyStr;
-        default = backendUrl;
-        description = "HTTP upstream reachable by Traefik; override for a remote or native backend.";
-      };
+  common = description: {
+    enable = lib.mkEnableOption description;
+    host = mkOption {
+      type = types.nullOr types.nonEmptyStr;
+      default = null;
+      description = "Owner's networking.hostName, required when enabled. Every fleet configuration imports the same registry; only this host deploys the service.";
     };
+    deploy = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Deploy on the owner host when enabled. False explicitly registers an externally managed endpoint without creating local dependencies or units.";
+    };
+    private = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Exclude this hostname from public CNAMEs and restrict HTTP access to the configured private networks.";
+    };
+  };
 
   entries =
     config: service:
@@ -74,16 +82,27 @@ rec {
     lib.concatLists (
       lib.mapAttrsToList (
         hostname: services:
-        lib.mapAttrsToList (service: cfg: { inherit hostname service cfg; }) (
-          lib.filterAttrs (_: cfg: (cfg.enable or false) && (cfg.backendUrl or null) != null) services
-        )
+        lib.mapAttrsToList
+          (service: cfg: {
+            inherit hostname service;
+            cfg = cfg // {
+              backendUrl = cfg.backendUrl or httpBackends.${service};
+            };
+          })
+          (
+            lib.filterAttrs (
+              service: cfg: (cfg.enable or false) && (cfg.backendUrl or (httpBackends.${service} or null)) != null
+            ) services
+          )
       ) (hosts config)
     );
+
+  isLocal = config: cfg: cfg.deploy && cfg.host != null && cfg.host == config.networking.hostName;
 
   select =
     config: service:
     let
-      local = lib.filter (entry: entry.cfg.deploy) (entries config service);
+      local = lib.filter (entry: isLocal config entry.cfg) (entries config service);
       first = if local == [ ] then null else builtins.head local;
     in
     {
@@ -94,7 +113,7 @@ rec {
       assertions = [
         {
           assertion = builtins.length local <= 1;
-          message = "modules.public-services: only one local ${service} deployment is supported; use deploy = false for remote hosts.";
+          message = "modules.public-services: only one local ${service} deployment is supported on ${config.networking.hostName}; use another host or deploy = false for endpoint-only aliases.";
         }
       ];
     };

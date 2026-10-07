@@ -6,7 +6,7 @@
 }:
 let
   cfg = osConfig.modules.userDirs;
-  homeDirectory = if cfg.homeDirectory == null then config.home.homeDirectory else cfg.homeDirectory;
+  homeDirectory = config.home.homeDirectory;
   dataDirectory = if cfg.dataDirectory == null then homeDirectory else cfg.dataDirectory;
 in
 {
@@ -15,15 +15,15 @@ in
       enable = true;
       userDirs = {
         enable = true;
-        createDirectories = true;
-        desktop = "${homeDirectory}/Desktop";
-        documents = "${dataDirectory}/Documents";
-        download = "${dataDirectory}/Downloads";
-        music = "${dataDirectory}/Music";
-        pictures = "${dataDirectory}/Pictures";
-        publicShare = "${homeDirectory}/Public";
-        templates = "${homeDirectory}/Templates";
-        videos = "${dataDirectory}/Videos";
+        createDirectories = lib.mkDefault true;
+        desktop = lib.mkDefault "${homeDirectory}/Desktop";
+        documents = lib.mkDefault "${dataDirectory}/Documents";
+        download = lib.mkDefault "${dataDirectory}/Downloads";
+        music = lib.mkDefault "${dataDirectory}/Music";
+        pictures = lib.mkDefault "${dataDirectory}/Pictures";
+        publicShare = lib.mkDefault "${homeDirectory}/Public";
+        templates = lib.mkDefault "${homeDirectory}/Templates";
+        videos = lib.mkDefault "${dataDirectory}/Videos";
       };
     };
   };

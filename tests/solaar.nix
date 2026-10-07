@@ -17,6 +17,23 @@ let
     }
   ];
   enabled = t.hm enabledCfg "test";
+  selectedCfg = t.cfgFor [
+    {
+      modules.solaar.enable = true;
+      programs.solaar.package = pkgs.solaar.overrideAttrs { pname = "solaar-selected"; };
+      home-manager.users.test.xdg.configFile = {
+        "solaar/rules.yaml".source = ./solaar.nix;
+        "solaar/config.yaml".source = ./solaar.nix;
+      };
+    }
+  ];
+  selected = t.hm selectedCfg "test";
+  customRules = t.hmFor [
+    {
+      modules.solaar.enable = true;
+      home-manager.users.test.xdg.configFile."solaar/rules.yaml".text = "# custom rules";
+    }
+  ];
   invalidType =
     builtins.tryEval
       (t.cfgFor [ { modules.solaar.enable = "yes"; } ]).modules.solaar.enable;
@@ -26,6 +43,15 @@ assert !base.modules.solaar.enable;
 assert !base.programs.solaar.enable;
 assert builtins.elem pkgs.solaar enabled.home.packages;
 assert builtins.elem pkgs.kando enabled.home.packages;
+assert lib.elem selectedCfg.programs.solaar.package selected.home.packages;
+assert selectedCfg.programs.solaar.package.pname == "solaar-selected";
+assert
+  selected.systemd.user.services.solaar.Service.ExecStart == [
+    "${selectedCfg.programs.solaar.package}/bin/solaar -w hide"
+  ];
+assert selected.xdg.configFile."solaar/rules.yaml".source == ./solaar.nix;
+assert selected.xdg.configFile."solaar/config.yaml".source == ./solaar.nix;
+assert customRules.xdg.configFile."solaar/rules.yaml".text == "# custom rules";
 assert
   enabled.systemd.user.services.solaar.Service.ExecStart == [ "${pkgs.solaar}/bin/solaar -w hide" ];
 assert enabled.systemd.user.services.kando.Service.ExecStart == [ "${pkgs.kando}/bin/kando" ];

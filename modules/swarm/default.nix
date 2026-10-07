@@ -25,7 +25,7 @@ in
     managerAddress = mkOption {
       type = types.nullOr types.nonEmptyStr;
       default = null;
-      description = "Manager address including port, such as 10.250.0.1:2377; required for a worker.";
+      description = "Manager IPv4 address, hostname or bracketed IPv6 address, with optional port (for example 10.250.0.1:2377); required for a worker. Readiness uses the same host on port 2378. IPv6 uses hexadecimal groups without a zone ID.";
     };
     joinTokenFile = ps.pathOption "Decrypted runtime worker join token; the consumer supplies its transport and permissions.";
     tokenOutputFile = mkOption {
@@ -43,20 +43,10 @@ in
       default = null;
       description = "Gateway for the traefik overlay; required for a manager.";
     };
-    networkReadyUrl = mkOption {
-      type = types.nullOr types.nonEmptyStr;
-      default = null;
-      description = "Manager's nonsecret readiness URL; required for a worker before containers attach to the overlay.";
-    };
     readinessAddress = mkOption {
       type = types.nullOr types.nonEmptyStr;
       default = null;
       description = "Optional manager bind address for serving only the overlay readiness marker; firewall access remains consumer-owned.";
-    };
-    readinessPort = mkOption {
-      type = types.port;
-      default = 2378;
-      description = "Port for the optional nonsecret readiness endpoint.";
     };
   };
 }

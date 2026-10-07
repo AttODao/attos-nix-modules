@@ -21,7 +21,7 @@ in
   ];
 
   options.modules.public-services = ps.option "opencloud" (
-    ps.common "OpenCloud server" "http://opencloud:9200"
+    ps.common "OpenCloud server"
     // {
       dataDir = ps.pathOption "Service root containing the existing config and data directories.";
       environmentFile = ps.pathOption "Runtime OpenCloud environment file, including credentials.";
@@ -78,9 +78,9 @@ in
         image = lib.mkDefault "opencloudeu/opencloud-rolling:latest";
         pull = lib.mkDefault "always";
         user = lib.mkDefault "${uid}:${gid}";
-        entrypoint = "/bin/sh";
+        entrypoint = lib.mkDefault "/bin/sh";
         # Keep init non-interactive without disabling certificate verification.
-        cmd = [
+        cmd = lib.mkDefault [
           "-c"
           "printf 'no\\n' | opencloud init || true; exec opencloud server"
         ];
@@ -93,15 +93,15 @@ in
           OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD = "false";
           TZ = "Asia/Tokyo";
         };
-        environmentFiles = [ environmentFile ];
-        autoRemoveOnStop = false;
-        extraOptions = [ "--restart=always" ];
-        volumes = [
+        environmentFiles = lib.mkDefault [ environmentFile ];
+        autoRemoveOnStop = lib.mkDefault false;
+        extraOptions = lib.mkDefault [ "--restart=always" ];
+        volumes = lib.mkDefault [
           "${configDir}:/etc/opencloud"
           "${dataDir}:/var/lib/opencloud"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        networks = [ "traefik" ];
+        networks = lib.mkDefault [ "traefik" ];
       };
     })
   ];

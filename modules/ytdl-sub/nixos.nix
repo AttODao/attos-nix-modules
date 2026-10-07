@@ -16,11 +16,7 @@ let
   youtube = require "subscriptionFiles.youtube" cfg.subscriptionFiles.youtube;
   twitch = require "subscriptionFiles.twitch" cfg.subscriptionFiles.twitch;
   commonConfig = pkgs.writeText "ytdl-sub-config.yaml" (builtins.readFile ./config.yaml);
-  cron =
-    if cfg.cronFile == null then
-      pkgs.writeText "ytdl-sub-cron" (builtins.readFile ./cron)
-    else
-      cfg.cronFile;
+  cron = pkgs.writeText "ytdl-sub-cron" (builtins.readFile ./cron);
   container = config.virtualisation.oci-containers.containers.ytdl-sub;
   # tmpfiles fields support quoted paths; escape specifiers and control chars.
   quotePath =

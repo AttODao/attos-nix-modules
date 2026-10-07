@@ -16,6 +16,7 @@ let
   mailModule = {
     modules.public-services."mail.example.test".mailserver = {
       enable = true;
+      host = "nixos";
       domains = [ "example.test" ];
       accounts."alice@example.test" = {
         hashedPasswordFile = "/run/secrets/mail-alice";
@@ -23,7 +24,6 @@ let
       };
       stateVersion = 5;
       dataDir = "/srv/mail";
-      acmeHost = "mail.example.test";
       dkimDomains."example.test".selectors.mail.keyFile = "/run/secrets/mail-dkim";
     };
     security.acme = {
@@ -41,6 +41,7 @@ let
     {
       modules.public-services."mail.example.test".groupware = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/groupware";
       };
     }
@@ -52,17 +53,8 @@ let
     {
       modules.public-services."mail.example.test".groupware = {
         enable = true;
+        host = "nixos";
         dataDir = "/srv/groupware";
-      };
-    }
-  ];
-  differentHost = evaluate [
-    mailModule
-    {
-      modules.public-services."webmail.example.test".groupware = {
-        enable = true;
-        dataDir = "/srv/groupware";
-        mailserverHostName = "mail.example.test";
       };
     }
   ];
@@ -71,24 +63,40 @@ let
       modules.public-services = {
         "remote-mail.example.test".mailserver = {
           enable = true;
+          host = "remote";
           deploy = false;
         };
         "remote-webmail.example.test".groupware = {
           enable = true;
+          host = "remote";
           deploy = false;
           backendUrl = "http://remote.internal:8080";
         };
       };
     }
   ];
-  runnerModule.modules.forgejo-actions-runner = {
-    enable = true;
-    name = "consumer-runner";
-    url = "https://forge.example.test";
-    dataDir = "/srv/runner";
-    tokenFile = "/run/secrets/runner-env";
+  runnerModule = {
+    modules.forgejo-actions-runner = {
+      enable = true;
+      dataDir = "/srv/runner";
+      tokenFile = "/run/secrets/runner-env";
+    };
+    modules.public-services."forge.example.test".forgejo = {
+      enable = true;
+      host = "remote";
+      deploy = false;
+    };
   };
   runner = evaluate [ runnerModule ];
+  runnerOverride = evaluate [
+    runnerModule
+    {
+      services.gitea-actions-runner.instances.forgejo = {
+        name = "consumer-runner";
+        url = "https://other-forge.example.test";
+      };
+    }
+  ];
   relay = evaluate [
     mailModule
     {
@@ -126,10 +134,13 @@ let
       ]).mailserver.dkim.domains."example.test".selectors.mail.keyFile;
   badTarget = evaluate [
     {
-      modules.public-services."webmail.example.test".groupware = {
-        enable = true;
-        dataDir = "/srv/groupware";
-        mailserverHostName = "missing.example.test";
+      modules.public-services."webmail.example.test" = {
+        mailserver.enable = lib.mkForce false;
+        groupware = {
+          enable = true;
+          host = "nixos";
+          dataDir = "/srv/groupware";
+        };
       };
     }
   ];
@@ -160,8 +171,6 @@ assert
   groupware.services.radicale.settings.storage.filesystem_folder == "/srv/groupware/collections";
 assert lib.elem "radicale-users.service" groupware.systemd.services.radicale.requires;
 assert !groupware.services.nginx.virtualHosts."mail.example.test".forceSSL;
-assert differentHost.services.roundcube.hostName == "webmail.example.test";
-assert lib.hasInfix "ssl://mail.example.test:993" differentHost.services.roundcube.extraConfig;
 assert
   !remote.mailserver.enable && !remote.services.radicale.enable && !remote.services.roundcube.enable;
 assert
@@ -172,11 +181,15 @@ assert
   runner.systemd.services.gitea-runner-forgejo.serviceConfig.BindPaths
   == [ "/srv/runner:/var/lib/gitea-runner/forgejo" ];
 assert !runner.systemd.services.gitea-runner-forgejo.serviceConfig.DynamicUser;
+assert runner.services.gitea-actions-runner.instances.forgejo.name == runner.networking.hostName;
+assert runner.services.gitea-actions-runner.instances.forgejo.url == "https://forge.example.test";
+assert runnerOverride.services.gitea-actions-runner.instances.forgejo.name == "consumer-runner";
+assert
+  runnerOverride.services.gitea-actions-runner.instances.forgejo.url
+  == "https://other-forge.example.test";
 assert relay.services.postfix.mapFiles.sasl_passwd == "/run/secrets/smtp-sasl";
 assert relay.services.postfix.settings.main.smtp_tls_security_level == "encrypt";
 assert standardOverride.mailserver.storage.path == "/srv/other-mail";
 assert !inlineHash.success && !storeKey.success;
-assert lib.any (
-  a: !a.assertion && lib.hasInfix "mailserverHostName" a.message
-) badTarget.assertions;
+assert lib.any (a: !a.assertion && lib.hasInfix "same hostname" a.message) badTarget.assertions;
 true

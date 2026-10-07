@@ -10,32 +10,17 @@ in
     enable = lib.mkEnableOption "shared Incus create-only provisioning";
     stateDir = ps.pathOption "Persistent image-source stamp directory; required when containers are declared. Existing directories are never cleared.";
 
-    initializePool = lib.mkOption {
-      type = lib.types.nullOr lib.types.nonEmptyStr;
-      default = null;
-      description = ''
-        Pool whose presence skips native Incus preseed. Required when preseed is
-        supplied, and must be declared in its storage_pools. This is only an
-        initialize-once guard: an existing pool does not prove that networks,
-        profiles or other bootstrap resources are complete. Existing/partial
-        initialization is not repaired or overwritten.
-      '';
-    };
-
     containers = lib.mkOption {
       default = { };
       description = ''
         Explicit images and native launch configuration for missing instances.
         Existing instances keep their launch configuration; removed entries are
-        not deleted. Image source paths, not mutable file contents, key the cache.
+        not deleted. Image aliases are server-dotfiles-<name>. Image source
+        paths, not mutable file contents, key the cache.
       '';
       type = lib.types.attrsOf (
         lib.types.submodule {
           options = {
-            alias = lib.mkOption {
-              type = lib.types.nonEmptyStr;
-              description = "Local Incus image alias (not a remote reference).";
-            };
             metadata = lib.mkOption {
               type = lib.types.path;
               description = "Metadata archive, or image output containing tarball/*.tar.xz.";

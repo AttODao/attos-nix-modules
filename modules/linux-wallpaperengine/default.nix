@@ -14,16 +14,6 @@
               type = lib.types.str;
               description = "Steam Workshop ID or path to the wallpaper directory.";
             };
-            scaling = lib.mkOption {
-              type = lib.types.enum [
-                "stretch"
-                "fit"
-                "fill"
-                "default"
-              ];
-              default = "fill";
-              description = "Wallpaper scaling mode.";
-            };
           };
         }
       );

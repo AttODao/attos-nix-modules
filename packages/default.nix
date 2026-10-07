@@ -1,5 +1,15 @@
 { pkgs }:
 {
+  atcoder-cli = pkgs.callPackage ./atcoder-cli.nix { };
+  atcoder-oj = pkgs.callPackage ./atcoder-oj.nix { };
+  atcoder-aclogin = pkgs.callPackage ./atcoder-aclogin.nix { };
+  atcoder-commands = args: pkgs.callPackage ./atcoder-commands.nix args;
+  code-server =
+    { src }:
+    pkgs.callPackage ./code-server.nix {
+      inherit src;
+      nerdFont = pkgs.nerd-fonts.jetbrains-mono;
+    };
   karakeep-monolith = pkgs.callPackage ./karakeep-monolith.nix { };
   pipeasio = pkgs.callPackage ./pipeasio.nix { };
   pi = pkgs.callPackage ./pi.nix { };

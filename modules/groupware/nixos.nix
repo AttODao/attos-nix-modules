@@ -9,7 +9,6 @@ let
   selected = ps.select config "groupware";
   cfg = selected.cfg;
   hostname = if selected.enabled then selected.hostname else "";
-  mailHost = if cfg.mailserverHostName == null then hostname else cfg.mailserverHostName;
   dataDir = ps.require "groupware" "dataDir" cfg.dataDir;
   radicale = config.services.radicale;
   accounts = lib.filterAttrs (_: account: !(account.sendOnly or false)) config.mailserver.accounts;
@@ -70,8 +69,8 @@ in
       package = lib.mkDefault roundcubePackage;
       plugins = lib.mkDefault [ "carddav" ];
       extraConfig = lib.mkDefault ''
-        $config['imap_host'] = 'ssl://${mailHost}:993';
-        $config['smtp_host'] = 'tls://${mailHost}:587';
+        $config['imap_host'] = 'ssl://${hostname}:993';
+        $config['smtp_host'] = 'tls://${hostname}:587';
         $config['smtp_user'] = '%u';
         $config['smtp_pass'] = '%p';
         $config['product_name'] = 'Mail';

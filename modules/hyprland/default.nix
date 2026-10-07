@@ -28,10 +28,6 @@
               type = str;
               default = "auto";
             };
-            scale = lib.mkOption {
-              type = numbers.positive;
-              default = 1;
-            };
             bitdepth = lib.mkOption {
               type = nullOr (enum [
                 8

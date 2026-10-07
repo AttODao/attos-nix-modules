@@ -9,26 +9,6 @@ let
     builtins.stringLength name <= 253
     && builtins.match "[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+" name != null
     && lib.all (label: builtins.stringLength label <= 63) (lib.splitString "." name);
-  externalOptions =
-    description:
-    ps.common description "http://localhost"
-    // {
-      deploy = mkOption {
-        type = types.bool;
-        default = false;
-        description = "These guests are configured by their own dotfiles; only forwarding is supported here.";
-      };
-      backendUrl = mkOption {
-        type = types.nullOr types.nonEmptyStr;
-        default = null;
-        description = "Required HTTP upstream for the externally managed service.";
-      };
-      insecureSkipVerify = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Explicitly allow an upstream self-signed certificate; retain TLS verification unless needed.";
-      };
-    };
   paseo = ps.select config "paseo";
 in
 {
@@ -36,12 +16,7 @@ in
     type = types.attrsOf (
       types.submodule {
         options = {
-          ssh = ps.common "an SSH endpoint" null // {
-            deploy = mkOption {
-              type = types.bool;
-              default = false;
-              description = "Enable the local OpenSSH preset rather than registering a remote SSH endpoint.";
-            };
+          ssh = ps.common "an SSH endpoint" // {
             private = mkOption {
               type = types.bool;
               default = true;
@@ -57,17 +32,10 @@ in
               default = null;
               description = "SSH client login name; does not create a user or grant server access.";
             };
-            port = mkOption {
-              type = types.port;
-              default = 22;
-              description = "SSH client port; configure the server's standard OpenSSH ports separately.";
-            };
           };
-          paseo = ps.common "the shared Paseo user daemon" null // {
+          paseo = ps.common "the shared Paseo user daemon" // {
             environmentFile = ps.pathOption "Runtime environment file; null retains the existing per-user ~/paseo/daemon.env location.";
           };
-          code-server = externalOptions "forwarding to a code-server guest";
-          sunshine = externalOptions "forwarding to a Sunshine guest";
         };
       }
     );
@@ -83,6 +51,15 @@ in
           assertion = validHostname hostname;
           message = "modules.public-services: '${hostname}' must be a fully qualified DNS hostname with valid labels.";
         }) config.modules.public-services
+        ++ lib.concatLists (
+          lib.mapAttrsToList (
+            hostname: services:
+            lib.mapAttrsToList (service: cfg: {
+              assertion = !cfg.enable || cfg.host != null;
+              message = "modules.public-services.${hostname}.${service}.host must name the owner machine when enabled.";
+            }) services
+          ) hosts
+        )
         ++ lib.mapAttrsToList (hostname: services: {
           assertion =
             builtins.length (
@@ -101,8 +78,8 @@ in
             (
               service:
               map (entry: {
-                assertion = !entry.cfg.deploy && entry.cfg.backendUrl != null;
-                message = "modules.public-services.${entry.hostname}.${service}: supply backendUrl and keep deploy = false; the guest has its own configuration.";
+                assertion = entry.cfg.backendUrl != null;
+                message = "modules.public-services.${entry.hostname}.${service}: supply the backendUrl reachable by the gateway.";
               }) (ps.entries config service)
             )
             [
@@ -126,7 +103,7 @@ in
           message = "modules.public-services.${entry.hostname}.ssh.address is required when enabled.";
         }) (ps.entries config "ssh");
     }
-    (lib.mkIf (lib.any (entry: entry.cfg.deploy) (ps.entries config "ssh")) {
+    (lib.mkIf (lib.any (entry: ps.isLocal config entry.cfg) (ps.entries config "ssh")) {
       modules.openssh.enable = true;
     })
     (lib.mkIf paseo.enabled {

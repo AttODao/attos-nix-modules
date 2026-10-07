@@ -43,7 +43,7 @@ in
   ];
 
   options.modules.public-services = ps.option "searxng" (
-    ps.common "SearXNG search service" "http://searxng:8080"
+    ps.common "SearXNG search service"
     // {
       environmentFile = ps.pathOption "Runtime SearXNG environment file supplying SEARXNG_SECRET.";
     }
@@ -63,7 +63,7 @@ in
       };
       virtualisation.oci-containers.containers.searxng = {
         image = lib.mkDefault "searxng/searxng:2026.10.4-d48c4b555";
-        environmentFiles = [ environmentFile ];
+        environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) {
           FORCE_OWNERSHIP = "false";
           SEARXNG_BASE_URL = "https://${s.hostname}/";
@@ -72,8 +72,8 @@ in
           SEARXNG_PORT = "8080";
           SEARXNG_SETTINGS_PATH = "/etc/searxng/settings.yml";
         };
-        autoRemoveOnStop = false;
-        extraOptions = [
+        autoRemoveOnStop = lib.mkDefault false;
+        extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
           "--network-alias=searxng"
           "--cap-drop=ALL"
@@ -83,11 +83,11 @@ in
           "--cap-add=DAC_OVERRIDE"
           "--security-opt=no-new-privileges:true"
         ];
-        volumes = [
+        volumes = lib.mkDefault [
           "${settings}:/etc/searxng/settings.yml:ro"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        networks = [ "traefik" ];
+        networks = lib.mkDefault [ "traefik" ];
       };
     })
   ];

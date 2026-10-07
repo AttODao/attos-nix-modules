@@ -19,7 +19,7 @@ let
       map (port: {
         name = "minecraft-${toString port}";
         inherit port;
-        address = "${game.cfg.gameHost}:${toString port}";
+        address = "api:${toString port}";
         private = game.cfg.private;
       }) game.cfg.tcpPorts
     ))
@@ -35,7 +35,7 @@ let
     map (port: {
       name = "minecraft-bedrock-${toString port}";
       inherit port;
-      address = "${game.cfg.gameHost}:${toString port}";
+      address = "api:${toString port}";
     }) game.cfg.udpPorts
   );
   byName =
@@ -86,8 +86,7 @@ let
           "1.0.0.1:53"
         ];
       };
-    }
-    // lib.optionalAttrs (cfg.acmeEmail != null) { email = cfg.acmeEmail; };
+    };
   };
   dynamic = {
     http = {
@@ -109,7 +108,7 @@ let
           value.loadBalancer = {
             servers = [ { url = route.cfg.backendUrl; } ];
           }
-          // lib.optionalAttrs (route.cfg.insecureSkipVerify or false) { serversTransport = route.hostname; };
+          // lib.optionalAttrs (route.service == "sunshine") { serversTransport = route.hostname; };
         }) routes
       );
       middlewares = lib.optionalAttrs privateEnabled {
@@ -119,7 +118,7 @@ let
         map (route: {
           name = route.hostname;
           value.insecureSkipVerify = true;
-        }) (lib.filter (route: route.cfg.insecureSkipVerify or false) routes)
+        }) (lib.filter (route: route.service == "sunshine") routes)
       );
     };
     tcp = {
@@ -164,8 +163,7 @@ in
           game == null
           || lib.all (
             entry:
-            entry.cfg.gameHost == game.cfg.gameHost
-            && entry.cfg.tcpPorts == game.cfg.tcpPorts
+            entry.cfg.tcpPorts == game.cfg.tcpPorts
             && entry.cfg.udpPorts == game.cfg.udpPorts
             && entry.cfg.private == game.cfg.private
           ) games;
@@ -251,21 +249,23 @@ in
     };
     virtualisation.oci-containers.containers.traefik = {
       image = lib.mkDefault "traefik:v3.7.13";
-      cmd = [ "--configFile=/etc/traefik/traefik.yml" ];
-      autoRemoveOnStop = false;
-      extraOptions = [
+      cmd = lib.mkDefault [ "--configFile=/etc/traefik/traefik.yml" ];
+      autoRemoveOnStop = lib.mkDefault false;
+      extraOptions = lib.mkDefault [
         "--restart=unless-stopped"
         "--user=0:0"
       ];
-      ports = [
-        "80:80"
-        "443:443"
-      ]
-      ++ map (entry: "${toString entry.port}:${toString entry.port}") tcp
-      ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp;
-      networks = [ "traefik" ];
-      environmentFiles = [ "/run/traefik-acme/cloudflare.env" ];
-      volumes = [
+      ports = lib.mkDefault (
+        [
+          "80:80"
+          "443:443"
+        ]
+        ++ map (entry: "${toString entry.port}:${toString entry.port}") tcp
+        ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
+      );
+      networks = lib.mkDefault [ "traefik" ];
+      environmentFiles = lib.mkDefault [ "/run/traefik-acme/cloudflare.env" ];
+      volumes = lib.mkDefault [
         "/etc/traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
         "/etc/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
         "${root}/acme:/letsencrypt"

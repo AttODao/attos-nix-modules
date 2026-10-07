@@ -15,15 +15,10 @@ in
   ];
 
   options.modules.public-services = ps.option "mineos" (
-    ps.common "MineOS Minecraft management" "http://web:3000"
+    ps.common "MineOS Minecraft management"
     // {
       dataDir = ps.pathOption "Service root containing data, archives, backups, imports, profiles and servers.";
       environmentFile = ps.pathOption "Runtime MineOS environment file containing credentials.";
-      gameHost = lib.mkOption {
-        type = lib.types.nonEmptyStr;
-        default = "api";
-        description = "Minecraft upstream host reachable by Traefik (without a port).";
-      };
       tcpPorts = lib.mkOption {
         type = lib.types.listOf lib.types.port;
         default = lib.range 25500 25600;
@@ -87,7 +82,7 @@ in
         mineos-api = {
           image = lib.mkDefault "ghcr.io/freeman412/mineos-api:latest";
           pull = lib.mkDefault "always";
-          environmentFiles = [ environmentFile ];
+          environmentFiles = lib.mkDefault [ environmentFile ];
           environment = lib.mapAttrs (_: lib.mkDefault) {
             ASPNETCORE_ENVIRONMENT = "Production";
             ASPNETCORE_URLS = "http://+:5078";
@@ -109,14 +104,14 @@ in
             "Logging__LogLevel__Microsoft.AspNetCore" = "Warning";
             MINEOS_SHUTDOWN_TIMEOUT = "600";
           };
-          autoRemoveOnStop = false;
-          extraOptions = [
+          autoRemoveOnStop = lib.mkDefault false;
+          extraOptions = lib.mkDefault [
             "--restart=unless-stopped"
             "--network-alias=api"
             "--stop-timeout=600"
           ];
-          networks = [ "traefik" ];
-          volumes = [
+          networks = lib.mkDefault [ "traefik" ];
+          volumes = lib.mkDefault [
             "${root}:/var/games/minecraft"
             "${root}/data:/app/data"
             "/var/run/docker.sock:/var/run/docker.sock"
@@ -125,7 +120,7 @@ in
         mineos-web = {
           image = lib.mkDefault "ghcr.io/freeman412/mineos-web:latest";
           pull = lib.mkDefault "always";
-          environmentFiles = [ environmentFile ];
+          environmentFiles = lib.mkDefault [ environmentFile ];
           environment = lib.mapAttrs (_: lib.mkDefault) {
             NODE_ENV = "production";
             PRIVATE_API_BASE_URL = "http://api:5078";
@@ -138,13 +133,13 @@ in
             ORIGIN = origin;
             BODY_SIZE_LIMIT = "Infinity";
           };
-          autoRemoveOnStop = false;
-          extraOptions = [
+          autoRemoveOnStop = lib.mkDefault false;
+          extraOptions = lib.mkDefault [
             "--restart=unless-stopped"
             "--network-alias=web"
           ];
           dependsOn = [ "mineos-api" ];
-          networks = [ "traefik" ];
+          networks = lib.mkDefault [ "traefik" ];
         };
       };
     })

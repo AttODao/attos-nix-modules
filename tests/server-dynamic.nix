@@ -34,7 +34,7 @@ let
   wireguard = {
     modules.public-services."vpn.example.test".wireguard-server = {
       enable = true;
-      privateKeyFile = "/run/secrets/server-private";
+      host = "nixos";
       serverPublicKeyFile = "/run/secrets/server-public";
       clientDns = "10.252.0.1";
       clients.phone = {
@@ -45,25 +45,55 @@ let
     };
     networking.wireguard.interfaces.wg0 = {
       ips = [ "10.252.0.1/24" ];
-      listenPort = 51820;
+      privateKeyFile = "/run/secrets/server-private";
     };
   };
   vpn = evaluate [ wireguard ];
-  remote = evaluate [
+  endpointOnly = evaluate [
     {
       modules.public-services."remote.example.test".wireguard-server = {
         enable = true;
+        host = "nixos";
         deploy = false;
       };
     }
   ];
+  remote = evaluate [
+    {
+      modules.public-services."remote.example.test".wireguard-server = {
+        enable = true;
+        host = "remote";
+      };
+    }
+  ];
+  disabled = evaluate [
+    { modules.public-services."disabled.example.test".wireguard-server.enable = false; }
+    {
+      modules.incus.containers.unused.launchConfig = { };
+      virtualisation.incus.preseed.storage_pools = [ ];
+    }
+  ];
+  nativePort = evaluate [
+    wireguard
+    { networking.wireguard.interfaces.wg0.listenPort = 12345; }
+  ];
+  manifestFor =
+    cfg: service:
+    builtins.fromJSON (builtins.head cfg.systemd.services.${service}.restartTriggers).text;
+  vpnManifest = manifestFor vpn "wireguard-client-config-sync";
+  missingKey = builtins.tryEval (
+    builtins.deepSeq (manifestFor (evaluate [
+      {
+        inherit (wireguard) modules;
+        networking.wireguard.interfaces.wg0.ips = [ "10.252.0.1/24" ];
+      }
+    ]) "wireguard-peer-sync") true
+  );
   incusModule = {
     modules.incus = {
       enable = true;
-      initializePool = "consumer-pool";
       stateDir = "/srv/incus/stamps";
       containers.guest = {
-        alias = "consumer-image";
         metadata = "/srv/images/metadata.tar.xz";
         rootfs = "/srv/images/rootfs.squashfs";
         launchConfig = {
@@ -95,6 +125,24 @@ let
   };
   guests = evaluate [ incusModule ];
   nativeIncus = evaluate [ { modules.incus.enable = true; } ];
+  nullPreseed = evaluate [
+    incusModule
+    { virtualisation.incus.preseed = lib.mkForce null; }
+  ];
+  poolOverride = pools: {
+    virtualisation.incus.preseed.storage_pools = lib.mkForce pools;
+  };
+  invalidPool =
+    pools:
+    builtins.tryEval (
+      builtins.deepSeq
+        (evaluate [
+          incusModule
+          (poolOverride pools)
+        ]).systemd.services.incus-preseed.serviceConfig.ExecCondition
+        true
+    );
+  guestManifest = manifestFor guests "incus-containers";
   bad = modules: lib.any (a: !a.assertion) (evaluate modules).assertions;
   missingDownload = builtins.tryEval (
     builtins.deepSeq
@@ -102,10 +150,14 @@ let
       true
   );
   invalidKey =
-    builtins.tryEval
-      (evaluate [
-        { modules.public-services."bad.example.test".wireguard-server.privateKeyFile = ../AGENTS.md; }
-      ]).modules.public-services."bad.example.test".wireguard-server.privateKeyFile;
+    path:
+    builtins.tryEval (
+      # Force generated metadata, not assertions: an unsafe native string must never reach it.
+      builtins.deepSeq (manifestFor (evaluate [
+        wireguard
+        { networking.wireguard.interfaces.wg0.privateKeyFile = lib.mkForce path; }
+      ]) "wireguard-peer-sync") true
+    );
   c = ytdl.virtualisation.oci-containers.containers.ytdl-sub;
 in
 assert
@@ -124,13 +176,60 @@ assert cookieOverride.virtualisation.oci-containers.containers.ytdl-sub.environm
 assert lib.all (a: a.assertion) vpn.assertions && vpn.home-manager.users == { };
 assert vpn.networking.wireguard.interfaces.wg0.privateKeyFile == "/run/secrets/server-private";
 assert vpn.networking.wireguard.interfaces.wg0.peers == [ ];
+assert vpn.networking.wireguard.interfaces.wg0.listenPort == 51820;
+assert vpnManifest.interface == "wg0" && vpnManifest.clientEndpoint == "vpn.example.test:51820";
+assert vpnManifest.privateKeyFile == "/run/secrets/server-private";
+assert !missingKey.success;
+assert lib.all
+  (field: !(builtins.hasAttr field vpn.modules.public-services."vpn.example.test".wireguard-server))
+  [
+    "interface"
+    "privateKeyFile"
+    "clientEndpoint"
+  ];
+assert
+  vpnManifest.clients == [
+    {
+      name = "phone";
+      address = "10.252.0.2";
+      publicKeyFile = "/run/secrets/phone-public";
+      privateKeyFile = "/run/secrets/phone-private";
+    }
+  ];
+assert
+  (manifestFor nativePort "wireguard-client-config-sync").clientEndpoint == "vpn.example.test:12345";
+assert lib.all (path: !(invalidKey path).success) [
+  null
+  ../AGENTS.md
+  "/nix/store/fake-key"
+  builtins.storeDir
+  "relative/key"
+  "/run/key:unsafe"
+  "/run/key\nunsafe"
+  "/run/key\runsafe"
+];
 assert vpn.systemd.services.wireguard-peer-sync.after == [ "wireguard-wg0.service" ];
 assert lib.elem "wireguard-wg0.target" vpn.systemd.services.wireguard-peer-sync.wantedBy;
 assert vpn.systemd.services.wireguard-client-config-sync.serviceConfig.UMask == "0077";
 assert
   vpn.systemd.services.wireguard-client-config-sync.serviceConfig.RuntimeDirectoryMode == "0700";
+assert lib.all
+  (
+    cfg:
+    lib.all (a: a.assertion) cfg.assertions
+    && cfg.networking.wireguard.interfaces == { }
+    && !(cfg.systemd.services ? wireguard-peer-sync)
+    && !(cfg.systemd.services ? wireguard-client-config-sync)
+  )
+  [
+    remote
+    endpointOnly
+    disabled
+  ];
 assert
-  remote.networking.wireguard.interfaces == { } && !(remote.systemd.services ? wireguard-peer-sync);
+  !disabled.virtualisation.incus.enable
+  && !(disabled.systemd.services ? incus-preseed)
+  && !(disabled.systemd.services ? incus-containers);
 assert bad [
   wireguard
   {
@@ -169,9 +268,44 @@ assert
   guests.systemd.services.incus-containers.unitConfig.RequiresMountsFor == [ "/srv/incus/stamps" ];
 assert
   nativeIncus.virtualisation.incus.enable && !(nativeIncus.systemd.services ? incus-containers);
+assert guestManifest.containers.guest.alias == "server-dotfiles-guest";
+assert !(guests.modules.incus ? initializePool) && !(guests.modules.incus.containers.guest ? alias);
+assert guestManifest.containers.guest.metadata == "/srv/images/metadata.tar.xz";
+assert guestManifest.containers.guest.rootfs == "/srv/images/rootfs.squashfs";
+assert
+  guestManifest.containers.guest.launchConfig
+  == incusModule.modules.incus.containers.guest.launchConfig;
+assert guestManifest.containers.guest.managedDeviceNames == [ ];
+assert lib.all (a: a.assertion) nullPreseed.assertions;
+assert
+  !(nativeIncus.systemd.services ? incus-preseed) && !(nullPreseed.systemd.services ? incus-preseed);
+assert !(lib.elem "incus-preseed.service" nullPreseed.systemd.services.incus-containers.requires);
+assert lib.all
+  (
+    pools:
+    bad [
+      incusModule
+      (poolOverride pools)
+    ]
+    && !(invalidPool pools).success
+  )
+  [
+    [ ]
+    [
+      {
+        name = "one";
+        driver = "dir";
+      }
+      {
+        name = "two";
+        driver = "dir";
+      }
+    ]
+    [ { driver = "dir"; } ]
+  ];
 assert bad [
   incusModule
-  { modules.incus.initializePool = lib.mkForce "wrong-pool"; }
+  { virtualisation.incus.preseed = lib.mkForce { }; }
 ];
-assert !missingDownload.success && !invalidKey.success;
+assert !missingDownload.success;
 true

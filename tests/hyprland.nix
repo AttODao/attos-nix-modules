@@ -20,7 +20,6 @@ let
       output = "HDMI-A-2";
       mode = "1920x1080@100";
       position = "0x0";
-      scale = 1;
       bitdepth = 10;
       cm = "hdr";
     }
@@ -28,7 +27,6 @@ let
       output = "DP-1";
       mode = "2560x1440@143.999";
       position = "1920x260";
-      scale = 1;
       bitdepth = 10;
       cm = "hdr";
     }
@@ -63,22 +61,51 @@ let
     }
   ];
   laptop = t.hm laptopCfg "test";
+  tunedCfg = t.cfgFor [
+    {
+      modules.hyprland.enable = true;
+      programs.hyprland = {
+        package = pkgs.hyprland.overrideAttrs { pname = "hyprland-selected"; };
+        portalPackage = pkgs.xdg-desktop-portal-hyprland.overrideAttrs {
+          pname = "xdg-desktop-portal-hyprland-selected";
+        };
+      };
+      home-manager.users.test = {
+        home.pointerCursor = {
+          enable = true;
+          package = pkgs.adwaita-icon-theme;
+          name = "Adwaita";
+          size = 24;
+        };
+        xdg.userDirs.pictures = "/home/test/My Pictures";
+        wayland.windowManager.hyprland.settings = {
+          config.decoration.rounding = 6;
+          config.input.follow_mouse = 1;
+          monitor = [ { output = "eDP-1"; } ];
+        };
+      };
+    }
+  ];
+  tuned = t.hm tunedCfg "test";
+  replaced = t.hmFor [
+    {
+      modules.hyprland.enable = true;
+      home-manager.users.test.wayland.windowManager.hyprland = {
+        package = null;
+        portalPackage = null;
+        settings.env = [
+          {
+            _args = [
+              "CUSTOM_ENV"
+              "value"
+            ];
+          }
+        ];
+      };
+    }
+  ];
   settings = cfg: cfg.wayland.windowManager.hyprland.settings;
   luaConfig = cfg: cfg.xdg.configFile."hypr/hyprland.lua".text;
-  invalidMonitors = builtins.tryEval (
-    builtins.deepSeq
-      (settings (
-        t.hmFor [
-          {
-            modules.hyprland = {
-              enable = true;
-              monitors = [ { scale = 0; } ];
-            };
-          }
-        ]
-      )).monitor
-      true
-  );
   invalidOutput =
     builtins.tryEval
       (t.cfgFor [ { modules.greeter.output = 1; } ]).modules.greeter.output;
@@ -95,7 +122,7 @@ let
 in
 assert desktop.wayland.windowManager.hyprland.configType == "lua";
 assert !desktop.wayland.windowManager.hyprland.systemd.enable;
-assert (settings desktop).monitor == desktopMonitors;
+assert (settings desktop).monitor == map (monitor: monitor // { scale = 1; }) desktopMonitors;
 assert
   (settings laptop).monitor == [
     {
@@ -130,6 +157,70 @@ assert
 assert
   desktopCfg.services.displayManager.noctalia-greeter.settings.cursor.theme == "Custom-Cursors";
 assert lib.hasInfix "Custom-Cursors" (luaConfig desktop);
+assert lib.elem {
+  _args = [
+    "XCURSOR_SIZE"
+    "48"
+  ];
+} (settings desktop).env;
+assert lib.all (entry: lib.elem entry (settings tuned).env) [
+  {
+    _args = [
+      "XCURSOR_THEME"
+      "Adwaita"
+    ];
+  }
+  {
+    _args = [
+      "XCURSOR_SIZE"
+      "24"
+    ];
+  }
+  {
+    _args = [
+      "HYPRCURSOR_THEME"
+      "Adwaita"
+    ];
+  }
+  {
+    _args = [
+      "HYPRCURSOR_SIZE"
+      "24"
+    ];
+  }
+];
+assert !(lib.hasInfix "Custom-Cursors" (luaConfig tuned));
+assert
+  builtins.length (
+    lib.filter (
+      bind: lib.hasInfix "-o '/home/test/My Pictures/Screenshots'" (builtins.elemAt bind._args 1).expr
+    ) (settings tuned).bind
+  ) == 3;
+assert (settings tuned).config.decoration.rounding == 6;
+assert (settings tuned).config.input.follow_mouse == 1;
+assert (settings tuned).config.decoration.blur.size == 8;
+assert (settings tuned).monitor == [ { output = "eDP-1"; } ];
+assert
+  (settings replaced).env == [
+    {
+      _args = [
+        "CUSTOM_ENV"
+        "value"
+      ];
+    }
+  ];
+assert replaced.wayland.windowManager.hyprland.package == null;
+assert replaced.wayland.windowManager.hyprland.portalPackage == null;
+assert
+  tuned.wayland.windowManager.hyprland.package.drvPath == tunedCfg.programs.hyprland.package.drvPath;
+assert
+  tuned.wayland.windowManager.hyprland.portalPackage.drvPath
+  == tunedCfg.programs.hyprland.portalPackage.drvPath;
+assert tuned.wayland.windowManager.hyprland.package.pname == "hyprland-selected";
+assert
+  tuned.wayland.windowManager.hyprland.portalPackage.pname == "xdg-desktop-portal-hyprland-selected";
+assert lib.hasInfix ''hl.on("hyprland.start", (function()'' (luaConfig tuned);
+assert lib.hasInfix ''hl.bind((mod .. " + Q"), (hl.dsp.window.close()))'' (luaConfig tuned);
 assert cursorPackage.pname == "custom-cursors";
 assert cursorPackage.src.name == "custom-cursors.zip";
 assert cursorPackage.src.urls == [ cursorUrl ];
@@ -138,6 +229,6 @@ assert cursorPackage.src.outputHash == lib.fakeHash;
 assert desktop.home.activationPackage.drvPath != "" && laptop.home.activationPackage.drvPath != "";
 assert
   desktopCfg.system.build.toplevel.drvPath != "" && laptopCfg.system.build.toplevel.drvPath != "";
-assert !invalidMonitors.success && !invalidOutput.success && !invalidExtra.success;
+assert !invalidOutput.success && !invalidExtra.success;
 assert !missingCursor.success && !invalidCursor.success;
 true

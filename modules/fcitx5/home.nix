@@ -11,14 +11,14 @@
       enable = true;
       type = "fcitx5";
       fcitx5 = {
-        waylandFrontend = true;
+        waylandFrontend = lib.mkDefault true;
         addons = with pkgs; [
           fcitx5-gtk
           fcitx5-skk
           qt6Packages.fcitx5-configtool
         ];
-        settings.globalOptions."Hotkey/AltTriggerKeys"."0" = "";
-        settings.inputMethod = {
+        settings.globalOptions."Hotkey/AltTriggerKeys"."0" = lib.mkDefault "";
+        settings.inputMethod = lib.mapAttrsRecursive (_: lib.mkDefault) {
           GroupOrder."0" = "Default";
           "Groups/0" = {
             "Name" = "Default";

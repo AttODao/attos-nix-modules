@@ -25,8 +25,35 @@ let
         enable = true;
         screenRecorder.enable = true;
         dock.pinned = [ "footclient" ];
+      };
+      home-manager.users.test.programs.noctalia.settings = {
         calendar.account = account;
         inherit location;
+      };
+    }
+  ];
+  recorderPackage = pkgs.gpu-screen-recorder.overrideAttrs (_: {
+    version = "test";
+  });
+  overridden = t.hmFor [
+    {
+      modules.noctalia = {
+        enable = true;
+        screenRecorder.enable = true;
+        dock.pinned = [ "footclient" ];
+      };
+      programs.gpu-screen-recorder.package = recorderPackage;
+      home-manager.users.test.programs.noctalia.settings = {
+        plugin_settings."noctalia/screen_recorder" = {
+          directory = "/home/test/My Recordings";
+          video_source = "focused";
+          video_codec = "hevc_hdr";
+        };
+        dock.pinned = [ "pcmanfm" ];
+        calendar.account.test = account.test // {
+          username = "operator";
+        };
+        location.address = "Osaka, Japan";
       };
     }
   ];
@@ -64,10 +91,29 @@ assert builtins.hasAttr "dark" (
 );
 assert enabled.home.activationPackage.drvPath != "";
 assert recording.home.activationPackage.drvPath != "";
+assert lib.elem recorderPackage overridden.home.packages;
+assert !(lib.elem pkgs.gpu-screen-recorder overridden.home.packages);
+assert overridden.programs.noctalia.settings.dock.pinned == [ "pcmanfm" ];
+assert overridden.programs.noctalia.settings.calendar.account.test.username == "operator";
+assert
+  overridden.programs.noctalia.settings.calendar.account.test.server_url == account.test.server_url;
+assert
+  overridden.programs.noctalia.settings.calendar.account.test.password_file
+  == account.test.password_file;
+assert overridden.programs.noctalia.settings.location.address == "Osaka, Japan";
+assert overridden.programs.noctalia.settings.theme.custom_palette == "Everforest";
+assert
+  overridden.programs.noctalia.settings.plugin_settings."noctalia/screen_recorder".video_source
+  == "focused";
+assert
+  overridden.programs.noctalia.settings.plugin_settings."noctalia/screen_recorder".video_codec
+  == "hevc_hdr";
+assert lib.hasInfix "'/home/test/My Recordings'"
+  overridden.home.activation.ensureNoctaliaRecordingsDir.data;
 assert !(invalid { enable = "yes"; }).success;
 assert !(invalid { dock.pinned = [ 1 ]; }).success;
 assert !(invalid { screenRecorder.enable = "yes"; }).success;
-assert !(invalid { calendar.account = "invalid"; }).success;
-assert !(invalid { location = "invalid"; }).success;
+assert !(invalid { calendar.account = { }; }).success;
+assert !(invalid { location = { }; }).success;
 assert !(invalid { extraConfig = ""; }).success;
 true

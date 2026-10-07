@@ -17,14 +17,14 @@ let
   ownership =
     description:
     lib.mkOption {
-      type = lib.types.nullOr lib.types.int;
+      type = lib.types.nullOr lib.types.ints.unsigned;
       default = null;
       inherit description;
     };
 in
 {
   options.modules.public-services = ps.option "forgejo" (
-    ps.common "shared Forgejo service" "http://forgejo:3000"
+    ps.common "shared Forgejo service"
     // {
       dataDir = ps.pathOption "Persistent service root containing forgejo/ and postgres/ directories.";
       environmentFile = ps.pathOption "Runtime environment file for Forgejo and PostgreSQL, including database credentials.";
@@ -34,11 +34,6 @@ in
       mailHost = nullableString "SMTP server hostname; port and protocol can be overridden through standard OCI environment settings.";
       sshHost = nullableString "Advertised Forgejo SSH hostname.";
       sshBindAddress = nullableString "Consumer-selected host IP address on which Docker publishes Forgejo SSH.";
-      sshPort = lib.mkOption {
-        type = lib.types.port;
-        default = 22;
-        description = "Advertised and published host SSH port; the container listens on port 22.";
-      };
     }
   );
 
@@ -154,12 +149,12 @@ in
               FORGEJO__server__DOMAIN = s.hostname;
               FORGEJO__server__ROOT_URL = "https://${s.hostname}/";
               FORGEJO__server__SSH_DOMAIN = sshHost;
-              FORGEJO__server__SSH_PORT = toString cfg.sshPort;
+              FORGEJO__server__SSH_PORT = "22";
             };
             environmentFiles = lib.mkDefault [ environmentFile ];
             autoRemoveOnStop = lib.mkDefault false;
             extraOptions = lib.mkDefault [ "--restart=always" ];
-            ports = lib.mkDefault [ "${sshBindAddress}:${toString cfg.sshPort}:22" ];
+            ports = lib.mkDefault [ "${sshBindAddress}:22:22" ];
             volumes = lib.mkDefault [
               "${forgejoDataRoot}:/data"
               "/etc/localtime:/etc/localtime:ro"

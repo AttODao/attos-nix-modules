@@ -6,9 +6,9 @@
 ## 1. 既存実装と責務を確認する
 
 - 最初に`git status --short`を確認し、既存のユーザー変更を保持する。
-- `README.md`、`docs/README.md`、対象機能に関連するdocsを読む。
+- `README.md`、`docs/inventory.md`、[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の対象moduleページを読む。
 - `modules/default.nix`、対象・依存module、`tests/`の関連テストを確認する。
-- 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。旧設定との比較には`docs/inventory.md`を使えるが、現在の設計はREADMEと実装を優先する。
+- 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。残作業と移行時の差分は`docs/inventory.md`を参照し、現在の設計・APIはREADME・Wiki・実装を優先する。
 - 類似実装や標準NixOS / Home Manager optionを再利用し、独自resolver、ホスト台帳、不要なwrapperを追加しない。
 
 ### 共有側と利用側の境界
@@ -22,6 +22,7 @@ hardware、ユーザー作成、ログインシェル、権限・linger、secret
 ## 2. 最小の公開APIを決める
 
 - 機能選択はNixOS側の`modules.<name>.enable`に集約し、`lib.mkEnableOption`で既定falseにする。公開サーバーはenableを含む独自設定を`modules.public-services.<FQDN>.<service>`へ集約し、別のglobal enable aliasを追加しない（既存Paseo bridgeのみ維持）。
+- 公開サービスは有効時に`host`で所有OSの`networking.hostName`を指定する。物理ホスト・guestが同じnamespaceを読み、所有OSだけで実体を起動する。`deploy`は全種既定true、falseは管理外endpoint登録専用。別ホストのrecordをfalseに書き換える実装はしない。
 - HM専用の機能にもNixOS側のenableを設ける。HM側に別のenableやstandalone HM exportを追加しない。
 - enable以外の独自optionは、利用側から渡す必要がある値だけに限定する。型、説明、妥当な既定値または有効時の必須条件を定義する。
 - ユーザーごとの調整は標準`home-manager.users.<name>`へ書けるようにする。調整可能な既定値には`lib.mkDefault`を使い、安易に`mkForce`で固定しない。
@@ -57,8 +58,8 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 ```
 
 - NixOSの`imports`は静的に宣言し、enableから組み立てない。依存moduleのimportも同様。
-- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーは`public-services/lib.nix`の`select`・`option`・`common`・`pathOption`・`require`を再利用し、`select.enabled`でlocal設定を囲む。singleton assertionも登録し、`deploy = false`でlocal依存・必須path・unitを作らない。
-- 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は`docs/server-services.md`を参照。
+- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーは`public-services/lib.nix`の`select`・`option`・`common`・`pathOption`・`require`を再利用し、`select.enabled`でlocal設定を囲む。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
+- 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は[Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各サービスページを参照。
 - `home.nix`の実設定は`lib.mkIf osConfig.modules.<name>.enable`で囲む。
 - HM設定は`home-manager.sharedModules`で接続する。特定ユーザーへの直書きや、ユーザー一覧を機能ごとに走査する実装はしない。
 - 有効なHM設定は、標準`home-manager.users`に直接宣言したユーザーを含む全HMユーザーに適用される。固定アカウント・デバイス設定や複数ユーザーでの競合を確認する。
@@ -119,6 +120,6 @@ python3 modules/pipeasio/test-register-steam-prefixes.py
 ## 7. ドキュメントと差分を確認する
 
 - `README.md`の機能一覧、scope、依存、独自option、利用側の前提を更新する。
-- 特殊な運用・制約は`docs/<name>.md`へ、custom packageは`packages/README.md`へ記載する。
+- moduleのpackage/version・設定項目・設定例・運用上の制約はWikiの対応ページへ記載し、重複する機能別docsを増やさない。custom packageの実装・供給契約は`packages/README.md`へ、残作業は`docs/inventory.md`へ記載する。
 - `git diff --check`と対象ファイルのdiffを確認し、無関係な変更やcredentialがないことを確認する。新規ファイルは未追跡の内容も確認する。
 - 完了報告には、変更した機能・ファイル、実行した検証、未検証事項を短く記す。利用側の移行や実機適用を行っていない場合は明示する。

@@ -14,6 +14,21 @@ let
     { modules.fcitx5.enable = true; }
     { home-manager.users.test.xdg.configHome = "/home/test/config"; }
   ];
+  tuned = t.hmFor [
+    {
+      modules.fcitx5.enable = true;
+      home-manager.users.test.i18n.inputMethod.fcitx5.settings = {
+        globalOptions."Hotkey/AltTriggerKeys"."0" = "Control+space";
+        inputMethod = {
+          "Groups/0" = {
+            "Default Layout" = "jp";
+            "DefaultIM" = "keyboard-jp";
+          };
+          "Groups/0/Items/1"."Name" = "keyboard-jp";
+        };
+      };
+    }
+  ];
   invalid = builtins.tryEval (t.cfgFor [ { modules.fcitx5.enable = "yes"; } ]).modules.fcitx5.enable;
 in
 assert !base.modules.fcitx5.enable;
@@ -30,6 +45,13 @@ assert lib.all (p: lib.elem p cfg.i18n.inputMethod.fcitx5.addons) (
 assert cfg.i18n.inputMethod.fcitx5.settings.globalOptions."Hotkey/AltTriggerKeys"."0" == "";
 assert cfg.i18n.inputMethod.fcitx5.settings.inputMethod."Groups/0"."DefaultIM" == "skk";
 assert cfg.i18n.inputMethod.fcitx5.settings.inputMethod."Groups/0/Items/1"."Layout" == "";
+assert
+  tuned.i18n.inputMethod.fcitx5.settings.globalOptions."Hotkey/AltTriggerKeys"."0" == "Control+space";
+assert tuned.i18n.inputMethod.fcitx5.settings.inputMethod."Groups/0"."Default Layout" == "jp";
+assert tuned.i18n.inputMethod.fcitx5.settings.inputMethod."Groups/0"."DefaultIM" == "keyboard-jp";
+assert
+  tuned.i18n.inputMethod.fcitx5.settings.inputMethod."Groups/0/Items/1"."Name" == "keyboard-jp";
+assert tuned.i18n.inputMethod.fcitx5.settings.inputMethod."Groups/0/Items/0"."Name" == "skk";
 assert !cfg.xdg.configFile.fcitx5.enable;
 assert cfg.home.activation ? installFcitx5Config;
 assert lib.hasInfix "install -m 600" cfg.home.activation.installFcitx5Config.data;

@@ -46,7 +46,7 @@ let
   );
   mailUser = config.mailserver.storage.owner;
   mailGroup = config.mailserver.storage.group;
-  acmeHost = require "acmeHost";
+  acmeHost = config.mailserver.x509.useACMEHost;
 in
 {
   config = lib.mkMerge [
@@ -64,7 +64,7 @@ in
             systemName = lib.mkDefault "Mail system";
             systemContact = lib.mkDefault "postmaster@${primary}";
             sendingFqdn = lib.mkDefault selected.hostname;
-            x509.useACMEHost = acmeHost;
+            x509.useACMEHost = lib.mkDefault selected.hostname;
             enableImap = lib.mkDefault true;
             enableSubmission = lib.mkDefault true;
             enableManageSieve = lib.mkDefault true;

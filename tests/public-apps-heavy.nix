@@ -8,6 +8,10 @@
 let
   t = import ./lib.nix { inherit nixpkgs homeManager system; };
   inherit (t) lib;
+  ps = import ../modules/public-services/lib.nix { inherit lib; };
+  routeUrl =
+    cfg: service:
+    (builtins.head (lib.filter (route: route.service == service) (ps.routes cfg))).cfg.backendUrl;
   services = [
     "forgejo"
     "immich"
@@ -36,6 +40,7 @@ let
   activeModule.modules.public-services = {
     "forge.example.org".forgejo = {
       enable = true;
+      host = "nixos";
       dataDir = "/srv/forgejo";
       environmentFile = "/run/private/forgejo.env";
       userUid = 1201;
@@ -47,18 +52,17 @@ let
     };
     "photos.example.org".immich = {
       enable = true;
+      host = "nixos";
       dataDir = "/srv/immich";
       environmentFile = "/run/private/immich.env";
     };
     "keep.example.org".karakeep = {
       enable = true;
+      host = "nixos";
       dataDir = "/srv/karakeep";
       environmentFile = "/run/private/karakeep.env";
       dataUid = 1301;
       dataGid = 1302;
-      networkSubnet = "10.3.0.0/24";
-      networkGateway = "10.3.0.1";
-      chromeAddress = "10.3.0.3";
     };
   };
   base = t.cfgFor [ ];
@@ -89,9 +93,9 @@ let
           name = "${service}.remote.example.org";
           value.${service} = {
             enable = true;
+            host = "remote";
             deploy = false;
             private = true;
-            backendUrl = "http://${service}.internal:8080";
           };
         }) services
       );
@@ -178,8 +182,8 @@ let
           name = "${service}.elsewhere.example.org";
           value.${service} = {
             enable = true;
+            host = "remote";
             deploy = false;
-            backendUrl = "http://${service}.elsewhere:8080";
           };
         }) services
       );
@@ -194,7 +198,12 @@ let
     builtins.deepSeq
       (t.cfgFor [
         swarm
-        { modules.public-services."missing.example.org".immich.enable = true; }
+        {
+          modules.public-services."missing.example.org".immich = {
+            enable = true;
+            host = "nixos";
+          };
+        }
       ]).virtualisation.oci-containers.containers
       true
   );
@@ -227,13 +236,9 @@ assert allAssertions active && allAssertions activeHeadless && allAssertions ove
 assert lib.all (
   service: remote.modules.public-services."${service}.remote.example.org".${service}.private
 ) services;
-assert
-  active.modules.public-services."forge.example.org".forgejo.backendUrl == "http://forgejo:3000";
-assert
-  active.modules.public-services."photos.example.org".immich.backendUrl
-  == "http://immich-server:2283";
-assert
-  active.modules.public-services."keep.example.org".karakeep.backendUrl == "http://karakeep:3000";
+assert routeUrl active "forgejo" == "http://forgejo:3000";
+assert routeUrl active "immich" == "http://immich-server:2283";
+assert routeUrl active "karakeep" == "http://karakeep:3000";
 assert
   c.forgejo.image
   == "codeberg.org/forgejo/forgejo:16.0.5@sha256:cf5f5ae6acf2ababca0ee3d255705b83a47f35b25e07fc931d694d60664053fe";
@@ -296,9 +301,9 @@ assert c.immich-machine-learning.volumes == [ "/srv/immich/model-cache:/cache" ]
 assert c.karakeep-meilisearch.volumes == [ "/srv/karakeep/meilisearch:/meili_data" ];
 assert lib.elem "/srv/karakeep/data:/data" c.karakeep.volumes;
 assert lib.elem "${monolith}/bin/monolith:/usr/local/bin/monolith:ro" c.karakeep.volumes;
-assert lib.elem "--ip=10.3.0.3" c.karakeep-chrome.extraOptions;
+assert lib.elem "--ip=172.20.0.3" c.karakeep-chrome.extraOptions;
 assert c.karakeep.environment.NEXTAUTH_URL == "https://keep.example.org";
-assert c.karakeep.environment.BROWSER_WEB_URL == "http://10.3.0.3:9222";
+assert c.karakeep.environment.BROWSER_WEB_URL == "http://172.20.0.3:9222";
 assert
   c.karakeep.environment.MONOLITH_FRAGMENT_NAVIGATION_PREFIX
   == "https://keep.example.org/api/assets/";
@@ -371,8 +376,8 @@ assert active.systemd.tmpfiles.settings."10-forgejo"."/srv/forgejo/postgres".d.m
 assert active.systemd.tmpfiles.settings."10-immich"."/srv/immich/redis".d.mode == "0700";
 assert active.systemd.tmpfiles.settings."10-karakeep"."/srv/karakeep/data".d.user == "1301";
 assert active.systemd.tmpfiles.settings."10-karakeep"."/srv/karakeep/meilisearch".d.group == "1302";
-assert lib.hasInfix "10.3.0.0/24" active.systemd.services.docker-network-karakeep.script;
-assert lib.hasInfix "10.3.0.1" active.systemd.services.docker-network-karakeep.script;
+assert lib.hasInfix "172.20.0.0/24" active.systemd.services.docker-network-karakeep.script;
+assert lib.hasInfix "172.20.0.1" active.systemd.services.docker-network-karakeep.script;
 assert
   o.forgejo.image == "forgejo:test"
   && o.immich-server.image == "immich:test"

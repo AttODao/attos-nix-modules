@@ -10,6 +10,7 @@ let
   require = field: ps.require "modules.forgejo-actions-runner" field cfg.${field};
   dataDir = require "dataDir";
   tokenFile = require "tokenFile";
+  forgejo = ps.entries config "forgejo";
 in
 {
   config = lib.mkIf cfg.enable {
@@ -22,16 +23,19 @@ in
         [
           "tokenFile"
           "dataDir"
-          "url"
-          "name"
         ];
 
     services.gitea-actions-runner = {
       package = lib.mkDefault pkgs.forgejo-runner;
       instances.forgejo = {
         enable = true;
-        name = lib.mkDefault (require "name");
-        url = lib.mkDefault (require "url");
+        name = lib.mkDefault config.networking.hostName;
+        url = lib.mkDefault (
+          if builtins.length forgejo == 1 then
+            "https://${(builtins.head forgejo).hostname}"
+          else
+            throw "Forgejo runner: register exactly one Forgejo hostname or set the native runner instance URL."
+        );
         tokenFile = lib.mkDefault tokenFile;
         labels = lib.mkDefault [
           "ubuntu-latest:docker://node:24.21.0-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4"

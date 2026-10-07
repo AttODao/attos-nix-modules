@@ -15,12 +15,6 @@ in
     dataDir = ps.pathOption "Runtime absolute path to the service root containing the workspace directory; required when enabled.";
     environmentFile = ps.pathOption "Runtime absolute path to the Open Terminal environment file; required when enabled. Secrets and file permissions are consumer-owned.";
 
-    allowedOrigins = lib.mkOption {
-      type = lib.types.nullOr lib.types.nonEmptyStr;
-      default = null;
-      description = "CORS origins string passed to OPEN_TERMINAL_CORS_ALLOWED_ORIGINS; required when enabled.";
-    };
-
     uid = lib.mkOption {
       type = lib.types.nullOr lib.types.ints.unsigned;
       default = null;

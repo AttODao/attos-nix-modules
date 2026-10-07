@@ -10,8 +10,9 @@ let
   ps = import ../public-services/lib.nix { inherit lib; };
   manifest = pkgs.writeText "incus-containers.json" (
     builtins.toJSON {
-      containers = lib.mapAttrs (_: instance: {
-        inherit (instance) alias launchConfig managedDeviceNames;
+      containers = lib.mapAttrs (name: instance: {
+        alias = "server-dotfiles-${name}";
+        inherit (instance) launchConfig managedDeviceNames;
         metadata = toString instance.metadata;
         rootfs = toString instance.rootfs;
       }) cfg.containers;
@@ -27,6 +28,17 @@ let
   };
   preseed = native.preseed != null;
   pools = if !preseed then [ ] else native.preseed.storage_pools or [ ];
+  singlePool =
+    builtins.isList pools
+    && builtins.length pools == 1
+    && builtins.isAttrs (builtins.head pools)
+    && lib.types.nonEmptyStr.check ((builtins.head pools).name or null);
+  # Existing pools only skip bootstrap; they do not prove complete initialization.
+  initializePool =
+    if singlePool then
+      (builtins.head pools).name
+    else
+      throw "modules.incus: supplied native preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";
 in
 {
   config = lib.mkIf cfg.enable (
@@ -36,10 +48,8 @@ in
         networking.nftables.enable = lib.mkDefault true;
         assertions = [
           {
-            assertion =
-              !preseed
-              || (cfg.initializePool != null && lib.any (pool: (pool.name or null) == cfg.initializePool) pools);
-            message = "modules.incus.initializePool must name a storage pool in the consumer's Incus preseed; initialization is create-only.";
+            assertion = !preseed || singlePool;
+            message = "modules.incus: supplied native preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";
           }
         ];
       }
@@ -47,9 +57,7 @@ in
         systemd.services.incus-preseed = {
           restartIfChanged = false;
           serviceConfig.ExecCondition = [
-            "${runner}/bin/attos-incus condition ${
-              lib.escapeShellArg (ps.require "modules.incus" "initializePool" cfg.initializePool)
-            }"
+            "${runner}/bin/attos-incus condition ${lib.escapeShellArg initializePool}"
           ];
         };
       })

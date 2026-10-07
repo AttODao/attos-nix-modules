@@ -6,6 +6,7 @@
   ...
 }:
 let
+  solaar = osConfig.programs.solaar.package;
   yamlList = items: builtins.concatStringsSep "\n  - " (map builtins.toJSON items);
   noctalia = "${config.programs.noctalia.package}/bin/noctalia";
   kando = "${pkgs.kando}/bin/kando";
@@ -45,7 +46,7 @@ in
     ];
 
     home.packages = [
-      pkgs.solaar
+      solaar
       pkgs.kando
     ];
 
@@ -56,7 +57,7 @@ in
           After = [ "graphical-session.target" ];
         };
         Service = {
-          ExecStart = "${pkgs.solaar}/bin/solaar -w hide";
+          ExecStart = "${solaar}/bin/solaar -w hide";
           Restart = "on-failure";
         };
         Install.WantedBy = [ "graphical-session.target" ];
@@ -75,8 +76,8 @@ in
     };
 
     xdg.configFile = {
-      "solaar/rules.yaml".text = solaarRules;
-      "solaar/config.yaml".source = ./config.yaml;
+      "solaar/rules.yaml".text = lib.mkDefault solaarRules;
+      "solaar/config.yaml".source = lib.mkDefault ./config.yaml;
     };
 
     wayland.windowManager.hyprland.settings.window_rule = [

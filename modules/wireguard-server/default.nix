@@ -12,20 +12,11 @@ let
   ipv4 = types.addCheck types.str (
     value: builtins.match "${octet}\\.${octet}\\.${octet}\\.${octet}" value != null
   );
-  interfaceType = types.addCheck types.str (
-    value: builtins.match "[a-zA-Z0-9][a-zA-Z0-9_-]{0,14}" value != null
-  );
 in
 {
   options.modules.public-services = ps.option "wireguard-server" (
-    ps.common "WireGuard server and runtime client configuration" null
+    ps.common "WireGuard server and runtime client configuration"
     // {
-      interface = mkOption {
-        type = interfaceType;
-        default = "wg0";
-        description = "Native networking.wireguard interface to manage; addresses, listenPort and other network policy remain consumer-owned.";
-      };
-      privateKeyFile = ps.pathOption "Runtime server private key file; key provisioning, permissions and rotation belong to the consumer.";
       serverPublicKeyFile = ps.pathOption "Runtime server public key file used to generate client configurations.";
       clients = mkOption {
         type = types.attrsOf (
@@ -48,11 +39,6 @@ in
         default = null;
         description = "Required client DNS server IP address (IPv4 or IPv6). The consumer supplies a reachable resolver.";
       };
-      clientEndpoint = mkOption {
-        type = types.nullOr types.singleLineStr;
-        default = null;
-        description = "Client endpoint override (host:port or [IPv6]:port); defaults to this hostname and the native interface listenPort.";
-      };
       clientConfigsDirectory = mkOption {
         type = ps.absolutePath;
         default = "/run/wireguard/client-configs";
@@ -67,21 +53,23 @@ in
       let
         cfg = selected.cfg;
         require = ps.require "wireguard-server";
-        privateKeyFile = require "privateKeyFile" cfg.privateKeyFile;
+        # Native WG accepts any string; reject unsafe/non-runtime paths before manifest generation.
+        privateKeyFile =
+          if ps.absolutePath.check native.privateKeyFile then
+            native.privateKeyFile
+          else
+            throw "wireguard-server: networking.wireguard.interfaces.wg0.privateKeyFile must be a quoted runtime absolute path string, outside the Nix store and without colon or CR/LF.";
         serverPublicKeyFile = require "serverPublicKeyFile" cfg.serverPublicKeyFile;
         clientDns = require "clientDns" cfg.clientDns;
-        native = config.networking.wireguard.interfaces.${cfg.interface};
+        interface = "wg0";
+        native = config.networking.wireguard.interfaces.${interface};
         clients = lib.mapAttrsToList (name: client: {
           inherit name;
           inherit (client) address;
           publicKeyFile = require "clients.${name}.publicKeyFile" client.publicKeyFile;
           privateKeyFile = require "clients.${name}.privateKeyFile" client.privateKeyFile;
         }) cfg.clients;
-        clientEndpoint =
-          if cfg.clientEndpoint != null then
-            cfg.clientEndpoint
-          else
-            "${selected.hostname}:${toString (require "networking.wireguard.interfaces.${cfg.interface}.listenPort (or clientEndpoint)" native.listenPort)}";
+        clientEndpoint = "${selected.hostname}:${toString (require "networking.wireguard.interfaces.wg0.listenPort" native.listenPort)}";
         metadata = pkgs.writeText "wireguard-runtime.json" (
           builtins.toJSON {
             inherit
@@ -91,7 +79,8 @@ in
               clientDns
               clientEndpoint
               ;
-            inherit (cfg) interface clientConfigsDirectory;
+            inherit interface;
+            inherit (cfg) clientConfigsDirectory;
             listenPort = native.listenPort;
             namespace =
               if native.interfaceNamespace != null then native.interfaceNamespace else native.socketNamespace;
@@ -135,32 +124,27 @@ in
             message = "wireguard-server: runtime synchronization requires the native script-based WireGuard backend (useNetworkd = false, type = wireguard).";
           }
           {
-            assertion =
-              native.privateKey == null
-              && native.privateKeyFile == privateKeyFile
-              && !native.generatePrivateKeyFile;
+            assertion = native.privateKey == null && !native.generatePrivateKeyFile;
             message = "wireguard-server: supply the server key only through privateKeyFile; key generation/provisioning belongs to the consumer.";
           }
           {
-            assertion =
-              cfg.clientEndpoint != null
-              || (native.listenPort != null && native.listenPort > 0 && native.listenPort <= 65535);
-            message = "wireguard-server: a valid native listenPort or explicit clientEndpoint is required.";
+            assertion = native.listenPort != null && native.listenPort > 0 && native.listenPort <= 65535;
+            message = "wireguard-server: a valid native wg0 listenPort is required.";
           }
         ];
 
         networking.wireguard = {
           useNetworkd = lib.mkDefault false;
-          interfaces.${cfg.interface}.privateKeyFile = lib.mkDefault privateKeyFile;
+          interfaces.${interface}.listenPort = lib.mkDefault 51820;
         };
         environment.systemPackages = [ qr ];
 
         systemd.services.wireguard-peer-sync = {
           description = "Synchronize runtime WireGuard peers";
-          after = [ "wireguard-${cfg.interface}.service" ];
-          requires = [ "wireguard-${cfg.interface}.service" ];
-          wantedBy = [ "wireguard-${cfg.interface}.target" ];
-          partOf = [ "wireguard-${cfg.interface}.service" ];
+          after = [ "wireguard-${interface}.service" ];
+          requires = [ "wireguard-${interface}.service" ];
+          wantedBy = [ "wireguard-${interface}.target" ];
+          partOf = [ "wireguard-${interface}.service" ];
           restartTriggers = [ metadata ];
           serviceConfig = {
             ExecStart = "${peerSync}/bin/wireguard-peer-sync";
