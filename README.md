@@ -294,7 +294,7 @@ SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,
 OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。旧global`modules.ollama`と旧公開`open-webui`record・実装directoryは廃止し、保存先・モデル・unit名は保持する。
 公開するサービスの独自enable aliasは追加しない。既存Paseoは互換bridgeを保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
-サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules}`。
+サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
 Forgejo runnerの`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
@@ -333,6 +333,7 @@ python3 modules/forgejo/test-networks.py
 python3 modules/ytdl-sub/test-stage-config.py
 python3 modules/wireguard-server/test-wireguard-runtime.py
 python3 modules/incus/test-provision.py
+python3 modules/incus/test-rebuild.py
 python3 modules/groupware/test-radicale-users.py
 python3 modules/wireguard-client/test-import-tunnels.py
 python3 modules/atcoder/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可

@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
 let
@@ -50,7 +51,20 @@ in
         };
         boot.initrd.kernelModules = cfg.initrdKernelModules;
         networking.nftables.enable = lib.mkDefault true;
+        environment.systemPackages = lib.optional (cfg.rebuild.flakeFile != null) (
+          attopkgs.container-rebuild {
+            flakeFile = cfg.rebuild.flakeFile;
+            containers = builtins.attrNames cfg.containers;
+            incus = native.clientPackage;
+          }
+        );
         assertions = [
+          {
+            assertion =
+              cfg.rebuild.flakeFile == null
+              || (lib.hasSuffix "/flake.nix" cfg.rebuild.flakeFile && cfg.containers != { });
+            message = "modules.incus.rebuild.flakeFile must name flake.nix and requires declared containers.";
+          }
           {
             assertion = !preseed || singlePool;
             message = "modules.incus: supplied preseed.storage_pools must contain exactly one named storage pool; initialization is create-only.";

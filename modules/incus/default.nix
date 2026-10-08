@@ -33,6 +33,7 @@ in
       description = "Kernel modules loaded with modprobe before container provisioning.";
     };
     stateDir = ps.pathOption "Persistent image-source stamp directory; required when containers are declared. Existing directories are never cleared.";
+    rebuild.flakeFile = ps.pathOption "Absolute runtime path to a flake.nix checkout. Non-null installs container-rebuild for the declared container names; nixosConfigurations must use those same names. The checkout is not copied into the package.";
 
     containers = lib.mkOption {
       default = { };

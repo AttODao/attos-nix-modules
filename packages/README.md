@@ -3,6 +3,7 @@
 共有設定に必要なcustom derivation / overrideだけを置く。
 
 実装済み:
+- `container-rebuild.nix`: Incus moduleのruntime flake.nix pathと宣言済みcontainer名を受け取るCLI package。local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す。local/default project限定、hostのprofileは変更しない。
 - `atcoder-cli.nix`: atcoder-cli 2.2.0。旧consumerのsource hash / npmDepsHashを維持。
 - `atcoder-oj.nix`: ホストのonline-judge-tools/API clientへAtCoderのMiB表記対応patchを適用。
 - `atcoder-aclogin.nix`: aclogin 0.2.1、旧revision/hashを維持。cookieを配布・宣言的管理しない。
