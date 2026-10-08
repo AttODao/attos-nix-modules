@@ -25,6 +25,22 @@ let
   foot = t.hm footCfg "test";
   fontsCfg = t.cfgFor [ { modules.fonts.enable = true; } ];
   fonts = t.hm fontsCfg "test";
+  fontOverrides = t.cfgFor [
+    {
+      modules.fonts.enable = true;
+      fonts.enableDefaultPackages = false;
+      fonts.fontconfig.defaultFonts = {
+        sansSerif = [ "sans-serif" ];
+        serif = [ "serif" ];
+        monospace = [ "monospace" ];
+      };
+      home-manager.users.test.fonts.fontconfig.defaultFonts = {
+        sansSerif = [ "sans-serif" ];
+        serif = [ "serif" ];
+        monospace = [ "monospace" ];
+      };
+    }
+  ];
   overridden = t.hmFor [
     { modules.foot.enable = true; }
     {
@@ -69,7 +85,33 @@ assert fontsCfg.modules.fonts.enable;
 assert !fonts.programs.foot.enable && fonts.fonts.fontconfig.enable;
 assert lib.all (p: lib.elem p fonts.home.packages) expectedPackages;
 assert lib.all (p: lib.elem p fontsCfg.fonts.packages) expectedPackages;
+assert fontsCfg.fonts.enableDefaultPackages;
+assert lib.all
+  (
+    name: fontsCfg.fonts.fontconfig.defaultFonts.${name} == fonts.fonts.fontconfig.defaultFonts.${name}
+  )
+  [
+    "sansSerif"
+    "serif"
+    "monospace"
+  ];
+assert fonts.fonts.fontconfig.defaultFonts.sansSerif == [ "Noto Sans CJK JP" ];
+assert fonts.fonts.fontconfig.defaultFonts.serif == [ "Noto Serif CJK JP" ];
 assert fontsCfg.fonts.fontconfig.defaultFonts.monospace == [ "Inconsolata Nerd Font Mono" ];
+assert !fontOverrides.fonts.enableDefaultPackages;
+assert lib.all
+  (
+    name:
+    fontOverrides.fonts.fontconfig.defaultFonts.${name} == [ name ]
+    && fontOverrides.home-manager.users.test.fonts.fontconfig.defaultFonts.${name} == [ name ]
+  )
+  [
+    "serif"
+    "monospace"
+  ];
+assert fontOverrides.fonts.fontconfig.defaultFonts.sansSerif == [ "sans-serif" ];
+assert
+  fontOverrides.home-manager.users.test.fonts.fontconfig.defaultFonts.sansSerif == [ "sans-serif" ];
 assert overridden.programs.foot.settings.main.font == "monospace:size=13";
 assert overridden.programs.foot.settings.colors-dark.alpha == 1.0;
 assert overridden.fonts.fontconfig.defaultFonts.monospace == [ "monospace" ];

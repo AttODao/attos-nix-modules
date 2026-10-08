@@ -52,7 +52,7 @@ in
 
     home.activation.ensureNoctaliaRecordingsDir = lib.mkIf cfg.screenRecorder.enable (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        ${pkgs.coreutils}/bin/install -d -m 755 ${lib.escapeShellArg recordingsDirectory}
+        run ${pkgs.coreutils}/bin/install -d -m 755 ${lib.escapeShellArg recordingsDirectory}
       ''
     );
 

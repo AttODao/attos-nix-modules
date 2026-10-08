@@ -66,7 +66,7 @@ in
 
     # The screenshot bindings below target this child of the configured Pictures directory.
     home.activation.ensureHyprlandScreenshotsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      ${pkgs.coreutils}/bin/install -d -m 755 ${screenshotDirectory}
+      run ${pkgs.coreutils}/bin/install -d -m 755 ${screenshotDirectory}
     '';
 
     xdg.configFile = lib.mkIf cfg.neowall.enable {

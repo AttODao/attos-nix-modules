@@ -40,7 +40,7 @@ in
     ];
 
     home.activation.registerPipeasioSteamPrefixes = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      ${registerSteamPrefixes}/bin/pipeasio-register-steam-prefixes --skip-registered --no-runtime-download
+      run ${registerSteamPrefixes}/bin/pipeasio-register-steam-prefixes --skip-registered --no-runtime-download
     '';
   };
 }

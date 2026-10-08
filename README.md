@@ -353,6 +353,7 @@ python3 modules/wireguard-client/test-import-tunnels.py
 python3 modules/atcoder-go/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可
 python3 modules/atcoder-go/test-project.py # bundled scaffold、mock Goのみ
 python3 packages/code-server/test-install.py
+python3 tests/test-review-regressions.py /path/to/nixpkgs /path/to/home-manager # activation dry-runと隔離prepare mocks
 ```
 
 現在の固定revisionは利用側の `flake.lock` を参照する。

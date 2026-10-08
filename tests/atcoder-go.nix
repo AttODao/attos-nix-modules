@@ -61,6 +61,14 @@ let
     }
   ];
 in
+assert
+  t.attopkgs.atcoder-cli.drvPath
+  == (pkgs.callPackage ../modules/atcoder-go/assets/atcoder/nix/atcoder-cli.nix { }).drvPath;
+assert
+  t.attopkgs.atcoder-aclogin.drvPath
+  == (pkgs.callPackage ../modules/atcoder-go/assets/atcoder/nix/aclogin.nix { }).drvPath;
+assert t.attopkgs.atcoder-cli.version == "2.2.0";
+assert t.attopkgs.atcoder-aclogin.version == "0.2.1";
 assert !(base.modules ? atcoder);
 assert !base.modules.atcoder-go.enable;
 assert base.modules.atcoder-go.projectAssets == ../modules/atcoder-go/assets;

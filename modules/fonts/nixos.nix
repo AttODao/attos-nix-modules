@@ -4,20 +4,15 @@
   pkgs,
   ...
 }:
+let
+  common = import ./common.nix { inherit pkgs; };
+in
 {
   config = lib.mkIf config.modules.fonts.enable {
     fonts = {
       enableDefaultPackages = lib.mkDefault true;
-      packages = with pkgs; [
-        nerd-fonts.inconsolata
-        noto-fonts-cjk-sans
-        noto-fonts-cjk-serif
-      ];
-      fontconfig.defaultFonts = lib.mkDefault {
-        sansSerif = [ "Noto Sans CJK JP" ];
-        serif = [ "Noto Serif CJK JP" ];
-        monospace = [ "Inconsolata Nerd Font Mono" ];
-      };
+      packages = common.packages;
+      fontconfig.defaultFonts = lib.mkDefault common.defaultFonts;
     };
   };
 }

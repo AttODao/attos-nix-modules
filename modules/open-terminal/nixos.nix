@@ -27,11 +27,6 @@ in
       }
     ];
 
-    systemd.tmpfiles.rules = [
-      "d ${dataDir} 0700 root root -"
-      "d ${workspaceDir} 0700 ${toString uid} ${toString gid} -"
-    ];
-
     systemd.services.open-terminal-prepare = {
       unitConfig.RequiresMountsFor = [ dataDir ];
       serviceConfig.Type = "oneshot";
