@@ -11,6 +11,8 @@ let
   workspaceDir = "${dataDir}/workspace";
   environmentFile = ps.require "modules.open-terminal" "environmentFile" cfg.environmentFile;
   web = ps.select config "ollama";
+  standalone = !(web.enabled && !web.standalone && web.cfg.webui);
+  transport = { inherit standalone; };
   allowedOrigins =
     config.virtualisation.oci-containers.containers.open-terminal.environment.OPEN_TERMINAL_CORS_ALLOWED_ORIGINS;
   uid = ps.require "modules.open-terminal" "uid" cfg.uid;
@@ -43,9 +45,9 @@ in
     systemd.services.docker-open-terminal = {
       unitConfig.RequiresMountsFor = [ dataDir ];
       requires = [ "open-terminal-prepare.service" ];
-      wants = [ "docker-network-traefik.service" ];
+      wants = [ (ps.networkUnit transport) ];
       after = [
-        "docker-network-traefik.service"
+        (ps.networkUnit transport)
         "open-terminal-prepare.service"
       ];
     };
@@ -56,7 +58,7 @@ in
       environment = {
         OPEN_TERMINAL_CORS_ALLOWED_ORIGINS = lib.mkDefault (
           if web.enabled && web.cfg.webui then
-            "https://${web.hostname}"
+            ps.url web 8080
           else
             throw "Open Terminal: enable a local Open WebUI registry entry or supply the native OCI CORS environment value."
         );
@@ -81,7 +83,8 @@ in
         "${workspaceDir}:/home/user"
         "/etc/localtime:/etc/localtime:ro"
       ];
-      networks = lib.mkDefault [ "traefik" ];
+      ports = lib.mkIf standalone (lib.mkDefault [ "127.0.0.1:8001:8000" ]);
+      networks = lib.mkDefault [ (ps.network transport) ];
     };
   };
 }

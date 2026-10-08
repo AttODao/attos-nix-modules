@@ -11,6 +11,7 @@ let
   dataDir = require "dataDir";
   tokenFile = require "tokenFile";
   forgejo = ps.entries config "forgejo";
+  localForgejo = ps.select config "forgejo";
 in
 {
   config = lib.mkIf cfg.enable {
@@ -37,7 +38,9 @@ in
         enable = true;
         name = lib.mkDefault config.networking.hostName;
         url = lib.mkDefault (
-          if builtins.length forgejo == 1 then
+          if localForgejo.standalone then
+            ps.url localForgejo 3000
+          else if builtins.length forgejo == 1 then
             "https://${(builtins.head forgejo).hostname}"
           else
             throw "Forgejo runner: register exactly one Forgejo hostname or set the native runner instance URL."
@@ -69,12 +72,12 @@ in
     };
 
     systemd.services.gitea-runner-forgejo = {
-      wants = lib.optional (lib.any (
-        entry: ps.isLocal config entry.cfg
-      ) forgejo) "docker-forgejo.service";
-      after = lib.optional (lib.any (
-        entry: ps.isLocal config entry.cfg
-      ) forgejo) "docker-forgejo.service";
+      wants = lib.optional (
+        localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo
+      ) "docker-forgejo.service";
+      after = lib.optional (
+        localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo
+      ) "docker-forgejo.service";
       unitConfig = {
         ConditionPathExists = lib.mkDefault [ tokenFile ];
         RequiresMountsFor = lib.mkDefault ([ dataDir ] ++ cfg.requiresMountsFor);

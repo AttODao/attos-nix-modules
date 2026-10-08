@@ -29,6 +29,11 @@ in
 
   config = lib.mkIf config.modules.open-terminal.enable {
     modules.docker.enable = true;
-    modules.swarm.enable = true;
+    modules.swarm.enable = lib.mkIf (
+      let
+        web = ps.select config "ollama";
+      in
+      web.enabled && !web.standalone && web.cfg.webui
+    ) true;
   };
 }

@@ -18,7 +18,7 @@ in
     })
   ];
 
-  options.modules.public-services = ps.option "mailserver" (
+  options.modules = ps.moduleOptions "mailserver" (
     ps.common "shared simple-nixos-mailserver integration"
     // {
       domains = nullable (lib.types.listOf lib.types.nonEmptyStr) "Consumer-owned mail domains; the first is the system domain.";

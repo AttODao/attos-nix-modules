@@ -259,9 +259,6 @@ let
       (t.cfgFor [
         { modules.public-services."invalid.example.test".vaultwarden.environmentFile = ../AGENTS.md; }
       ]).modules.public-services."invalid.example.test".vaultwarden.environmentFile;
-  oldGlobal =
-    builtins.tryEval
-      (t.cfgFor [ { modules.searxng.enable = true; } ]).modules.searxng.enable;
   duplicate = t.cfgFor [
     swarm
     {
@@ -432,7 +429,8 @@ assert
 assert
   remoteSearch.virtualisation.oci-containers.containers.open-webui.dependsOn == [ "open-terminal" ];
 assert lib.all (name: !(missing name).success) services;
-assert !invalidPath.success && !storePathInput.success && !oldGlobal.success;
+assert !invalidPath.success && !storePathInput.success;
+assert !disabled.modules.searxng.enable;
 assert lib.any (
   a: !a.assertion && lib.hasInfix "only one local vaultwarden" a.message
 ) duplicate.assertions;

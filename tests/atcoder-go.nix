@@ -1,4 +1,4 @@
-# nix-instantiate --eval --strict tests/atcoder.nix \
+# nix-instantiate --eval --strict tests/atcoder-go.nix \
 #   --arg nixpkgs /path/to/nixpkgs --arg homeManager /path/to/home-manager
 {
   nixpkgs,
@@ -21,14 +21,14 @@ let
       );
   };
   atcoderModule = {
-    imports = [ ../modules/atcoder ];
+    imports = [ ../modules/atcoder-go ];
     _module.args.attopkgs = lib.mkForce attopkgs;
   };
 
   cfg = modules: t.cfgFor ([ atcoderModule ] ++ modules);
-  actual = t.hmFor [ { modules.atcoder.enable = true; } ];
+  actual = t.hmFor [ { modules.atcoder-go.enable = true; } ];
   base = cfg [ ];
-  enabledCfg = cfg [ { modules.atcoder.enable = true; } ];
+  enabledCfg = cfg [ { modules.atcoder-go.enable = true; } ];
   enabled = t.hm enabledCfg "test";
   commands = lib.findFirst (p: (p.passthru.commands or [ ]) != [ ]) null enabled.home.packages;
 
@@ -39,7 +39,7 @@ let
     ];
     modules = [
       atcoderModule
-      { modules.atcoder.enable = true; }
+      { modules.atcoder-go.enable = true; }
       { users.users.bob.home = "/srv/bob"; }
     ];
   };
@@ -47,12 +47,29 @@ let
   bob = t.hm multiCfg.config "bob";
 
   overrideCfg = cfg [
-    { modules.atcoder.enable = true; }
+    { modules.atcoder-go.enable = true; }
     { home-manager.users.test.programs.go.package = pkgs.go; }
   ];
   override = t.hm overrideCfg "test";
+  project = lib.findFirst (p: lib.getName p == "atcoder-go") null enabled.home.packages;
+  minimal = t.hmFor [
+    {
+      modules.atcoder-go = {
+        enable = true;
+        projectAssets = null;
+      };
+    }
+  ];
 in
-assert !base.modules.atcoder.enable;
+assert !(base.modules ? atcoder);
+assert !base.modules.atcoder-go.enable;
+assert base.modules.atcoder-go.projectAssets == ../modules/atcoder-go/assets;
+assert project != null && project.meta.priority == -10;
+assert lib.hasInfix
+  (builtins.unsafeDiscardStringContext "${enabledCfg.modules.atcoder-go.projectAssets}/atcoder/scripts/project")
+  project.text;
+assert lib.hasInfix (builtins.unsafeDiscardStringContext "${pkgs.go}/bin") project.text;
+assert lib.findFirst (p: lib.getName p == "atcoder-go") null minimal.home.packages == null;
 assert !base.modules.zsh.enable;
 assert !base.home-manager.users.test.programs.go.enable;
 assert !base.home-manager.users.test.programs.direnv.enable;

@@ -1,0 +1,23 @@
+if [ "$#" -lt 1 ]; then
+  echo "usage: acn <contest-id> [acc options]" >&2
+  exit 2
+fi
+
+contest_id="$1"
+shift
+
+project_root="${ATCODER_GO_ROOT:-}"
+if [ -z "$project_root" ]; then
+  project_root="$(pwd -P)"
+  while [ ! -f "$project_root/go.mod" ]; do
+    parent="$(dirname "$project_root")"
+    if [ "$parent" = "$project_root" ]; then
+      echo "go.mod was not found; run 'atcoder-go init' at the project root." >&2
+      exit 2
+    fi
+    project_root="$parent"
+  done
+fi
+
+cd "$project_root"
+acc new "$contest_id" --choice all --template go "$@"

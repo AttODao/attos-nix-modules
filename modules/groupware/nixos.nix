@@ -37,7 +37,7 @@ let
       'accountname' => 'Personal',
       'username' => '%u',
       'password' => '%p',
-      'discovery_url' => 'https://${hostname}/',
+      'discovery_url' => '${ps.url selected 80}/',
       'active' => true,
       'readonly' => false,
       'hide' => false,
@@ -79,6 +79,14 @@ in
     };
 
     services.nginx.virtualHosts.${hostname} = {
+      listen = lib.mkIf selected.standalone (
+        lib.mkDefault [
+          {
+            addr = "127.0.0.1";
+            port = 80;
+          }
+        ]
+      );
       # Roundcube supplies mkDefault true; this stronger default still permits ordinary overrides.
       forceSSL = lib.mkOverride 900 false;
       enableACME = lib.mkOverride 900 false;
@@ -95,7 +103,9 @@ in
         extraConfig = lib.mkDefault ''
           proxy_set_header Host $host;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-          proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+          proxy_set_header X-Forwarded-Proto ${
+            if selected.standalone then "$scheme" else "$http_x_forwarded_proto"
+          };
           proxy_set_header X-Script-Name /radicale;
           proxy_set_header Authorization $http_authorization;
         '';

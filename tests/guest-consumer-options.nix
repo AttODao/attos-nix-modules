@@ -55,7 +55,7 @@ let
             linger = true;
           };
           modules = {
-            atcoder = {
+            atcoder-go = {
               enable = true;
               goPackage = pkgs.go;
               nixDirenv.enable = false;
@@ -176,7 +176,7 @@ let
   disabled = t.cfgFor [
     {
       modules = {
-        atcoder = {
+        atcoder-go = {
           projectAssets = scaffold;
           nixDirenv.enable = false;
         };
@@ -249,11 +249,10 @@ assert
   deskHome.programs.noctalia.package == shellPackage && deskHome.programs.noctalia.systemd.enable;
 assert
   deskHome.systemd.user.services.noctalia.Unit.Requires == [ "hyprland-headless-output.service" ];
-assert
-  lib.all (unit: lib.elem unit deskHome.systemd.user.services.noctalia.Install.WantedBy) [
-    "graphical-session.target"
-    "hyprland-headless-output.service"
-  ];
+assert lib.all (unit: lib.elem unit deskHome.systemd.user.services.noctalia.Install.WantedBy) [
+  "graphical-session.target"
+  "hyprland-headless-output.service"
+];
 assert !lib.hasInfix "uwsm app -t service -- noctalia" lua;
 assert lib.hasInfix "fcitx5-daemon.service xdg-desktop-portal.service" lua;
 assert desktop.systemd.user.services.sunshine.requires == [ "hyprland-headless-output.service" ];

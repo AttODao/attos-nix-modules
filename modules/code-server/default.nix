@@ -6,7 +6,7 @@ in
 {
   imports = [ ./nixos.nix ];
 
-  options.modules.public-services = ps.option "code-server" (
+  options.modules = ps.moduleOptions "code-server" (
     ps.common "code-server web development environment"
     // {
       backendUrl = lib.mkOption {

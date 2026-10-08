@@ -56,6 +56,12 @@ in
     (lib.mkIf selected.enabled (
       lib.mkMerge [
         {
+          assertions = [
+            {
+              assertion = cfg.acme.dnsProvider == null || acmeHost != null;
+              message = "mailserver.acme.dnsProvider requires native mailserver.x509.useACMEHost; standalone defaults to caller-supplied certificates.";
+            }
+          ];
           mailserver = {
             enable = true;
             openFirewall = lib.mkDefault false;
@@ -66,7 +72,7 @@ in
             systemName = lib.mkDefault cfg.systemName;
             systemContact = lib.mkDefault "postmaster@${primary}";
             sendingFqdn = lib.mkDefault selected.hostname;
-            x509.useACMEHost = lib.mkDefault selected.hostname;
+            x509.useACMEHost = lib.mkDefault (if selected.standalone then null else selected.hostname);
             enableImap = lib.mkDefault true;
             enableSubmission = lib.mkDefault true;
             enableManageSieve = lib.mkDefault true;
@@ -89,25 +95,37 @@ in
               nameserver = [ "127.0.0.1:53" ];
             }
           '';
-          systemd.services = {
-            "acme-order-renew-${acmeHost}".unitConfig.RequiresMountsFor = [ root ];
-            "acme-${acmeHost}".unitConfig.RequiresMountsFor = [ root ];
-            dovecot.unitConfig.RequiresMountsFor = [ root ] ++ hashFiles;
-            postfix.unitConfig.RequiresMountsFor = [ root ];
-            rspamd = {
-              unitConfig.RequiresMountsFor = [ root ];
-              after = [ "kresd@1.service" ];
-              requires = [ "kresd@1.service" ];
+          services.postfix.settings.main.inet_interfaces = lib.mkIf selected.standalone (
+            lib.mkDefault [ "loopback-only" ]
+          );
+          services.dovecot2.settings.listen = lib.mkIf selected.standalone (
+            lib.mkDefault [
+              "127.0.0.1"
+              "::1"
+            ]
+          );
+          systemd.services =
+            lib.optionalAttrs (acmeHost != null) {
+              "acme-order-renew-${acmeHost}".unitConfig.RequiresMountsFor = [ root ];
+              "acme-${acmeHost}".unitConfig.RequiresMountsFor = [ root ];
+            }
+            // {
+              dovecot.unitConfig.RequiresMountsFor = [ root ] ++ hashFiles;
+              postfix.unitConfig.RequiresMountsFor = [ root ];
+              rspamd = {
+                unitConfig.RequiresMountsFor = [ root ];
+                after = [ "kresd@1.service" ];
+                requires = [ "kresd@1.service" ];
+              };
+              # Native postfix-tlspol needs a Unix socket as well as network sockets.
+              postfix-tlspol.serviceConfig.RestrictAddressFamilies = lib.mkForce [
+                "AF_INET"
+                "AF_INET6"
+                "AF_UNIX"
+              ];
             };
-            # Native postfix-tlspol needs a Unix socket as well as network sockets.
-            postfix-tlspol.serviceConfig.RestrictAddressFamilies = lib.mkForce [
-              "AF_INET"
-              "AF_INET6"
-              "AF_UNIX"
-            ];
-          };
         }
-        (lib.mkIf (cfg.acme.dnsProvider != null) {
+        (lib.mkIf (cfg.acme.dnsProvider != null && acmeHost != null) {
           security.acme = {
             acceptTerms = lib.mkDefault cfg.acme.acceptTerms;
             defaults.email = lib.mkIf (cfg.acme.email != null) (lib.mkDefault cfg.acme.email);

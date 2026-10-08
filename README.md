@@ -167,7 +167,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | steam | NixOS + HM | PCManFM |
 | wireguard-client | NixOS | NetworkManager |
 | limine | NixOS | — |
-| atcoder | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin同梱 |
+| atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
 | zed | HM | 任意のcodex-acp npm policy |
 | discord | HM | Fcitx5 |
 | foot | HM | Fonts |
@@ -208,7 +208,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。GTK/icon等の公開API外のユーザー差分は標準NixOS/HM optionを使う。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
 Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。
-AtCoderはホストのGoを既定とし、`atcoder.{goPackage,nixDirenv.enable,projectAssets,projectGoPackage}`でtoolchain・direnv・consumer所有の完全なproject scaffoldを選択できる。projectAssetsは既定null（共有の最小initializer）。認証は配布しない。
+AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・scripts・template・snippet）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時は最小helperのみ。認証は配布しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{userSettings,codexAcp.npmPolicy}`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。
 `pi.{settingsMode,piSessionsSource,systemWide}`で宣言的/既存優先merge、extension source、全system userへのCLI導入を選ぶ。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。
@@ -284,15 +284,29 @@ OCI upstreamは既存の内部DNS名・portで固定されるため、別hostの
 FQDNごとに分離する仕組みではない。Groupwareの暗黙Mailserver依存も同じhostを継承する。
 
 code-server / Sunshineも `enable = true; host = "<所有OS>";` でnative実体を有効にする。
-別のglobal enable aliasは追加しない。
+単独利用は同じtyped入力を`modules.code-server` / `modules.sunshine`へ指定する。
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
 `HASHED_PASSWORD`）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 旧Nerd Font組み込みpackageは `attopkgs.code-server { src = <固定したstandalone release>; }`
 へ公開 `code-server.packageSource` でstandalone releaseを渡せる。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
 SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。headless待機とnative autoStartが有効なら、output再作成後にSunshineも起動する。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
-OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。旧global`modules.ollama`と旧公開`open-webui`record・実装directoryは廃止し、保存先・モデル・unit名は保持する。
-公開するサービスの独自enable aliasは追加しない。既存Paseoは互換bridgeを保持する。
+OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。旧公開`open-webui`record・実装directoryは廃止し、保存先・モデル・unit名は保持する。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
+
+### localhost単独利用
+
+`modules.<service>.enable = true`で公開registryなしに同じ実装を起動できる。サービス固有の既存typed入力を再利用し、公開endpoint用の`host/deploy/private/backendUrl/backendAddress`は不要。`hostname`は既定`localhost`で、DNS/CNAME/Traefikへの登録はしない。公開local配置との同時有効化は拒否するが、別owner/管理外endpoint登録との併用は可能。
+
+```nix
+modules.ollama.enable = true;
+modules.vaultwarden = {
+  enable = true;
+  dataDir = "/srv/vaultwarden";
+  environmentFile = "/run/secrets/vaultwarden.env";
+};
+```
+
+OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要）。data/credential/UID/GID等の既存必須入力はcallerが供給し、portやpackage等の追加調整は標準NixOS optionで行う。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
@@ -336,7 +350,8 @@ python3 modules/incus/test-provision.py
 python3 modules/incus/test-rebuild.py
 python3 modules/groupware/test-radicale-users.py
 python3 modules/wireguard-client/test-import-tunnels.py
-python3 modules/atcoder/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可
+python3 modules/atcoder-go/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可
+python3 modules/atcoder-go/test-project.py # bundled scaffold、mock Goのみ
 python3 packages/code-server/test-install.py
 ```
 

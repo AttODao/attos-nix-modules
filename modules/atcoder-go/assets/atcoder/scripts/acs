@@ -1,0 +1,13 @@
+set -e
+
+if [ ! -f main.go ]; then
+  echo "main.go was not found; run acs from a task directory." >&2
+  exit 2
+fi
+
+# Combine the project library into a single source file before submitting.
+# Keep oj's confirmation prompt. --no-open is needed in the headless
+# development container, and extra arguments are forwarded to oj.
+atcoder-snippet --entry main.go --output .submit/main.go
+language="${ATCODER_GO_LANGUAGE:-go 1.25.1}"
+acc submit .submit/main.go -- --no-open -l "$language" "$@"

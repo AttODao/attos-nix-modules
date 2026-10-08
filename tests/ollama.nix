@@ -148,7 +148,6 @@ let
         { modules.public-services."search.example.test".searxng.enable = lib.mkForce false; }
       ];
   obsolete = map (input: builtins.tryEval (builtins.deepSeq (evaluate [ input ]).modules true)) [
-    { modules.ollama.enable = true; }
     { modules.public-services."old.example.test".open-webui.enable = true; }
   ];
   nativeInput = {
@@ -174,7 +173,8 @@ let
   container = local.virtualisation.oci-containers.containers.open-webui;
   route = lib.findFirst (r: r.service == "ollama") null (ps.routes local);
 in
-assert !(base.options.modules ? ollama) && !(base.options.modules ? open-webui);
+assert base.options.modules ? ollama && !(base.options.modules ? open-webui);
+assert !base.config.modules.ollama.enable;
 assert lib.all (result: !result.success) obsolete;
 assert !opts.enable.default && !opts.webui.default && opts.webui.type.check true;
 assert !opts.webui.type.check "true";

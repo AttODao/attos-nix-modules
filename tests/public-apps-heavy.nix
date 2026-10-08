@@ -222,7 +222,7 @@ assert isolated base && isolated disabled && isolated remote && isolated headles
 assert
   allAssertions base && allAssertions disabled && allAssertions remote && allAssertions headless;
 assert base.modules.public-services == { };
-assert lib.all (service: !(builtins.hasAttr service base.modules)) services;
+assert lib.all (service: !base.modules.${service}.enable) services;
 assert headless.home-manager.users == { } && activeHeadless.home-manager.users == { };
 assert (t.hm active "test").programs.home-manager.enable;
 assert

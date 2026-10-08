@@ -37,7 +37,7 @@ Pi等のbase package供給元が違う場合は、利用側でpackage setを組�
 実行可能check:
 
 ```sh
-NIXPKGS=/path/to/pinned/nixpkgs python3 modules/atcoder/test-commands.py
+NIXPKGS=/path/to/pinned/nixpkgs python3 modules/atcoder-go/test-commands.py
 python3 packages/code-server/test-install.py
 ```
 

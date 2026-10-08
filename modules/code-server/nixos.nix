@@ -24,7 +24,7 @@ in
       );
       user = lib.mkDefault cfg.user;
       group = lib.mkDefault cfg.group;
-      host = lib.mkDefault "0.0.0.0";
+      host = lib.mkDefault (if selected.standalone then "127.0.0.1" else "0.0.0.0");
       port = lib.mkDefault 4444;
       auth = lib.mkDefault "password";
       disableTelemetry = lib.mkDefault true;

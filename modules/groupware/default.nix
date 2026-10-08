@@ -18,6 +18,11 @@ let
 in
 {
   imports = [ ./nixos.nix ];
+  options.modules.groupware = lib.mkOption {
+    type = lib.types.submodule (ps.standaloneOptions serviceOptions);
+    default = { };
+    description = "Standalone Roundcube and Radicale with local mailserver integration.";
+  };
   options.modules.public-services = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule (
@@ -35,11 +40,15 @@ in
   config = lib.mkMerge [
     { assertions = selected.assertions; }
     (lib.mkIf selected.enabled {
+      modules.mailserver.enable = lib.mkIf selected.standalone true;
       assertions = [
         {
           assertion =
-            lib.attrByPath [ selected.hostname "mailserver" "enable" ] false config.modules.public-services
-            && ps.isLocal config config.modules.public-services.${selected.hostname}.mailserver;
+            if selected.standalone then
+              config.modules.mailserver.enable
+            else
+              lib.attrByPath [ selected.hostname "mailserver" "enable" ] false config.modules.public-services
+              && ps.isLocal config config.modules.public-services.${selected.hostname}.mailserver;
           message = "groupware: the same hostname must have an enabled local mailserver deployment.";
         }
       ];

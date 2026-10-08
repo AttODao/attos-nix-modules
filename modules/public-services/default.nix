@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   ps = import ./lib.nix { inherit lib; };
   inherit (lib) mkOption types;
@@ -10,6 +15,14 @@ let
     && builtins.match "[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+" name != null
     && lib.all (label: builtins.stringLength label <= 63) (lib.splitString "." name);
   paseo = ps.select config "paseo";
+  localContainers = lib.filterAttrs (
+    _: container: lib.elem "local-services" container.networks
+  ) config.virtualisation.oci-containers.containers;
+  ensureLocalNetwork =
+    lib.replaceStrings
+      [ "@docker@" "@network@" ]
+      [ (lib.escapeShellArg "${pkgs.docker}/bin/docker") (lib.escapeShellArg "local-services") ]
+      (builtins.readFile ../forgejo/ensure-network.sh);
 in
 {
   options.modules.public-services = mkOption {
@@ -103,6 +116,29 @@ in
           message = "modules.public-services.${entry.hostname}.ssh.address is required when enabled.";
         }) (ps.entries config "ssh");
     }
+    (lib.mkIf (localContainers != { }) {
+      systemd.services = {
+        docker-network-local-services = {
+          description = "Create the standalone services Docker bridge";
+          requires = [ "docker.service" ];
+          after = [ "docker.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ensureLocalNetwork;
+        };
+      }
+      // lib.mapAttrs' (
+        name: _:
+        lib.nameValuePair "docker-${name}" {
+          requires = [ "docker-network-local-services.service" ];
+          after = [ "docker-network-local-services.service" ];
+          # Docker prune can remove an unused bridge while the oneshot stays active.
+          preStart = lib.mkBefore ensureLocalNetwork;
+        }
+      ) localContainers;
+    })
     (lib.mkIf (lib.any (entry: ps.isLocal config entry.cfg) (ps.entries config "ssh")) {
       modules.openssh.enable = true;
     })

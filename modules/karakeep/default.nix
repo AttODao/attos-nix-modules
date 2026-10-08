@@ -13,7 +13,7 @@ in
 {
   imports = [ ./nixos.nix ];
 
-  options.modules.public-services = ps.option "karakeep" (
+  options.modules = ps.moduleOptions "karakeep" (
     ps.common "shared Karakeep service"
     // {
       dataDir = ps.pathOption "Persistent root containing Karakeep data/ and meilisearch/ directories.";
@@ -32,7 +32,7 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = true;
+      modules.swarm.enable = lib.mkIf (!s.standalone) true;
     })
   ];
 }

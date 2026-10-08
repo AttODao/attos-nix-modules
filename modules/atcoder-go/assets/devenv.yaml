@@ -1,0 +1,7 @@
+require_version: ">=2.1"
+
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+  nixpkgs-atcoder:
+    url: github:NixOS/nixpkgs/nixos-unstable

@@ -10,7 +10,7 @@ in
     ../steam
   ];
 
-  options.modules.public-services = ps.option "sunshine" (
+  options.modules = ps.moduleOptions "sunshine" (
     ps.common "Sunshine game streaming host"
     // {
       settings = lib.mkOption {

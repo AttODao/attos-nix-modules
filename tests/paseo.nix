@@ -39,7 +39,7 @@ let
   invalid =
     option: value:
     builtins.tryEval (t.cfgFor [ { modules.paseo.${option} = value; } ]).modules.paseo.${option};
-  missing = builtins.tryEval (t.cfgFor [ { modules.paseo.enable = true; } ]).modules.paseo.hostname;
+  standalone = t.cfgFor [ { modules.paseo.enable = true; } ];
 in
 assert !base.programs.pi-coding-agent.enable;
 assert enabled.programs.pi-coding-agent.enable;
@@ -66,5 +66,5 @@ assert lib.hasSuffix " daemon run --home ${lib.escapeShellArg "/srv/dev/paseo"}"
 assert builtins.any (p: p.name == "paseo") enabled.home.packages;
 assert !(invalid "enable" "yes").success;
 assert !(invalid "hostname" "").success;
-assert !missing.success;
+assert standalone.modules.paseo.hostname == "localhost";
 true

@@ -29,7 +29,7 @@
     ./wireguard-server
     ./ytdl-sub
     ./zed
-    ./atcoder
+    ./atcoder-go
     ./desktop-theme
     ./discord
     ./fcitx5

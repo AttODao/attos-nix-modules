@@ -20,7 +20,7 @@ in
     ../swarm
   ];
 
-  options.modules.public-services = ps.option "opencloud" (
+  options.modules = ps.moduleOptions "opencloud" (
     ps.common "OpenCloud server"
     // {
       dataDir = ps.pathOption "Service root containing the existing config and data directories.";
@@ -42,7 +42,7 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = true;
+      modules.swarm.enable = lib.mkIf (!s.standalone) true;
 
       systemd.tmpfiles.rules = [
         "d ${builtins.toJSON root} 0700 root root -"
@@ -65,17 +65,18 @@ in
           environmentFile
         ];
         wants = [
-          "docker-network-traefik.service"
+          (ps.networkUnit s)
           "opencloud-prepare.service"
         ];
         after = [
-          "docker-network-traefik.service"
+          (ps.networkUnit s)
           "opencloud-prepare.service"
         ];
       };
 
       virtualisation.oci-containers.containers.opencloud = {
         image = lib.mkDefault "opencloudeu/opencloud-rolling:latest";
+        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:9200:9200");
         pull = lib.mkDefault "always";
         user = lib.mkDefault "${uid}:${gid}";
         entrypoint = lib.mkDefault "/bin/sh";
@@ -85,7 +86,7 @@ in
           "printf 'no\\n' | opencloud init || true; exec opencloud server"
         ];
         environment = lib.mapAttrs (_: lib.mkDefault) {
-          OC_URL = "https://${s.hostname}";
+          OC_URL = ps.url s 9200;
           PROXY_HTTP_ADDR = "0.0.0.0:9200";
           PROXY_TLS = "false";
           OC_CONFIG_DIR = "/etc/opencloud";
@@ -101,7 +102,7 @@ in
           "${dataDir}:/var/lib/opencloud"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        networks = lib.mkDefault [ "traefik" ];
+        networks = lib.mkDefault [ (ps.network s) ];
       };
     })
   ];

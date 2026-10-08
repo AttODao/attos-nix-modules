@@ -45,6 +45,43 @@ rec {
       );
     };
 
+  # Both entry points share the same typed service inputs; endpoint metadata stays public-only.
+  standaloneOptions = serviceOptions: {
+    options =
+      builtins.removeAttrs serviceOptions [
+        "host"
+        "deploy"
+        "private"
+        "backendUrl"
+        "backendAddress"
+      ]
+      // {
+        hostname = mkOption {
+          type = types.strMatching "[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?";
+          default = "localhost";
+          description = "Hostname advertised by the standalone service; does not register DNS or a proxy route.";
+        };
+      };
+  };
+
+  moduleOptions = service: serviceOptions: {
+    public-services = option service serviceOptions;
+    ${service} = mkOption {
+      type = types.submodule (standaloneOptions serviceOptions);
+      default = { };
+      description = "Standalone ${service}; reuses the public service inputs without endpoint registration.";
+    };
+  };
+
+  network = selected: if selected.standalone then "local-services" else "traefik";
+  networkUnit = selected: "docker-network-${network selected}.service";
+  url =
+    selected: port:
+    if selected.standalone then
+      "http://${selected.hostname}:${toString port}"
+    else
+      "https://${selected.hostname}";
+
   common = description: {
     enable = lib.mkEnableOption description;
     host = mkOption {
@@ -107,16 +144,40 @@ rec {
     let
       local = lib.filter (entry: isLocal config entry.cfg) (entries config service);
       first = if local == [ ] then null else builtins.head local;
+      # SSH is endpoint metadata for openssh; Paseo already has a public-to-global bridge.
+      standalone =
+        !lib.elem service [
+          "ssh"
+          "paseo"
+        ]
+        && (config.modules.${service}.enable or false);
     in
     {
-      enabled = first != null;
-      hostname = if first == null then null else first.hostname;
-      cfg = if first == null then { } else first.cfg;
+      inherit standalone;
+      enabled = standalone || first != null;
+      hostname =
+        if standalone then
+          config.modules.${service}.hostname
+        else if first == null then
+          null
+        else
+          first.hostname;
+      cfg =
+        if standalone then
+          config.modules.${service}
+        else if first == null then
+          { }
+        else
+          first.cfg;
       # ponytail: legacy units/container names are single-instance; use instance-qualified names when multiple local deployments are needed.
       assertions = [
         {
           assertion = builtins.length local <= 1;
           message = "modules.public-services: only one local ${service} deployment is supported on ${config.networking.hostName}; use another host or deploy = false for endpoint-only aliases.";
+        }
+        {
+          assertion = !standalone || local == [ ];
+          message = "${service}: standalone and public local deployment cannot be enabled together; choose one entry point.";
         }
       ];
     };

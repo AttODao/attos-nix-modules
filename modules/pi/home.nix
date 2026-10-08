@@ -35,6 +35,24 @@ let
         rev = "3f7cd305414e95f9350541a5f95cd286a06e3705";
         hash = "sha256-abHSnNpD0tOXObRfLDJPpZPapm3+kvMaVWED+jEhMO4=";
       };
+  piReview = pkgs.fetchFromGitHub {
+    owner = "bacnh85";
+    repo = "pi-extensions";
+    rev = "5388a5f1987873fe1355064f72021452c4347c72";
+    hash = "sha256-8igRRDOEDIO0Nae7vzTSfnYg06i8KNiDM3XgkWT/CJY=";
+  };
+  piUsage = pkgs.fetchFromGitHub {
+    owner = "mtrojnar";
+    repo = "pi-usage";
+    rev = "bab49aed024f76b60877bc08f6854a8ffcb6d4b1";
+    hash = "sha256-e+AOcwQSPxYAaMg2y+crbEh/6QKw9oDkHLF4NRQzwv8=";
+  };
+  piKeepGoing = pkgs.fetchFromGitHub {
+    owner = "ohlulu";
+    repo = "pi-keep-going";
+    rev = "0c646fb606ddbf7e7bebaa379a43e29e9920a47a";
+    hash = "sha256-8odkgve5sx3x52Vl+ICoeTcLJUD4Yrv802l60idu/mo=";
+  };
   ponytail = pkgs.fetchFromGitHub {
     owner = "DietrichGebert";
     repo = "ponytail";
@@ -49,6 +67,7 @@ in
       package = attopkgs.pi;
       extraPackages = [
         pkgs.bun
+        pkgs.git
         pkgs.tmux
         contextMode
       ];
@@ -99,6 +118,10 @@ in
     home.file = {
       "${agentDir}/settings.json".enable = lib.mkIf (cfg.settingsMode == "merge") false;
       "${agentDir}/extensions/pi-sessions".source = piSessions;
+      # Pi discovers these package manifests locally; no runtime npm install.
+      "${agentDir}/extensions/pi-review".source = lib.mkDefault "${piReview}/pi-review";
+      "${agentDir}/extensions/pi-usage".source = lib.mkDefault piUsage;
+      "${agentDir}/extensions/pi-keep-going".source = lib.mkDefault piKeepGoing;
       # The package manifest loads Ponytail's skills too; do not register them twice.
       "${agentDir}/extensions/ponytail".source = ponytail;
       # Reuse Pi's shared skill discovery location to avoid duplicate local copies.

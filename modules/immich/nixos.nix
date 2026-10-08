@@ -67,8 +67,8 @@ in
         docker-immich-server = lib.mkMerge [
           networkDep
           {
-            wants = [ "docker-network-traefik.service" ];
-            after = [ "docker-network-traefik.service" ];
+            wants = [ (ps.networkUnit s) ];
+            after = [ (ps.networkUnit s) ];
           }
         ];
       };
@@ -109,6 +109,7 @@ in
 
         immich-server = {
           image = lib.mkDefault "ghcr.io/immich-app/immich-server:v3.2.4@sha256:d317916b28090c33eb36b308464ea391f8b7df1d850fcfea227a39ec879718c2";
+          ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:2283:2283");
           environmentFiles = lib.mkDefault [ environmentFile ];
           autoRemoveOnStop = lib.mkDefault false;
           extraOptions = lib.mkDefault [ "--restart=unless-stopped" ];
@@ -122,7 +123,7 @@ in
           ];
           networks = lib.mkDefault [
             "immich"
-            "traefik"
+            (ps.network s)
           ];
         };
       };

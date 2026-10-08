@@ -14,7 +14,7 @@ in
       host = lib.mkDefault cfg.listenAddress;
       port = lib.mkDefault cfg.port;
       loadModels = lib.mkDefault cfg.loadModels;
-      openFirewall = lib.mkDefault true;
+      openFirewall = lib.mkDefault (!s.standalone);
       syncModels = lib.mkDefault false;
       environmentVariables = lib.mapAttrs (_: lib.mkDefault) (
         {

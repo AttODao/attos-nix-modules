@@ -1,0 +1,111 @@
+command="${1:-init}"
+atcoder_go_version="1.25.1"
+project_assets="${ATCODER_PROJECT_ASSETS:-}"
+go_bin_dir="${ATCODER_GO_BIN_DIR:-}"
+
+if [ -z "$go_bin_dir" ]; then
+  go_bin_dir="$(dirname "$(command -v go)")"
+fi
+
+go_cmd="$go_bin_dir/go"
+
+find_project_root() {
+  current="$(pwd -P)"
+  while :; do
+    if [ -f "$current/go.mod" ]; then
+      printf '%s\n' "$current"
+      return 0
+    fi
+
+    parent="$(dirname "$current")"
+    if [ "$parent" = "$current" ]; then
+      echo "go.mod was not found; run 'atcoder-go init' at the project root." >&2
+      return 1
+    fi
+    current="$parent"
+  done
+}
+
+export GOTOOLCHAIN=local
+
+scaffold_project() {
+  if [ -z "$project_assets" ]; then
+    return 0
+  fi
+
+  install -d -m 755 "$project_root/.atcoder"
+  cp -R -n "$project_assets/.atcoder/." "$project_root/.atcoder/"
+  chmod -R u+rwX "$project_root/.atcoder"
+
+  for file in devenv.nix devenv.yaml .gitignore; do
+    if [ ! -e "$project_root/$file" ]; then
+      cp "$project_assets/$file" "$project_root/$file"
+    fi
+    chmod u+rw "$project_root/$file"
+  done
+
+  if [ ! -e "$project_root/.envrc" ]; then
+    cp "$project_assets/.envrc" "$project_root/.envrc"
+  elif grep -Fq 'source_env .atcoder-go.env' "$project_root/.envrc"; then
+    cp "$project_assets/.envrc" "$project_root/.envrc"
+    if [ -f "$project_root/.atcoder-go.env" ]; then
+      rm -f "$project_root/.atcoder-go.env"
+    fi
+  fi
+  chmod u+rw "$project_root/.envrc"
+
+  gitignore="$project_root/.gitignore"
+  for entry in .devenv/ .direnv/ .submit/ .atcoder-go.env; do
+    if ! grep -Fxq "$entry" "$gitignore"; then
+      printf '%s\n' "$entry" >> "$gitignore"
+    fi
+  done
+}
+
+case "$command" in
+  init)
+    project_root="$(pwd -P)"
+    scaffold_project
+    mkdir -p "$project_root/library"
+    cd "$project_root"
+
+    if [ ! -f go.mod ]; then
+      "$go_cmd" mod init atcoder.jp/golang
+    fi
+
+    "$go_cmd" mod edit "-go=$atcoder_go_version"
+    "$go_cmd" get \
+      github.com/emirpasic/gods \
+      gonum.org/v1/gonum \
+      github.com/liyue201/gostl \
+      github.com/benbjohnson/immutable \
+      golang.org/x/exp \
+      github.com/monkukui/ac-library-go
+    "$go_cmd" mod edit "-go=$atcoder_go_version"
+
+    echo "initialized AtCoder Go project: $project_root"
+    echo "run 'direnv allow' here to activate devenv"
+    ;;
+  sync)
+    project_root="${ATCODER_GO_ROOT:-$(find_project_root)}"
+    mkdir -p "$project_root/library"
+    cd "$project_root"
+
+    "$go_cmd" mod edit "-go=$atcoder_go_version"
+    "$go_cmd" get \
+      github.com/emirpasic/gods \
+      gonum.org/v1/gonum \
+      github.com/liyue201/gostl \
+      github.com/benbjohnson/immutable \
+      golang.org/x/exp \
+      github.com/monkukui/ac-library-go
+    "$go_cmd" mod edit "-go=$atcoder_go_version"
+    ;;
+  version)
+    "$go_cmd" version
+    ;;
+  *)
+    echo "usage: atcoder-go [init|sync|version]" >&2
+    exit 2
+    ;;
+esac

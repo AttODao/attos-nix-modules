@@ -213,9 +213,7 @@ let
         ]).modules.public-services
         true
     );
-  wrongScope =
-    builtins.tryEval
-      (evaluate [ { modules.vaultwarden.enable = true; } ]).modules.vaultwarden.enable;
+  standaloneScope = (evaluate [ { modules.vaultwarden.enable = true; } ]).modules.vaultwarden.enable;
   override = evaluate [
     infrastructure
     registry
@@ -343,7 +341,7 @@ assert lib.hasInfix "is-active --quiet docker-sample"
   latest.system.activationScripts.restartLatestOciContainers.text;
 assert lib.hasInfix "try-restart docker-sample"
   latest.system.activationScripts.restartLatestOciContainers.text;
-assert !invalidType.success && !wrongScope.success;
+assert !invalidType.success && standaloneScope;
 assert override.systemd.timers.cloudflare-ddns.timerConfig.OnCalendar == "hourly";
 assert override.virtualisation.oci-containers.containers.traefik.image == "traefik:test";
 assert override.virtualisation.oci-containers.containers.traefik.autoRemoveOnStop;

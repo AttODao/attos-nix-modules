@@ -6,7 +6,8 @@
     enable = lib.mkEnableOption "shared Paseo daemon configuration";
     hostname = lib.mkOption {
       type = lib.types.nonEmptyStr;
-      description = "Public hostname advertised by Paseo; required when enabled.";
+      default = "localhost";
+      description = "Hostname advertised by Paseo; standalone defaults to localhost.";
     };
     environmentFile =
       (import ../public-services/lib.nix { inherit lib; }).pathOption

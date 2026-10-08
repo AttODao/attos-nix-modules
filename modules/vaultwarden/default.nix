@@ -11,7 +11,7 @@ in
     ../swarm
   ];
 
-  options.modules.public-services = ps.option "vaultwarden" (
+  options.modules = ps.moduleOptions "vaultwarden" (
     ps.common "Vaultwarden password manager"
     // {
       dataDir = ps.pathOption "Service root containing the existing vw-data directory.";
@@ -28,7 +28,7 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = true;
+      modules.swarm.enable = lib.mkIf (!s.standalone) true;
 
       systemd.tmpfiles.rules = [
         "d ${builtins.toJSON root} 0755 root root -"
@@ -39,12 +39,13 @@ in
           root
           environmentFile
         ];
-        wants = [ "docker-network-traefik.service" ];
-        after = [ "docker-network-traefik.service" ];
+        wants = [ (ps.networkUnit s) ];
+        after = [ (ps.networkUnit s) ];
       };
 
       virtualisation.oci-containers.containers.vaultwarden = {
         image = lib.mkDefault "vaultwarden/server:latest";
+        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8000:80");
         pull = lib.mkDefault "always";
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment.TZ = lib.mkDefault "Asia/Tokyo";
@@ -54,7 +55,7 @@ in
           ++ lib.mapAttrsToList (host: address: "--add-host=${host}:${address}") s.cfg.extraHosts
         );
         volumes = lib.mkDefault [ "${root}/vw-data:/data" ];
-        networks = lib.mkDefault [ "traefik" ];
+        networks = lib.mkDefault [ (ps.network s) ];
       };
     })
   ];

@@ -247,7 +247,7 @@ let
       [ ];
 in
 assert !base.config.modules.dns.enable && !base.config.services.dnsmasq.enable;
-assert !(opts ? ollama) && !base.config.services.ollama.enable;
+assert opts ? ollama && !base.config.modules.ollama.enable && !base.config.services.ollama.enable;
 assert !base.config.modules.incus.enable && !base.config.virtualisation.incus.enable;
 assert !(disabled.systemd.services ? dnsmasq) && !(disabled.systemd.services ? ollama);
 assert

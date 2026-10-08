@@ -16,7 +16,7 @@ let
   networkSubnet = "172.20.0.0/24";
   networkGateway = "172.20.0.1";
   chromeAddress = "172.20.0.3";
-  baseUrl = "https://${s.hostname}";
+  baseUrl = ps.url s 3001;
 
   ensureNetwork = lib.replaceStrings [ "@docker@" "@subnet@" "@gateway@" ] (map lib.escapeShellArg [
     "${pkgs.docker}/bin/docker"
@@ -68,8 +68,8 @@ in
       docker-karakeep = lib.mkMerge [
         networkDep
         {
-          wants = [ "docker-network-traefik.service" ];
-          after = [ "docker-network-traefik.service" ];
+          wants = [ (ps.networkUnit s) ];
+          after = [ (ps.networkUnit s) ];
         }
       ];
     };
@@ -113,6 +113,7 @@ in
 
       karakeep = {
         image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.33.2";
+        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:3001:3000");
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) (
           {
@@ -147,7 +148,7 @@ in
         ];
         networks = lib.mkDefault [
           "karakeep"
-          "traefik"
+          (ps.network s)
         ];
       };
     };

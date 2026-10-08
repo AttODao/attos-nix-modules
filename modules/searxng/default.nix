@@ -42,7 +42,7 @@ in
     ../swarm
   ];
 
-  options.modules.public-services = ps.option "searxng" (
+  options.modules = ps.moduleOptions "searxng" (
     ps.common "SearXNG search service"
     // {
       environmentFile = ps.pathOption "Runtime SearXNG environment file supplying SEARXNG_SECRET.";
@@ -53,20 +53,21 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = true;
+      modules.swarm.enable = lib.mkIf (!s.standalone) true;
 
       systemd.services.docker-searxng = {
         unitConfig.RequiresMountsFor = [ environmentFile ];
-        wants = [ "docker-network-traefik.service" ];
-        after = [ "docker-network-traefik.service" ];
+        wants = [ (ps.networkUnit s) ];
+        after = [ (ps.networkUnit s) ];
         restartTriggers = [ settings ];
       };
       virtualisation.oci-containers.containers.searxng = {
         image = lib.mkDefault "searxng/searxng:2026.10.4-d48c4b555";
+        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8081:8080");
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) {
           FORCE_OWNERSHIP = "false";
-          SEARXNG_BASE_URL = "https://${s.hostname}/";
+          SEARXNG_BASE_URL = "${ps.url s 8081}/";
           SEARXNG_BIND_ADDRESS = "0.0.0.0";
           SEARXNG_LIMITER = "false";
           SEARXNG_PORT = "8080";
@@ -87,7 +88,7 @@ in
           "${settings}:/etc/searxng/settings.yml:ro"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        networks = lib.mkDefault [ "traefik" ];
+        networks = lib.mkDefault [ (ps.network s) ];
       };
     })
   ];

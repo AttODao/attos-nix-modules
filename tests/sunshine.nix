@@ -195,9 +195,6 @@ let
       };
     }
   ];
-  oldAlias =
-    builtins.tryEval
-      (t.cfgFor [ { modules.sunshine.enable = true; } ]).modules.sunshine.enable;
 in
 assert !disabledDesktop.services.sunshine.enable;
 assert !disabledDesktop.services.seatd.enable;
@@ -292,6 +289,6 @@ assert overridden.services.sunshine.settings.capture == "kms";
 assert overridden.services.sunshine.settings.audio_sink == "consumer-sink";
 assert overridden.services.sunshine.applications.apps == [ { name = "Consumer App"; } ];
 assert !overridden.services.sunshine.autoStart;
-assert !oldAlias.success;
+assert !base.modules.sunshine.enable;
 assert lib.all (a: a.assertion) local.assertions;
 true

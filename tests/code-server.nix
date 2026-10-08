@@ -118,9 +118,6 @@ let
           modules.public-services."code.example.test".code-server.environmentFile = /tmp/credential;
         }
       ]).modules.public-services."code.example.test".code-server.environmentFile;
-  oldAlias =
-    builtins.tryEval
-      (t.cfgFor [ { modules.code-server.enable = true; } ]).modules.code-server.enable;
 in
 assert !base.services.code-server.enable && !remote.services.code-server.enable;
 assert !(remote.systemd.services ? code-server);
@@ -148,6 +145,7 @@ assert overridden.services.code-server.enable;
 assert overridden.services.code-server.host == "127.0.0.1";
 assert overridden.services.code-server.port == 5555;
 assert !overridden.services.code-server.disableTelemetry;
-assert !missing.success && !invalid.success && !oldAlias.success;
+assert !missing.success && !invalid.success;
+assert !base.modules.code-server.enable;
 assert lib.all (a: a.assertion) local.assertions;
 true

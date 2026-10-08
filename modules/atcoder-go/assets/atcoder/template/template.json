@@ -1,0 +1,10 @@
+{
+  "task": {
+    "program": ["main.go"],
+    "submit": "main.go",
+    "testdir": "tests"
+  },
+  "contest": {
+    "static": [["gitignore", ".gitignore"]]
+  }
+}

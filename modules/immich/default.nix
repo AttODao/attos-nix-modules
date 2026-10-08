@@ -6,7 +6,7 @@ in
 {
   imports = [ ./nixos.nix ];
 
-  options.modules.public-services = ps.option "immich" (
+  options.modules = ps.moduleOptions "immich" (
     ps.common "shared Immich photo service"
     // {
       dataDir = ps.pathOption "Persistent Immich root containing library, postgres, redis and model-cache directories.";
@@ -18,7 +18,7 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = true;
+      modules.swarm.enable = lib.mkIf (!s.standalone) true;
     })
   ];
 }

@@ -6,7 +6,7 @@ let
   environmentFile = ps.require "mineos" "environmentFile" s.cfg.environmentFile;
   uid = toString (ps.require "mineos" "uid" s.cfg.uid);
   gid = toString (ps.require "mineos" "gid" s.cfg.gid);
-  origin = "https://${s.hostname}";
+  origin = ps.url s 3002;
 in
 {
   imports = [
@@ -14,7 +14,7 @@ in
     ../swarm
   ];
 
-  options.modules.public-services = ps.option "mineos" (
+  options.modules = ps.moduleOptions "mineos" (
     ps.common "MineOS Minecraft management"
     // {
       dataDir = ps.pathOption "Service root containing data, archives, backups, imports, profiles and servers.";
@@ -22,12 +22,12 @@ in
       tcpPorts = lib.mkOption {
         type = lib.types.listOf lib.types.port;
         default = lib.range 25500 25600;
-        description = "Minecraft TCP ports forwarded by Traefik; override allocation separately through standard MineOS environment settings if needed.";
+        description = "Minecraft TCP ports forwarded by Traefik or published on loopback when standalone; override allocation separately through standard MineOS environment settings if needed.";
       };
       udpPorts = lib.mkOption {
         type = lib.types.listOf lib.types.port;
         default = lib.range 19132 19137;
-        description = "Bedrock UDP ports forwarded by Traefik. Private services must disable these and arrange VPN-only ingress in the consumer.";
+        description = "Bedrock UDP ports forwarded by Traefik or published on loopback when standalone. Private public services must disable these and arrange VPN-only ingress in the consumer.";
       };
       uid = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.unsigned;
@@ -46,15 +46,15 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = true;
+      modules.swarm.enable = lib.mkIf (!s.standalone) true;
 
       systemd.services.docker-mineos-api = {
         unitConfig.RequiresMountsFor = [
           root
           environmentFile
         ];
-        wants = [ "docker-network-traefik.service" ];
-        after = [ "docker-network-traefik.service" ];
+        wants = [ (ps.networkUnit s) ];
+        after = [ (ps.networkUnit s) ];
         serviceConfig.TimeoutStopSec = lib.mkDefault "10min";
       };
       systemd.services.docker-mineos-web = {
@@ -62,9 +62,9 @@ in
           root
           environmentFile
         ];
-        wants = [ "docker-network-traefik.service" ];
+        wants = [ (ps.networkUnit s) ];
         after = [
-          "docker-network-traefik.service"
+          (ps.networkUnit s)
           "docker-mineos-api.service"
         ];
       };
@@ -81,6 +81,12 @@ in
       virtualisation.oci-containers.containers = {
         mineos-api = {
           image = lib.mkDefault "ghcr.io/freeman412/mineos-api:latest";
+          ports = lib.mkDefault (
+            lib.optionals s.standalone (
+              map (port: "127.0.0.1:${toString port}:${toString port}/tcp") s.cfg.tcpPorts
+              ++ map (port: "127.0.0.1:${toString port}:${toString port}/udp") s.cfg.udpPorts
+            )
+          );
           pull = lib.mkDefault "always";
           environmentFiles = lib.mkDefault [ environmentFile ];
           environment = lib.mapAttrs (_: lib.mkDefault) {
@@ -110,7 +116,7 @@ in
             "--network-alias=api"
             "--stop-timeout=600"
           ];
-          networks = lib.mkDefault [ "traefik" ];
+          networks = lib.mkDefault [ (ps.network s) ];
           volumes = lib.mkDefault [
             "${root}:/var/games/minecraft"
             "${root}/data:/app/data"
@@ -119,6 +125,7 @@ in
         };
         mineos-web = {
           image = lib.mkDefault "ghcr.io/freeman412/mineos-web:latest";
+          ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:3002:3000");
           pull = lib.mkDefault "always";
           environmentFiles = lib.mkDefault [ environmentFile ];
           environment = lib.mapAttrs (_: lib.mkDefault) {
@@ -139,7 +146,7 @@ in
             "--network-alias=web"
           ];
           dependsOn = [ "mineos-api" ];
-          networks = lib.mkDefault [ "traefik" ];
+          networks = lib.mkDefault [ (ps.network s) ];
         };
       };
     })

@@ -20,12 +20,13 @@ in
       settings = lib.mapAttrs (_: lib.mkDefault) (
         {
           sunshine_name = config.networking.hostName;
-          csrf_allowed_origins = "https://${selected.hostname}";
+          csrf_allowed_origins = "https://${selected.hostname}${lib.optionalString selected.standalone ":47990"}";
           capture = "wlr";
           keyboard = "enabled";
           mouse = "enabled";
           native_pen_touch = "enabled";
         }
+        // lib.optionalAttrs selected.standalone { bind_address = "127.0.0.1"; }
         // cfg.settings
       );
       applications.apps = lib.mkDefault (

@@ -7,7 +7,7 @@
 {
   imports = [ ../zsh ];
 
-  options.modules.atcoder = {
+  options.modules.atcoder-go = {
     enable = lib.mkEnableOption "shared AtCoder Go tools and commands";
     goPackage = lib.mkOption {
       type = lib.types.package;
@@ -22,18 +22,19 @@
     };
     projectAssets = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
-      default = null;
-      description = "Complete consumer-owned scaffold directory containing atcoder/, devenv.nix, devenv.yaml, envrc and gitignore. When supplied, package its atcoder/scripts/project as the preferred atcoder-go command.";
+      default = ./assets;
+      defaultText = lib.literalExpression "./assets";
+      description = "Complete project scaffold; defaults to the module's bundled scripts, templates, snippet and devenv definitions. Null selects only the minimal shared helpers.";
     };
     projectGoPackage = lib.mkOption {
       type = lib.types.package;
-      default = config.modules.atcoder.goPackage;
-      defaultText = lib.literalExpression "config.modules.atcoder.goPackage";
-      description = "Go toolchain used by the consumer scaffold's atcoder-go command.";
+      default = config.modules.atcoder-go.goPackage;
+      defaultText = lib.literalExpression "config.modules.atcoder-go.goPackage";
+      description = "Go toolchain used by the project scaffold's atcoder-go command.";
     };
   };
 
-  config = lib.mkIf config.modules.atcoder.enable {
+  config = lib.mkIf config.modules.atcoder-go.enable {
     modules.zsh.enable = true;
     home-manager.sharedModules = [ ./home.nix ];
   };

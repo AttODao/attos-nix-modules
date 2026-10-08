@@ -25,7 +25,7 @@ hardware、ユーザー作成、ログインシェル、権限・linger、secret
 
 ## 2. 最小の公開APIを決める
 
-- 機能選択はNixOS側の`modules.<name>.enable`に集約し、`lib.mkEnableOption`で既定falseにする。公開サーバーはenableを含む独自設定を`modules.public-services.<FQDN>.<service>`へ集約し、別のglobal enable aliasを追加しない（既存Paseo bridgeのみ維持）。
+- 機能選択はNixOS側の`modules.<name>.enable`に集約し、`lib.mkEnableOption`で既定falseにする。公開サーバーは`modules.public-services.<FQDN>.<service>`、localhost単独利用は`modules.<service>`を使う。`public-services/lib.nix`の`moduleOptions`で同じtyped schemaを再利用し、単独利用を公開registryへ注入しない（既存Paseo bridge、SSH client/serverのscopeは維持）。
 - 公開サービスは有効時に`host`で所有OSの`networking.hostName`を指定する。物理ホスト・guestが同じnamespaceを読み、所有OSだけで実体を起動する。`deploy`は全種既定true、falseは管理外endpoint登録専用。別ホストのrecordをfalseに書き換える実装はしない。
 - HM専用の機能にもNixOS側のenableを設ける。HM側に別のenableやstandalone HM exportを追加しない。
 - enable以外の独自optionは、利用側から渡す必要がある値だけに限定する。型、説明、妥当な既定値または有効時の必須条件を定義する。
@@ -62,7 +62,7 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 ```
 
 - NixOSの`imports`は静的に宣言し、enableから組み立てない。依存moduleのimportも同様。
-- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーは`public-services/lib.nix`の`select`・`option`・`common`・`pathOption`・`require`を再利用し、`select.enabled`でlocal設定を囲む。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
+- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーと単独利用は`public-services/lib.nix`の`select`・`moduleOptions`・`common`・`pathOption`・`require`を再利用し、`select.enabled`で同じ実装を囲む。`select.standalone`の場合だけlocalhost bind/HTTP・通常Docker bridgeを使い、公開record・Swarm・gateway依存を作らない。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
 - 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は[Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各サービスページを参照。
 - `home.nix`の実設定は`lib.mkIf osConfig.modules.<name>.enable`で囲む。
 - HM設定は`home-manager.sharedModules`で接続する。特定ユーザーへの直書きや、ユーザー一覧を機能ごとに走査する実装はしない。

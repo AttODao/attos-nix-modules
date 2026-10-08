@@ -15,7 +15,7 @@ let
   );
 in
 {
-  options.modules.public-services = ps.option "wireguard-server" (
+  options.modules = ps.moduleOptions "wireguard-server" (
     ps.common "WireGuard server and runtime client configuration"
     // {
       serverPublicKeyFile = ps.pathOption "Runtime server public key file used to generate client configurations.";

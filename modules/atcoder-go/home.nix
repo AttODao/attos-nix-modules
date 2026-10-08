@@ -7,7 +7,7 @@
   ...
 }:
 let
-  cfg = osConfig.modules.atcoder;
+  cfg = osConfig.modules.atcoder-go;
   projectAssets = pkgs.runCommand "atcoder-go-project-assets" { } ''
     mkdir -p "$out/.atcoder"
     cp -R ${lib.escapeShellArg "${cfg.projectAssets}/atcoder/."} "$out/.atcoder/"
@@ -21,6 +21,7 @@ let
     runtimeInputs = [
       cfg.projectGoPackage
       pkgs.coreutils
+      pkgs.gnugrep
     ];
     text = ''
       export ATCODER_GO_BIN_DIR="${cfg.projectGoPackage}/bin"
@@ -30,7 +31,7 @@ let
   };
 in
 {
-  config = lib.mkIf osConfig.modules.atcoder.enable {
+  config = lib.mkIf osConfig.modules.atcoder-go.enable {
     programs.go = {
       enable = lib.mkDefault true;
       package = lib.mkDefault cfg.goPackage;
