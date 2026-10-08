@@ -289,7 +289,7 @@ code-serverは既定password認証でruntime `environmentFile` が必須（`PASS
 `HASHED_PASSWORD`）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 旧Nerd Font組み込みpackageは `attopkgs.code-server { src = <固定したstandalone release>; }`
 へ公開 `code-server.packageSource` でstandalone releaseを渡せる。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
-SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
+SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。headless待機とnative autoStartが有効なら、output再作成後にSunshineも起動する。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
 OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。旧global`modules.ollama`と旧公開`open-webui`record・実装directoryは廃止し、保存先・モデル・unit名は保持する。
 公開するサービスの独自enable aliasは追加しない。既存Paseoは互換bridgeを保持する。

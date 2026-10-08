@@ -103,6 +103,15 @@ let
       modules.public-services."sun.example.test".sunshine = inputs;
     }
   ];
+  manualDesktop = t.cfgFor [
+    endpoint
+    {
+      networking.hostName = "desktop";
+      modules.hyprland.headless.enable = true;
+      modules.public-services."sun.example.test".sunshine = inputs;
+      services.sunshine.autoStart = false;
+    }
+  ];
   isolated = t.cfgFor [
     endpoint
     {
@@ -204,6 +213,9 @@ assert desktop.services.sunshine.settings.audio_sink == "sink-sunshine-stereo";
 assert desktop.services.sunshine.settings.output_name == "moonlight";
 assert desktop.services.sunshine.settings.capture == "kms";
 assert desktop.services.sunshine.applications.apps == apps;
+assert manualDesktop.systemd.user.services.hyprland-headless-output.wants == [ ];
+assert !(local.systemd.user.services ? hyprland-headless-output);
+assert desktop.systemd.user.services.hyprland-headless-output.wants == [ "sunshine.service" ];
 assert desktop.systemd.user.services.sunshine.requires == [ "hyprland-headless-output.service" ];
 assert lib.elem "hyprland-headless-output.service" desktop.systemd.user.services.sunshine.after;
 assert

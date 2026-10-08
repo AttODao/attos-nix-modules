@@ -57,9 +57,15 @@ in
         message = "Sunshine waitForHeadlessOutput requires modules.hyprland.headless.enable on the owning OS.";
       }
     ];
-    systemd.user.services.sunshine = lib.mkIf cfg.waitForHeadlessOutput {
-      requires = [ "hyprland-headless-output.service" ];
-      after = [ "hyprland-headless-output.service" ];
+    systemd.user.services = lib.mkIf cfg.waitForHeadlessOutput {
+      sunshine = {
+        requires = [ "hyprland-headless-output.service" ];
+        after = [ "hyprland-headless-output.service" ];
+      };
+      # Requires stops Sunshine on output recreation; restore it when autoStart is enabled.
+      hyprland-headless-output.wants = lib.mkIf config.services.sunshine.autoStart [
+        "sunshine.service"
+      ];
     };
     # Hardware, permissions, ingress and pairing/authentication state remain consumer-owned.
   };
