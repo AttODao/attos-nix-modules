@@ -117,6 +117,7 @@ in
     ];
     home.file = {
       "${agentDir}/settings.json".enable = lib.mkIf (cfg.settingsMode == "merge") false;
+      "${agentDir}/AGENTS.md".source = lib.mkDefault ./AGENTS.md;
       "${agentDir}/extensions/pi-sessions".source = piSessions;
       # Pi discovers these package manifests locally; no runtime npm install.
       "${agentDir}/extensions/pi-review".source = lib.mkDefault "${piReview}/pi-review";

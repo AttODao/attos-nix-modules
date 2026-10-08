@@ -86,6 +86,10 @@ assert lib.all (
   && !(base.home.file ? "${dir}/extensions/${extension.name}")
   && relocated.home.file."/home/test/custom-pi/extensions/${extension.name}".source == file.source
 ) extensions;
+assert cfg.home.file."${dir}/AGENTS.md".enable;
+assert lib.hasInfix "use context-mode" (builtins.readFile cfg.home.file."${dir}/AGENTS.md".source);
+assert lib.hasInfix "session_search" (builtins.readFile cfg.home.file."${dir}/AGENTS.md".source);
+assert relocated.home.file."/home/test/custom-pi/AGENTS.md".source == cfg.home.file."${dir}/AGENTS.md".source;
 assert cfg.home.file."${dir}/extensions/pi-sessions".enable;
 assert cfg.home.file."${dir}/extensions/ponytail".enable;
 assert !(cfg.home.file ? "${dir}/skills/ponytail");
