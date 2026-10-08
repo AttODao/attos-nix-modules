@@ -80,7 +80,7 @@ in
       "solaar/config.yaml".source = lib.mkDefault ./config.yaml;
     };
 
-    wayland.windowManager.hyprland.settings.window_rule = [
+    wayland.windowManager.hyprland.settings.window_rule = lib.mkDefault [
       {
         match = {
           class = "^menu\\.kando\\.Kando$";

@@ -83,7 +83,7 @@ let
         {
           networking.hostName = "attodesk";
           modules = {
-            hyprland.monitors = desktopMonitors;
+            hyprland.settings.monitor = map (monitor: monitor // { scale = 1; }) desktopMonitors;
             greeter.output = "DP-1";
             userDirs.dataDirectory = "/mnt/hdd1";
             solaar.enable = true;

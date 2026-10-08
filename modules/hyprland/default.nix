@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  options,
+  lib,
+  ...
+}:
 {
   imports = [
     ./nixos.nix
@@ -11,38 +16,28 @@
 
   options.modules.hyprland = {
     enable = lib.mkEnableOption "shared Hyprland configuration";
-    monitors = lib.mkOption {
+    settings = lib.mkOption {
       type =
-        with lib.types;
-        listOf (submodule {
-          options = {
-            output = lib.mkOption {
-              type = str;
-              default = "";
-            };
-            mode = lib.mkOption {
-              type = str;
-              default = "preferred";
-            };
-            position = lib.mkOption {
-              type = str;
-              default = "auto";
-            };
-            bitdepth = lib.mkOption {
-              type = nullOr (enum [
-                8
-                10
-              ]);
-              default = null;
-            };
-            cm = lib.mkOption {
-              type = nullOr str;
-              default = null;
-            };
-          };
-        });
-      default = [ { } ];
-      description = "Monitor layout; defaults to the portable preferred-mode output.";
+        lib.types.attrsOf
+          (options.home-manager.users.type.getSubOptions [ ]).wayland.windowManager.hyprland.settings.type;
+      default = { };
+      example = {
+        monitor = [
+          {
+            output = "DP-1";
+            mode = "preferred";
+            scale = 1;
+            cm = "hdr";
+          }
+        ];
+        window_rule = [
+          {
+            match.class = "^com[.]moonlight_stream[.]Moonlight$";
+            no_auto_hdr = true;
+          }
+        ];
+      };
+      description = "Hyprland Lua settings for all HM users, recursively overriding shared defaults; lists replace defaults. Each user can override these defaults through standard Home Manager settings. Monitor layout uses settings.monitor (including scale).";
     };
     headless = {
       enable = lib.mkEnableOption "container headless UWSM session, seatd, input nodes and named output";

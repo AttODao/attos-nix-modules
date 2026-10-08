@@ -35,7 +35,7 @@ let
     {
       modules.hyprland = {
         enable = true;
-        monitors = desktopMonitors;
+        settings.monitor = map (monitor: monitor // { scale = 1; }) desktopMonitors;
       };
       modules.greeter = {
         enable = true;
@@ -61,7 +61,10 @@ let
     }
   ];
   inactive = t.cfgFor [
-    { modules.hyprland.headless.enable = true; }
+    {
+      modules.hyprland.headless.enable = true;
+      modules.hyprland.settings.window_rule = [ moonlightRule ];
+    }
   ];
   headlessHM = t.hm headless "test";
   nativeLauncher = t.hmFor [
@@ -128,6 +131,40 @@ let
       };
     }
   ];
+  moonlightRule = {
+    match.class = "^com[.]moonlight_stream[.]Moonlight$";
+    no_auto_hdr = true;
+  };
+  publicCfg =
+    (t.evalSystem {
+      users = [
+        "test"
+        "other"
+      ];
+      modules = [
+        {
+          modules.hyprland = {
+            enable = true;
+            settings = {
+              config.decoration.rounding = 12;
+              monitor = [
+                {
+                  output = "DP-1";
+                  scale = 1.25;
+                  cm = "hdr";
+                }
+              ];
+              window_rule = [ moonlightRule ];
+              mod._var = "ALT";
+            };
+          };
+          modules.solaar.enable = true;
+          home-manager.users.test.wayland.windowManager.hyprland.settings.config.decoration.rounding = 7;
+        }
+      ];
+    }).config;
+  publicTest = t.hm publicCfg "test";
+  publicOther = t.hm publicCfg "other";
   settings = cfg: cfg.wayland.windowManager.hyprland.settings;
   luaConfig = cfg: cfg.xdg.configFile."hypr/hyprland.lua".text;
   invalidOutput =
@@ -143,7 +180,44 @@ let
   invalidExtra =
     builtins.tryEval
       (t.cfgFor [ { modules.hyprland.extraConfig = ""; } ]).modules.hyprland.enable;
+  invalidSettings = builtins.tryEval (
+    builtins.deepSeq
+      (t.cfgFor [ { modules.hyprland.settings.config = x: x; } ]).modules.hyprland.settings
+      true
+  );
+  removedMonitors =
+    builtins.tryEval
+      (t.cfgFor [ { modules.hyprland.monitors = [ ]; } ]).modules.hyprland.enable;
 in
+assert !invalidSettings.success && !removedMonitors.success;
+assert (settings publicTest).config.decoration.rounding == 7;
+assert (settings publicOther).config.decoration.rounding == 12;
+assert (settings publicOther).config.decoration.blur.size == 8;
+assert (settings publicOther).mod == { _var = "ALT"; };
+assert lib.all
+  (
+    user:
+    lib.elem moonlightRule (settings user).window_rule
+    && lib.any (rule: (rule.match.class or "") == "^menu\\.kando\\.Kando$") (settings user).window_rule
+    &&
+      (settings user).monitor == [
+        {
+          output = "DP-1";
+          scale = 1.25;
+          cm = "hdr";
+        }
+      ]
+    && lib.hasInfix "hl.window_rule(" (luaConfig user)
+    && lib.hasInfix ''["no_auto_hdr"] = true'' (luaConfig user)
+    && user.home.activationPackage.drvPath != ""
+  )
+  [
+    publicTest
+    publicOther
+  ];
+assert !((settings laptop) ? window_rule);
+assert !(t.hm inactive "test").wayland.windowManager.hyprland.enable;
+assert !((settings (t.hm inactive "test")) ? window_rule);
 assert !inactive.services.seatd.enable;
 assert !(inactive.systemd.services ? container-udevd);
 assert !(inactive.systemd.user.services ? hyprland-bootstrap);

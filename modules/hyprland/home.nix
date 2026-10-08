@@ -23,6 +23,12 @@ let
   lidMonitorCommand = action: "sleep 1 && ${noctalia "monitors ${action}"}";
   screenshotDirectory = lib.escapeShellArg "${config.xdg.userDirs.pictures}/Screenshots";
   lua = lib.generators.mkLuaInline;
+  # Shared settings override the preset; per-user HM settings can override both.
+  sharedSettings =
+    defaults:
+    lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault) (
+      lib.recursiveUpdate defaults cfg.settings
+    );
 
   luaBind = keys: dispatcher: options: {
     _args = [
@@ -82,7 +88,7 @@ in
       xwayland.enable = true;
 
       # Default individual leaves/lists, keeping Lua marker attrsets atomic.
-      settings = lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault) {
+      settings = sharedSettings {
         mod._var = mod;
 
         config = {
@@ -200,9 +206,14 @@ in
           }
         ];
 
-        monitor = map (
-          monitor: lib.filterAttrs (_: value: value != null) monitor // { scale = 1; }
-        ) cfg.monitors;
+        monitor = [
+          {
+            output = "";
+            mode = "preferred";
+            position = "auto";
+            scale = 1;
+          }
+        ];
 
         curve = [
           {
