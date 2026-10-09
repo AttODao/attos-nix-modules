@@ -139,7 +139,17 @@ assert lib.all (p: !(lib.elem p enabled.boot.kernelParams)) [
   "udev.log_level=3"
   "rd.systemd.show_status=auto"
 ];
-assert defaults.services.openssh.settings == base.services.openssh.settings;
+assert !defaults.modules.openssh.passwordAuthentication;
+assert !defaults.services.openssh.settings.PasswordAuthentication;
+assert !defaults.services.openssh.settings.KbdInteractiveAuthentication;
+assert
+  builtins.removeAttrs defaults.services.openssh.settings [
+    "PasswordAuthentication"
+    "KbdInteractiveAuthentication"
+  ] == builtins.removeAttrs base.services.openssh.settings [
+    "PasswordAuthentication"
+    "KbdInteractiveAuthentication"
+  ];
 assert defaults.services.openssh.listenAddresses == base.services.openssh.listenAddresses;
 assert defaults.services.openssh.startWhenNeeded == base.services.openssh.startWhenNeeded;
 assert defaults.services.openssh.openFirewall == base.services.openssh.openFirewall;

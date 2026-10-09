@@ -43,11 +43,38 @@ let
       backendUrl = "https://10.88.0.11:47990";
     };
   };
+  vmGuest = {
+    boot.isContainer = lib.mkForce false;
+    boot.loader.grub.enable = false;
+    virtualisation.incus.agent.enable = true;
+  };
+  runnerInput = {
+    modules.forgejo-actions-runner = {
+      enable = true;
+      dynamicUser = true;
+      dataDir = "/var/lib/gitea-runner/forgejo";
+      tokenFile = "/var/lib/forgejo-runner/token.env";
+    };
+    services.gitea-actions-runner.instances.forgejo.url = "https://forge.example.test";
+  };
+  runner = t.cfgFor [
+    vmGuest
+    runnerInput
+  ];
+  physicalRunner = t.cfgFor [
+    runnerInput
+    { boot.isContainer = lib.mkForce false; }
+  ];
+  containerRunner = t.cfgFor [ runnerInput ];
+  good = c: lib.all (a: a.assertion) c.assertions;
+  rejectsRunner =
+    c: lib.any (a: !a.assertion && lib.hasInfix "virtual-machine guest" a.message) c.assertions;
   development =
     (t.evalSystem {
       users = [ "dev" ];
       modules = [
         registry
+        vmGuest
         {
           networking.hostName = "development";
           users.users.dev = {
@@ -64,12 +91,9 @@ let
             };
             openssh = {
               enable = true;
+              passwordAuthentication = true;
               startWhenNeeded = false;
-              settings = {
-                PasswordAuthentication = true;
-                KbdInteractiveAuthentication = true;
-                UseDns = false;
-              };
+              settings.UseDns = false;
             };
             public-services."code.example.test".code-server = {
               packageSource = codeServerSource;
@@ -86,6 +110,7 @@ let
       users = [ "attodao" ];
       modules = [
         registry
+        vmGuest
         {
           networking.hostName = "desktop";
           users.users.attodao = {
@@ -124,6 +149,7 @@ let
             };
             openssh = {
               enable = true;
+              passwordAuthentication = true;
               openFirewall = false;
               startWhenNeeded = false;
               settings.AllowUsers = [ "attodao" ];
@@ -219,6 +245,16 @@ let
       desktop.services.pipewire.extraConfig.pipewire."99-sunshine-sink"."context.objects";
   lua = deskHome.xdg.configFile."hypr/hyprland.lua".text;
 in
+assert !development.boot.isContainer && development.virtualisation.incus.agent.enable;
+assert !desktop.boot.isContainer && desktop.virtualisation.incus.agent.enable;
+assert good runner && rejectsRunner physicalRunner && rejectsRunner containerRunner;
+assert runner.systemd.services.gitea-runner-forgejo.serviceConfig.DynamicUser;
+assert
+  runner.services.gitea-actions-runner.instances.forgejo.tokenFile
+  == "/var/lib/forgejo-runner/token.env";
+assert !(runner.users.users ? gitea-runner);
+assert (runner.systemd.services.gitea-runner-forgejo.serviceConfig.BindPaths or [ ]) == [ ];
+assert (runner.systemd.tmpfiles.settings."10-forgejo-actions-runner" or { }) == { };
 assert development.services.code-server.user == "dev";
 assert development.services.code-server.group == "users";
 assert development.services.code-server.extraEnvironment.HOME == "/home/dev";
@@ -240,8 +276,8 @@ assert !development.services.openssh.startWhenNeeded;
 assert !development.modules.hyprland.enable && !development.services.sunshine.enable;
 assert desktop.services.seatd.enable && desktop.services.seatd.group == "render";
 assert desktop.systemd.services.seatd.environment.SEATD_VTBOUND == "0";
-assert desktop.systemd.services ? container-udevd;
-assert lib.elem "c /dev/input/event63 0660 root input - 13:127" desktop.systemd.tmpfiles.rules;
+assert !(desktop.systemd.services ? container-udevd);
+assert !lib.elem "c /dev/input/event63 0660 root input - 13:127" desktop.systemd.tmpfiles.rules;
 assert lib.hasInfix "\"output\" \"create\" \"headless\" \"moonlight\""
   desktop.systemd.user.services.hyprland-headless-output.serviceConfig.ExecStart;
 assert desktop.systemd.user.services.hyprland-bootstrap.serviceConfig.Restart == "always";

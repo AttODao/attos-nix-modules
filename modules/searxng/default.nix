@@ -62,7 +62,7 @@ in
         restartTriggers = [ settings ];
       };
       virtualisation.oci-containers.containers.searxng = {
-        image = lib.mkDefault "searxng/searxng:2026.10.4-d48c4b555";
+        image = lib.mkDefault "searxng/searxng:2026.10.4-d48c4b555@sha256:76b0bf285aca014c7191fc4d9234c4bfb358624ac33d8883833d496c059ec072";
         ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8081:8080");
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) {

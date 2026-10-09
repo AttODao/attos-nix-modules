@@ -12,7 +12,10 @@ let
   environmentFile = ps.require "modules.open-terminal" "environmentFile" cfg.environmentFile;
   web = ps.select config "ollama";
   standalone = !(web.enabled && !web.standalone && web.cfg.webui);
-  transport = { inherit standalone; };
+  transport = {
+    inherit standalone;
+    service = "open-terminal";
+  };
   allowedOrigins =
     config.virtualisation.oci-containers.containers.open-terminal.environment.OPEN_TERMINAL_CORS_ALLOWED_ORIGINS;
   uid = ps.require "modules.open-terminal" "uid" cfg.uid;
@@ -48,7 +51,7 @@ in
     };
 
     virtualisation.oci-containers.containers.open-terminal = {
-      image = lib.mkDefault "ghcr.io/open-webui/open-terminal:0.14.0";
+      image = lib.mkDefault "ghcr.io/open-webui/open-terminal:0.14.0@sha256:81a5394b3cd4ae32adb600f2135f09ee124de37f26b0a780e2f5692472c0fc5c";
       environmentFiles = lib.mkDefault [ environmentFile ];
       environment = {
         OPEN_TERMINAL_CORS_ALLOWED_ORIGINS = lib.mkDefault (

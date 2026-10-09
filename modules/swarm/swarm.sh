@@ -40,19 +40,35 @@ case "$1" in
     docker swarm join --token "$token" "$manager"
     ;;
   network)
-    subnet="$2"
-    gateway="$3"
-    marker="$4"
-    for _ in $(seq 1 30); do
-      if docker network inspect traefik >/dev/null 2>&1 || docker network create --driver overlay --attachable --subnet "$subnet" --gateway "$gateway" traefik; then
-        mkdir -p -- "$(dirname -- "$marker")"
-        touch -- "$marker"
-        exit 0
+    marker="$2"
+    shift 2
+    mkdir -p -- "$marker"
+    rm -f -- "$marker/ready" "$marker"/backend-*
+    for network in "$@"; do
+      ready=false
+      for _ in $(seq 1 30); do
+        if metadata="$(docker network inspect --format '{{.Driver}} {{.Attachable}} {{.Scope}} {{range $key, $value := .Options}}{{$key}} {{end}}' "$network" 2>/dev/null)"; then
+          # Never silently reuse an unencrypted overlay or recreate an existing network.
+          if [[ "$metadata" != "overlay true swarm "* || " $metadata " != *" encrypted "* ]]; then
+            echo "Existing $network must be an encrypted attachable overlay; migrate it explicitly" >&2
+            exit 1
+          fi
+          ready=true
+        elif docker network create --driver overlay --attachable --opt encrypted "$network"; then
+          ready=true
+        fi
+        if [ "$ready" = true ]; then
+          touch -- "$marker/$network"
+          break
+        fi
+        sleep 1
+      done
+      if [ "$ready" != true ]; then
+        echo "Failed to ensure the $network overlay network" >&2
+        exit 1
       fi
-      sleep 1
     done
-    echo "Failed to ensure the traefik overlay network" >&2
-    exit 1
+    touch -- "$marker/ready"
     ;;
   fetch)
     url="$2"
@@ -82,10 +98,20 @@ case "$1" in
   wait)
     url="$2"
     for _ in $(seq 1 60); do
-      if curl -fsS --max-time 2 "$url" >/dev/null; then exit 0; fi
+      if curl --noproxy '*' -fsS --max-time 2 "$url" >/dev/null; then
+        if [ -n "${3:-}" ] && metadata="$(docker network inspect --format '{{.Driver}} {{.Attachable}} {{.Scope}} {{range $key, $value := .Options}}{{$key}} {{end}}' "$3" 2>/dev/null)"; then
+          if [[ "$metadata" != "overlay true swarm "* || " $metadata " != *" encrypted "* ]]; then
+            echo "Local $3 is not an encrypted attachable Swarm overlay" >&2
+            exit 1
+          fi
+        fi
+        # Docker materializes remote attachable overlays on the first container
+        # attachment; requiring local presence here would deadlock fresh workers.
+        exit 0
+      fi
       sleep 2
     done
-    echo "Failed to confirm the traefik overlay network" >&2
+    echo "Failed to confirm the service overlay network" >&2
     exit 1
     ;;
   *)

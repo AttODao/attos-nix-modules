@@ -5,6 +5,9 @@
   ...
 }:
 let
+  overlayContainers = lib.filterAttrs (
+    _: container: lib.any (lib.hasPrefix "backend-") container.networks
+  ) config.virtualisation.oci-containers.containers;
   latest = lib.filterAttrs (
     _: container: lib.hasSuffix ":latest" container.image
   ) config.virtualisation.oci-containers.containers;
@@ -19,6 +22,19 @@ in
       };
     };
     virtualisation.oci-containers.backend = lib.mkDefault "docker";
+    # Network failure must block startup, not merely order it after a failed wants unit.
+    systemd.services = lib.mapAttrs' (
+      name: container:
+      let
+        units = map (network: "docker-network-${network}.service") (
+          lib.filter (lib.hasPrefix "backend-") container.networks
+        );
+      in
+      lib.nameValuePair container.serviceName {
+        requires = units;
+        after = units;
+      }
+    ) overlayContainers;
     assertions = lib.mapAttrsToList (name: container: {
       assertion = container.pull == "always";
       message = "OCI container '${name}' uses :latest and must set pull = \"always\".";

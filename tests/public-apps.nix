@@ -11,7 +11,6 @@ let
   services = [
     "vaultwarden"
     "opencloud"
-    "mineos"
     "jellyfin"
     "ollama"
     "searxng"
@@ -21,8 +20,7 @@ let
       enable = true;
       role = "manager";
       advertiseAddress = "10.1.0.1";
-      networkSubnet = "10.2.0.0/24";
-      networkGateway = "10.2.0.1";
+
     };
   };
   inputs = {
@@ -68,14 +66,6 @@ let
         environmentFile = "/run/credentials/cloud.env";
         uid = 1400;
         gid = 1401;
-      };
-      "mine.example.test".mineos = {
-        enable = true;
-        host = "nixos";
-        dataDir = "/srv/minecraft";
-        environmentFile = "/run/credentials/mine.env";
-        uid = 1500;
-        gid = 1501;
       };
       "media.example.test".jellyfin = {
         enable = true;
@@ -125,6 +115,7 @@ let
           enable = true;
           host = "remote";
           deploy = false;
+          backendUrl = "http://${service}.external:8080";
         }
         // lib.optionalAttrs (service == "ollama") { webui = true; };
       }) services
@@ -146,8 +137,6 @@ let
             extraOptions = [ "--restart=on-failure" ];
           };
           opencloud.environment.OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD = "true";
-          mineos-api.environment.Host__OwnerUid = "1600";
-          mineos-web.environment.BODY_SIZE_LIMIT = "1G";
           jellyfin.user = "1700:1701";
           open-webui.environment = {
             RAG_EMBEDDING_MODEL = "consumer-embedding";
@@ -202,6 +191,7 @@ let
           enable = true;
           host = "remote";
           deploy = false;
+          backendUrl = "http://searxng.external:8080";
         };
       };
     }
@@ -278,6 +268,11 @@ let
       };
     }
   ];
+  invalidSignup =
+    builtins.tryEval
+      (t.cfgFor [
+        { modules.public-services."invalid.example.test".vaultwarden.signupsAllowed = "true"; }
+      ]).modules.public-services."invalid.example.test".vaultwarden.signupsAllowed;
   c = active.virtualisation.oci-containers.containers;
   o = overrides.virtualisation.oci-containers.containers;
 in
@@ -305,8 +300,6 @@ assert
 assert
   builtins.attrNames c == [
     "jellyfin"
-    "mineos-api"
-    "mineos-web"
     "open-terminal"
     "open-webui"
     "opencloud"
@@ -314,11 +307,28 @@ assert
     "vaultwarden"
     "ytdl-sub"
   ];
-assert c.vaultwarden.image == "vaultwarden/server:latest" && c.vaultwarden.pull == "always";
+assert
+  c.vaultwarden.image
+  == "vaultwarden/server:1.37.4@sha256:efb3cde962015fcc036b2ea625242248611943b27212ebf4392841fb30fad055";
+assert c.vaultwarden.pull == "always";
+assert !active.modules.public-services."vault.example.test".vaultwarden.signupsAllowed;
+assert c.vaultwarden.environment.SIGNUPS_ALLOWED == "false";
+assert c.vaultwarden.environment.SIGNUPS_DOMAINS_WHITELIST == "";
+assert !(c.vaultwarden.environment ? ADMIN_TOKEN);
+assert lib.hasInfix "/srv/passwords/vw-data/config.json"
+  active.systemd.services.docker-vaultwarden.preStart;
+assert lib.hasInfix "patch-signups.py" active.systemd.services.docker-vaultwarden.preStart;
 assert c.vaultwarden.volumes == [ "/srv/passwords/vw-data:/data" ];
 assert c.vaultwarden.environmentFiles == [ "/run/credentials/vault.env" ];
 assert !(lib.any (x: lib.hasInfix "mail.attodao.cc" x) c.vaultwarden.extraOptions);
-assert c.opencloud.image == "opencloudeu/opencloud-rolling:latest" && c.opencloud.pull == "always";
+assert
+  c.opencloud.image
+  == "opencloudeu/opencloud-rolling:8.1.0@sha256:8fc64ca861739cc62095cd558814f2eba6a90acf5998d884e439b33a47875da8";
+assert c.opencloud.pull == "always";
+assert
+  c.ytdl-sub.image
+  == "ghcr.io/jmbannon/ytdl-sub:2026.08.26.post1@sha256:f96bcf1d2896da0177f9c7964407c27830571d1eb96a5886abd605140c69e278";
+assert c.ytdl-sub.environment.UPDATE_YT_DLP_ON_START == "";
 assert c.opencloud.user == "1400:1401";
 assert c.opencloud.environment.OC_URL == "https://cloud.example.test";
 assert lib.elem "/srv/cloud/config:/etc/opencloud" c.opencloud.volumes;
@@ -329,26 +339,20 @@ assert
     "printf 'no\\n' | opencloud init || true; exec opencloud server"
   ];
 assert
-  c.mineos-api.environment.ConnectionStrings__DefaultConnection == "Data Source=/app/data/mineos.db";
-assert
-  c.mineos-api.environment.Host__OwnerUid == "1500"
-  && c.mineos-api.environment.Host__OwnerGid == "1501";
-assert c.mineos-api.environment.Cors__AllowedOrigins__0 == "https://mine.example.test";
-assert c.mineos-web.environment.PUBLIC_MINECRAFT_HOST == "mine.example.test";
-assert c.mineos-web.environment.ORIGIN == "https://mine.example.test";
-assert c.mineos-web.dependsOn == [ "mineos-api" ];
-assert lib.elem "--stop-timeout=600" c.mineos-api.extraOptions;
-assert
   c.jellyfin.image
   == "jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e";
 assert c.jellyfin.environment.JELLYFIN_PublishedServerUrl == "https://media.example.test";
 assert lib.elem "/srv/downloads:/ytdl-sub:ro" c.jellyfin.volumes;
 assert lib.elem "/srv/media-server/video:/video:ro" c.jellyfin.volumes;
-assert c.searxng.image == "searxng/searxng:2026.10.4-d48c4b555";
+assert
+  c.searxng.image
+  == "searxng/searxng:2026.10.4-d48c4b555@sha256:76b0bf285aca014c7191fc4d9234c4bfb358624ac33d8883833d496c059ec072";
 assert c.searxng.environment.SEARXNG_BASE_URL == "https://search.example.test/";
 assert c.searxng.environmentFiles == [ "/run/credentials/search.env" ];
 assert active.systemd.services.docker-searxng.restartTriggers != [ ];
-assert c.open-webui.image == "ghcr.io/open-webui/open-webui:v0.11.4";
+assert
+  c.open-webui.image
+  == "ghcr.io/open-webui/open-webui:v0.11.4@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f";
 assert c.open-webui.environment.WEBUI_URL == "https://chat.example.test";
 assert c.open-webui.environment.OLLAMA_BASE_URL == "http://10.1.0.1:11434";
 assert c.open-webui.environment.RAG_OLLAMA_BASE_URL == "http://10.1.0.1:11434";
@@ -360,21 +364,28 @@ assert
     "open-terminal"
     "searxng"
   ];
-assert c.open-terminal.image == "ghcr.io/open-webui/open-terminal:0.14.0";
+assert
+  c.open-terminal.image
+  == "ghcr.io/open-webui/open-terminal:0.14.0@sha256:81a5394b3cd4ae32adb600f2135f09ee124de37f26b0a780e2f5692472c0fc5c";
 assert
   c.open-terminal.environment.OPEN_TERMINAL_CORS_ALLOWED_ORIGINS == "https://chat.example.test";
 assert lib.elem "/srv/terminal/workspace:/home/user" c.open-terminal.volumes;
-assert lib.all (name: c.${name}.networks == [ "traefik" ] && !c.${name}.autoRemoveOnStop) [
+assert lib.all (name: c.${name}.networks == [ "backend-${name}" ] && !c.${name}.autoRemoveOnStop) [
   "vaultwarden"
   "opencloud"
-  "mineos-api"
-  "mineos-web"
   "jellyfin"
   "searxng"
-  "open-webui"
   "open-terminal"
 ];
-assert lib.elem "docker-network-traefik.service" active.systemd.services.docker-jellyfin.after;
+assert
+  c.open-webui.networks == [
+    "backend-ollama"
+    "backend-open-terminal"
+    "backend-searxng"
+  ];
+assert !c.open-webui.autoRemoveOnStop;
+assert lib.elem "docker-network-backend-jellyfin.service"
+  active.systemd.services.docker-jellyfin.after;
 assert lib.elem "ollama-model-loader.service" active.systemd.services.docker-open-webui.after;
 assert lib.elem "/srv/media-server"
   active.systemd.services.docker-jellyfin.unitConfig.RequiresMountsFor;
@@ -403,8 +414,6 @@ assert
   && o.vaultwarden.environmentFiles == c.vaultwarden.environmentFiles
   && o.vaultwarden.networks == c.vaultwarden.networks;
 assert o.opencloud.environment.OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD == "true";
-assert o.mineos-api.environment.Host__OwnerUid == "1600";
-assert o.mineos-web.environment.BODY_SIZE_LIMIT == "1G";
 assert o.jellyfin.user == "1700:1701";
 assert o.open-webui.environment.RAG_EMBEDDING_MODEL == "consumer-embedding";
 assert o.open-webui.environment.CONTEXT_COMPACTION_MODEL == "consumer-compaction";
@@ -425,11 +434,13 @@ assert
   ];
 assert
   remoteSearch.virtualisation.oci-containers.containers.open-webui.environment.SEARXNG_QUERY_URL
-  == "http://searxng:8080/search";
+  == "http://searxng.external:8080/search";
+assert
+  !lib.elem "backend-searxng" remoteSearch.virtualisation.oci-containers.containers.open-webui.networks;
 assert
   remoteSearch.virtualisation.oci-containers.containers.open-webui.dependsOn == [ "open-terminal" ];
 assert lib.all (name: !(missing name).success) services;
-assert !invalidPath.success && !storePathInput.success;
+assert !invalidPath.success && !storePathInput.success && !invalidSignup.success;
 assert !disabled.modules.searxng.enable;
 assert lib.any (
   a: !a.assertion && lib.hasInfix "only one local vaultwarden" a.message

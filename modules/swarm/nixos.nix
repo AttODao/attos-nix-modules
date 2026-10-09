@@ -37,7 +37,27 @@ let
     else
       throw "modules.swarm.managerAddress must be an IPv4 address, hostname or bracketed hexadecimal IPv6 address, with an optional port from 1 to 65535.";
   managerAddress = builtins.seq managerHost (required "managerAddress");
-  networkReadyUrl = "http://${managerHost}:${toString cfg.readinessPort}/traefik-network-ready";
+  networkReadyUrl = "http://${managerHost}:${toString cfg.readinessPort}/networks-ready";
+  containerNetworks = lib.unique (
+    lib.concatMap (container: lib.filter (lib.hasPrefix "backend-") container.networks) (
+      lib.attrValues config.virtualisation.oci-containers.containers
+    )
+  );
+  # The manager provisions remote owners too; workers wait only for their attachments.
+  networks = lib.unique (
+    containerNetworks
+    ++ lib.optionals manager (
+      ps.backendNetworks config
+      ++
+        lib.optional (lib.any (route: route.service == "ollama" && route.cfg.deploy) (ps.routes config))
+          (
+            ps.network {
+              standalone = false;
+              service = "open-terminal";
+            }
+          )
+    )
+  );
   swarm = pkgs.writeShellApplication {
     name = "attos-swarm";
     runtimeInputs = [
@@ -49,7 +69,7 @@ let
   };
   manager = cfg.role == "manager";
   joinUnit = if manager then "docker-swarm-init" else "docker-swarm-join";
-  marker = "/run/docker-swarm-network-ready/traefik-network-ready";
+  marker = "/run/docker-swarm-network-ready/networks-ready";
 in
 {
   config = lib.mkIf cfg.enable (
@@ -101,8 +121,8 @@ in
             LoadCredential = [ "join-token:${required "joinTokenFile"}" ];
           };
         };
-        systemd.services.docker-network-traefik = {
-          description = "Ensure the attachable traefik overlay is ready";
+        systemd.services.docker-swarm-networks = {
+          description = "Ensure encrypted service overlays are ready";
           wantedBy = [ "multi-user.target" ];
           after = [
             "${joinUnit}.service"
@@ -110,24 +130,72 @@ in
             "docker.socket"
           ];
           requires = [ "${joinUnit}.service" ];
-          restartIfChanged = false;
-          stopIfChanged = false;
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
             ExecStart =
               if manager then
-                "${swarm}/bin/attos-swarm network ${
-                  lib.escapeShellArgs [
-                    (required "networkSubnet")
-                    (required "networkGateway")
-                    marker
-                  ]
-                }"
+                "${swarm}/bin/attos-swarm network ${lib.escapeShellArgs ([ marker ] ++ networks)}"
               else
                 "${swarm}/bin/attos-swarm wait ${lib.escapeShellArg networkReadyUrl}";
           };
         };
+      }
+      {
+        systemd.services = lib.genAttrs (map (network: "docker-network-${network}") networks) (
+          unit:
+          let
+            network = lib.removePrefix "docker-network-" unit;
+          in
+          {
+            description = "Wait for the ${network} encrypted overlay";
+            requires = [ "${joinUnit}.service" ] ++ lib.optional manager "docker-swarm-networks.service";
+            after = [ "${joinUnit}.service" ] ++ lib.optional manager "docker-swarm-networks.service";
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              ExecStart =
+                if manager then
+                  "${pkgs.coreutils}/bin/test -f ${marker}/${network}"
+                else
+                  "${swarm}/bin/attos-swarm wait ${
+                    lib.escapeShellArgs [
+                      "${networkReadyUrl}/${network}"
+                      network
+                    ]
+                  }";
+            };
+          }
+        );
+      }
+      {
+        # Recheck on every container start: oneshot units can remain active after prune.
+        systemd.services =
+          lib.mapAttrs'
+            (
+              name: container:
+              lib.nameValuePair container.serviceName {
+                preStart = lib.mkBefore (
+                  if manager then
+                    "${swarm}/bin/attos-swarm network ${lib.escapeShellArgs ([ marker ] ++ networks)}"
+                  else
+                    lib.concatMapStringsSep "\n" (
+                      network:
+                      "${swarm}/bin/attos-swarm wait ${
+                        lib.escapeShellArgs [
+                          "${networkReadyUrl}/${network}"
+                          network
+                        ]
+                      }"
+                    ) (lib.filter (lib.hasPrefix "backend-") container.networks)
+                );
+              }
+            )
+            (
+              lib.filterAttrs (
+                _: c: lib.any (lib.hasPrefix "backend-") c.networks
+              ) config.virtualisation.oci-containers.containers
+            );
       }
       (lib.mkIf (!manager && cfg.tokenFetch.enable) {
         systemd.services.docker-swarm-token-fetch = {
@@ -165,11 +233,11 @@ in
               "Serve the nonsecret overlay readiness marker (not the join token)";
           wantedBy = [ "multi-user.target" ];
           after = [
-            "docker-network-traefik.service"
+            "docker-swarm-networks.service"
           ]
           ++ lib.optional cfg.tokenTransport.enable "docker-swarm-init.service";
           requires = [
-            "docker-network-traefik.service"
+            "docker-swarm-networks.service"
           ]
           ++ lib.optional cfg.tokenTransport.enable "docker-swarm-init.service";
           serviceConfig = {

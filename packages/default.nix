@@ -4,7 +4,9 @@
   atcoder-oj = pkgs.callPackage ./atcoder-oj.nix { };
   atcoder-aclogin = pkgs.callPackage ./atcoder-aclogin.nix { };
   atcoder-commands = args: pkgs.callPackage ./atcoder-commands.nix args;
-  container-rebuild = args: pkgs.callPackage ./container-rebuild.nix args;
+  vm-rebuild = args: pkgs.callPackage ./vm-rebuild.nix args;
+  mcsmanager = pkgs.callPackage ./mcsmanager.nix { };
+  paseo = pkgs.callPackage ./paseo.nix { };
   code-server =
     { src }:
     pkgs.callPackage ./code-server.nix {

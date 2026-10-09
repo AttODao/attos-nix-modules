@@ -67,10 +67,23 @@ in
         ++ lib.concatLists (
           lib.mapAttrsToList (
             hostname: services:
-            lib.mapAttrsToList (service: cfg: {
-              assertion = !cfg.enable || cfg.host != null;
-              message = "modules.public-services.${hostname}.${service}.host must name the owner machine when enabled.";
-            }) services
+            lib.concatLists (
+              lib.mapAttrsToList (service: cfg: [
+                {
+                  assertion = !cfg.enable || cfg.host != null;
+                  message = "modules.public-services.${hostname}.${service}.host must name the owner machine when enabled.";
+                }
+                {
+                  assertion =
+                    !cfg.enable
+                    || cfg.deploy
+                    || !(cfg ? backendUrl)
+                    || (service == "ollama" && !cfg.webui)
+                    || cfg.backendUrl != null;
+                  message = "modules.public-services.${hostname}.${service}: deploy=false HTTP endpoints require an explicit backendUrl.";
+                }
+              ]) services
+            )
           ) hosts
         )
         ++ lib.mapAttrsToList (hostname: services: {

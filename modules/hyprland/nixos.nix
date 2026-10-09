@@ -38,7 +38,7 @@ in
     };
     systemd.services = lib.mkIf cfg.headless.enable {
       seatd.environment.SEATD_VTBOUND = "0";
-      container-udevd = {
+      container-udevd = lib.mkIf config.boot.isContainer {
         description = "Run udevd for dynamic input devices in the desktop container";
         wantedBy = [ "multi-user.target" ];
         after = [ "systemd-tmpfiles-setup.service" ];
@@ -52,7 +52,7 @@ in
         };
       };
     };
-    systemd.tmpfiles.rules = lib.mkIf cfg.headless.enable (
+    systemd.tmpfiles.rules = lib.mkIf (cfg.headless.enable && config.boot.isContainer) (
       [ "d /dev/input 0755 root root -" ]
       ++ map (
         index:

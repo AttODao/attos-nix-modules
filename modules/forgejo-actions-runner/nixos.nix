@@ -27,6 +27,10 @@ in
         ]
       ++ [
         {
+          assertion = !config.boot.isContainer && config.virtualisation.incus.agent.enable;
+          message = "Forgejo runner must run inside an Incus virtual-machine guest (boot.isContainer=false and virtualisation.incus.agent.enable=true), never on the physical host or in a container.";
+        }
+        {
           assertion = !cfg.dynamicUser || dataDir == "/var/lib/gitea-runner/forgejo";
           message = "Forgejo runner: dynamicUser requires the native /var/lib/gitea-runner/forgejo StateDirectory.";
         }

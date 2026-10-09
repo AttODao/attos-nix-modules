@@ -97,7 +97,10 @@ let
     registry
     {
       modules.public-services."ssh-a.example.test".ssh.deploy = lib.mkForce false;
-      modules.public-services."vault.example.test".vaultwarden.deploy = false;
+      modules.public-services."vault.example.test".vaultwarden = {
+        deploy = false;
+        backendUrl = "http://vault.external:8080";
+      };
     }
   ];
   disabled = evaluate "attobox" [
@@ -133,12 +136,105 @@ let
           modules.public-services."bad.example.test".vaultwarden.machine = "attobox";
         }
       ]).modules.public-services."bad.example.test".vaultwarden.machine;
+  peers.modules.public-services = {
+    "llm.example.test".ollama = {
+      enable = true;
+      host = "web";
+      webui = true;
+      dataDir = "/srv/webui";
+      ollamaUrl = "http://10.250.0.2:11434";
+    };
+    "search.example.test".searxng = {
+      enable = true;
+      host = "search";
+    };
+    "vault.example.test".vaultwarden = {
+      enable = true;
+      host = "vault";
+    };
+  };
+  peerWeb = evaluate "web" [
+    peers
+    {
+      modules.swarm = {
+        role = "worker";
+        managerAddress = "10.250.0.1:2377";
+        joinTokenFile = "/run/secrets/worker-token";
+      };
+      modules.open-terminal = {
+        dataDir = "/srv/terminal";
+        environmentFile = "/run/secrets/terminal.env";
+        uid = 1100;
+        gid = 1100;
+      };
+    }
+  ];
+  peerGateway = evaluate "gateway" [
+    peers
+    swarm
+    {
+      modules.traefik = {
+        enable = true;
+        dataDir = "/srv/traefik";
+        environmentFile = "/run/secrets/cloudflare.env";
+      };
+    }
+  ];
+  ps = import ../modules/public-services/lib.nix { inherit lib; };
   dynamic = builtins.fromJSON gateway.environment.etc."traefik/dynamic.yml".source.text;
   cnames = builtins.fromJSON gateway.environment.etc."cloudflare/public-cnames.json".source.text;
   dns = gateway.environment.etc."dnsmasq-public-services".source.text;
 in
 assert lib.all (a: a.assertion) gateway.assertions;
 assert gateway.virtualisation.oci-containers.containers ? traefik;
+assert (ps.select attobox "vaultwarden").service == "vaultwarden";
+assert
+  attobox.virtualisation.oci-containers.containers.vaultwarden.networks == [ "backend-vaultwarden" ];
+assert attofort.virtualisation.oci-containers.containers.searxng.networks == [ "backend-searxng" ];
+assert
+  lib.sort builtins.lessThan gateway.virtualisation.oci-containers.containers.traefik.networks == [
+    "backend-searxng"
+    "backend-vaultwarden"
+  ];
+assert lib.all (a: a.assertion) peerWeb.assertions;
+assert
+  lib.sort builtins.lessThan peerWeb.virtualisation.oci-containers.containers.open-webui.networks == [
+    "backend-ollama"
+    "backend-open-terminal"
+    "backend-searxng"
+  ];
+assert
+  peerWeb.virtualisation.oci-containers.containers.open-terminal.networks
+  == [ "backend-open-terminal" ];
+assert !(peerWeb.systemd.services ? docker-network-backend-vaultwarden);
+assert lib.all
+  (
+    name:
+    lib.elem "docker-network-${name}.service" peerWeb.systemd.services.docker-open-webui.requires
+    && lib.hasSuffix " wait ${
+       lib.escapeShellArgs [
+         "http://10.250.0.1:2378/networks-ready/${name}"
+         name
+       ]
+     }" peerWeb.systemd.services."docker-network-${name}".serviceConfig.ExecStart
+  )
+  [
+    "backend-ollama"
+    "backend-open-terminal"
+    "backend-searxng"
+  ];
+assert
+  lib.sort builtins.lessThan peerGateway.virtualisation.oci-containers.containers.traefik.networks
+  == [
+    "backend-ollama"
+    "backend-searxng"
+    "backend-vaultwarden"
+  ];
+assert peerGateway.systemd.services ? docker-network-backend-open-terminal;
+assert lib.elem "docker-swarm-networks.service"
+  peerGateway.systemd.services.docker-network-backend-vaultwarden.requires;
+assert lib.hasInfix "backend-vaultwarden"
+  peerGateway.systemd.services.docker-swarm-networks.serviceConfig.ExecStart;
 assert !(gateway.virtualisation.oci-containers.containers ? vaultwarden);
 assert !(gateway.virtualisation.oci-containers.containers ? searxng);
 assert !gateway.services.code-server.enable && !gateway.services.sunshine.enable;

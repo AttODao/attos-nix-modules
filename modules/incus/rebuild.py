@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build locally and explicitly activate an existing local Incus container."""
+"""Build locally and explicitly activate an existing local Incus KVM VM."""
 import argparse
 import json
 from pathlib import Path
@@ -47,40 +47,44 @@ def main():
     configured, arguments = settings.parse_known_args()
     with open(configured.config, encoding="utf-8") as handle:
         config = json.load(handle)
-    names = config["containers"]
+    names = config["virtualMachines"]
     if not isinstance(names, list) or not all(
         isinstance(name, str) and re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9-]{0,62}", name) for name in names
     ):
-        raise ValueError("Invalid declared container list")
-    parser = argparse.ArgumentParser(prog="container-rebuild", description=__doc__)
+        raise ValueError("Invalid declared virtual-machine list")
+    parser = argparse.ArgumentParser(prog="vm-rebuild", description=__doc__)
     parser.add_argument("action", choices=ACTIONS)
-    parser.add_argument("container", choices=names)
+    parser.add_argument("virtual_machine", choices=names)
     parser.add_argument("--rollback", action="store_true", help="Use the guest's previous generation, without building")
     parser.add_argument("--max-jobs", type=int)
     parser.add_argument("--cores", type=int)
+    parser.add_argument("--override-input", nargs=2, action="append", default=[], metavar=("NAME", "REFERENCE"))
     args = parser.parse_args(arguments)
+    nix_args = [value for pair in args.override_input for value in ("--override-input", *pair)]
     if args.rollback and args.action not in APPLY:
         parser.error("--rollback requires dry-activate, test, switch or boot")
     if any(value is not None and value < 0 for value in (args.max_jobs, args.cores)):
         parser.error("--max-jobs and --cores must be nonnegative")
 
     if args.action in APPLY or args.action == "list-generations":
-        instance = json.loads(run([*INCUS, "query", "/1.0/instances/" + args.container + "?project=default"], capture=True))
-        if instance.get("type") != "container" or instance.get("status") != "Running":
-            raise ValueError("Target must be an existing Running container; no instance will be created or started")
+        instance = json.loads(run([*INCUS, "query", "/1.0/instances/" + args.virtual_machine + "?project=default"], capture=True))
+        if instance.get("type") != "virtual-machine" or instance.get("status") != "Running":
+            raise ValueError("Target must be an existing Running virtual-machine; no instance will be created, converted, deleted or started")
         native = ["/run/current-system/sw/bin/nixos-rebuild", args.action, "--no-reexec"]
         if args.rollback or args.action == "list-generations":
-            run(guest(args.container, native + (["--rollback"] if args.rollback else [])))
+            run(guest(args.virtual_machine, native + (["--rollback"] if args.rollback else [])))
             return
 
     file = Path(config["flakeFile"]).resolve(strict=True)
     if file.name != "flake.nix" or not file.is_file():
         raise ValueError("flakeFile must name an existing flake.nix")
-    configuration = str(file.parent) + "#nixosConfigurations." + args.container + ".config"
-    if json.loads(run(["nix", "eval", "--no-write-lock-file", "--json", configuration + ".boot.isContainer"], capture=True)) is not True:
-        raise ValueError("Selected flake configuration is not a NixOS container")
+    configuration = "path:" + str(file.parent) + "#nixosConfigurations." + args.virtual_machine + ".config"
+    shape = json.loads(run(["nix", "eval", "--no-write-lock-file", *nix_args, "--json", configuration,
+                           "--apply", "c: { isContainer = c.boot.isContainer; incusAgent = c.virtualisation.incus.agent.enable; }"], capture=True))
+    if shape != {"isContainer": False, "incusAgent": True}:
+        raise ValueError("Selected flake configuration must be an Incus NixOS VM guest (not a container, with the Incus agent enabled)")
     installable = configuration + ".system.build.toplevel"
-    command = ["nix", "build", "--no-write-lock-file", "--no-link", "--print-out-paths"]
+    command = ["nix", "build", "--no-write-lock-file", *nix_args, "--no-link", "--print-out-paths"]
     for flag, value in (("--max-jobs", args.max_jobs), ("--cores", args.cores)):
         if value is not None:
             command += [flag, str(value)]
@@ -93,14 +97,14 @@ def main():
     if args.action == "build":
         print(system)
         return
-    transfer(args.container, system)
+    transfer(args.virtual_machine, system)
     # Native rebuild owns profile/generation semantics: test is temporary, boot does not activate.
-    run(guest(args.container, [*native, "--store-path", system]))
+    run(guest(args.virtual_machine, [*native, "--store-path", system]))
 
 
 if __name__ == "__main__":
     try:
         main()
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
-        print("container-rebuild: " + str(error), file=sys.stderr)
+        print("vm-rebuild: " + str(error), file=sys.stderr)
         sys.exit(1)

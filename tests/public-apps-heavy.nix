@@ -33,8 +33,7 @@ let
       enable = true;
       role = "manager";
       advertiseAddress = "10.1.0.1";
-      networkSubnet = "10.2.0.0/24";
-      networkGateway = "10.2.0.1";
+
     };
   };
   activeModule.modules.public-services = {
@@ -95,6 +94,7 @@ let
             enable = true;
             host = "remote";
             deploy = false;
+            backendUrl = "http://${service}.external:8080";
             private = true;
           };
         }) services
@@ -145,13 +145,13 @@ let
     lib.elem "docker-network-${service}.service" unit.requires
     && lib.elem "docker-network-${service}.service" unit.after
     && lib.hasInfix "network inspect" unit.preStart;
-  traefikDeps =
-    name:
+  backendDeps =
+    service: name:
     let
       unit = active.systemd.services."docker-${name}";
     in
-    lib.elem "docker-network-traefik.service" unit.wants
-    && lib.elem "docker-network-traefik.service" unit.after;
+    lib.elem "docker-network-backend-${service}.service" unit.wants
+    && lib.elem "docker-network-backend-${service}.service" unit.after;
   duplicate =
     service:
     t.cfgFor [
@@ -184,6 +184,7 @@ let
             enable = true;
             host = "remote";
             deploy = false;
+            backendUrl = "http://${service}.external:8080";
           };
         }) services
       );
@@ -260,8 +261,12 @@ assert
 assert
   c.karakeep-meilisearch.image
   == "getmeili/meilisearch:v1.54.3@sha256:e68913ab7d6f5b159529e472cfd362ce3c741fafd3c127961b2142abbe41b3c9";
-assert c.karakeep-chrome.image == "ghcr.io/karakeep-app/karakeep-chrome:release";
-assert c.karakeep.image == "ghcr.io/karakeep-app/karakeep:0.33.2";
+assert
+  c.karakeep-chrome.image
+  == "ghcr.io/karakeep-app/karakeep-chrome:release@sha256:5b19bbb160e9ff60681a3abd97e1c4ec9f64212301410de658c3900ab7ef31e7";
+assert
+  c.karakeep.image
+  == "ghcr.io/karakeep-app/karakeep:0.33.2@sha256:b069e4307dec06ea06d16989c6861c30a1ff208568be44ed5fb5d422cd3e950c";
 assert lib.all (name: !c.${name}.autoRemoveOnStop) containers;
 assert c.forgejo.extraOptions == [ "--restart=always" ];
 assert c.forgejo-db.extraOptions == [ "--restart=always" ];
@@ -347,11 +352,10 @@ assert lib.all (name: mounts name == [ "/srv/karakeep" ] && networkDeps "karakee
   "karakeep-chrome"
   "karakeep"
 ];
-assert lib.all traefikDeps [
-  "forgejo"
-  "immich-server"
-  "karakeep"
-];
+assert
+  backendDeps "forgejo" "forgejo"
+  && backendDeps "immich" "immich-server"
+  && backendDeps "karakeep" "karakeep";
 assert lib.elem "--network-alias=database" c.immich-database.extraOptions;
 assert lib.elem "--network-alias=redis" c.immich-redis.extraOptions;
 assert lib.elem "--network-alias=meilisearch" c.karakeep-meilisearch.extraOptions;
@@ -360,17 +364,17 @@ assert lib.all (name: c.${name}.networks == [ "forgejo" ]) [ "forgejo-db" ];
 assert
   c.forgejo.networks == [
     "forgejo"
-    "traefik"
+    "backend-forgejo"
   ];
 assert
   c.immich-server.networks == [
     "immich"
-    "traefik"
+    "backend-immich"
   ];
 assert
   c.karakeep.networks == [
     "karakeep"
-    "traefik"
+    "backend-karakeep"
   ];
 assert active.systemd.tmpfiles.settings."10-forgejo"."/srv/forgejo/postgres".d.mode == "0700";
 assert active.systemd.tmpfiles.settings."10-immich"."/srv/immich/redis".d.mode == "0700";

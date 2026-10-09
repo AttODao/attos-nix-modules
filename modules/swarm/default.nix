@@ -6,7 +6,7 @@ in
 {
   imports = [ ./nixos.nix ];
   options.modules.swarm = {
-    enable = lib.mkEnableOption "shared Docker Swarm initialization and overlay network";
+    enable = lib.mkEnableOption "shared Docker Swarm initialization and encrypted service overlays";
     role = mkOption {
       type = types.nullOr (
         types.enum [
@@ -32,16 +32,6 @@ in
       type = ps.absolutePath;
       default = "/run/docker-swarm/worker-token";
       description = "Manager-generated runtime worker token (0600); never placed in the readiness HTTP directory.";
-    };
-    networkSubnet = mkOption {
-      type = types.nullOr types.nonEmptyStr;
-      default = null;
-      description = "Subnet for the attachable traefik overlay; required for a manager.";
-    };
-    networkGateway = mkOption {
-      type = types.nullOr types.nonEmptyStr;
-      default = null;
-      description = "Gateway for the traefik overlay; required for a manager.";
     };
     readinessAddress = mkOption {
       type = types.nullOr types.nonEmptyStr;

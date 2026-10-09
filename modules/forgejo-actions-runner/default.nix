@@ -9,7 +9,7 @@ in
   ];
 
   options.modules.forgejo-actions-runner = {
-    enable = lib.mkEnableOption "shared Forgejo Actions runner";
+    enable = lib.mkEnableOption "shared Forgejo Actions runner inside an Incus KVM VM guest";
     tokenFile = ps.pathOption "Absolute runtime path to the native runner's registration environment file containing TOKEN; required when enabled.";
     dataDir = ps.pathOption "Absolute runtime path to persistent runner registration state; required when enabled. Never migrate existing state implicitly.";
     dynamicUser = lib.mkOption {

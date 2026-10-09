@@ -26,16 +26,14 @@ let
         };
       }
     ]).config;
-  waitCommand = cfg: cfg.systemd.services.docker-network-traefik.serviceConfig.ExecStart;
+  waitCommand = cfg: cfg.systemd.services.docker-swarm-networks.serviceConfig.ExecStart;
   joinCommand = cfg: cfg.systemd.services.docker-swarm-join.serviceConfig.ExecStart;
   valid =
     address: host:
     let
       cfg = worker address;
     in
-    lib.hasSuffix " wait ${lib.escapeShellArg "http://${host}:2378/traefik-network-ready"}" (
-      waitCommand cfg
-    )
+    lib.hasSuffix " wait ${lib.escapeShellArg "http://${host}:2378/networks-ready"}" (waitCommand cfg)
     && lib.hasSuffix " worker ${lib.escapeShellArg address} %d/join-token" (joinCommand cfg)
     && cfg.modules.docker.enable
     &&
@@ -71,8 +69,6 @@ let
           enable = true;
           role = "manager";
           advertiseAddress = "10.250.0.1";
-          networkSubnet = "10.251.0.0/24";
-          networkGateway = "10.251.0.1";
           readinessAddress = "10.250.0.1";
           tokenTransport = {
             enable = true;
@@ -98,20 +94,20 @@ let
           enable = true;
           role = "manager";
           advertiseAddress = "10.250.0.1";
-          networkSubnet = "10.251.0.0/24";
-          networkGateway = "10.251.0.1";
           readinessAddress = "10.250.0.1";
         };
       }
     ]).config;
 in
 assert !base.config.modules.swarm.enable && !base.config.modules.docker.enable;
-assert !(base.config.systemd.services ? docker-network-traefik);
+assert !(base.config.systemd.services ? docker-swarm-networks);
 assert base.config.modules.swarm.readinessPort == 2378;
 assert !base.config.modules.swarm.tokenTransport.enable;
 assert !base.config.modules.swarm.tokenFetch.enable;
 assert !(base.config.systemd.services ? docker-swarm-token-fetch);
 assert !(base.options.modules.swarm ? networkReadyUrl);
+assert
+  !(base.options.modules.swarm ? networkSubnet) && !(base.options.modules.swarm ? networkGateway);
 assert valid "10.250.0.1:2377" "10.250.0.1";
 assert valid "10.250.0.1" "10.250.0.1";
 assert valid "manager" "manager";
@@ -157,7 +153,7 @@ assert lib.hasSuffix (
   + lib.escapeShellArgs [
     "10.250.0.1"
     "2378"
-    "/run/docker-swarm-network-ready/traefik-network-ready"
+    "/run/docker-swarm-network-ready/networks-ready"
   ]
 ) manager.systemd.services.docker-swarm-network-server.serviceConfig.ExecStart;
 assert !(manager.systemd.services ? docker-swarm-token-server);
@@ -167,7 +163,7 @@ assert lib.all (a: a.assertion) manager.assertions;
 assert lib.all (a: a.assertion) fetching.assertions;
 assert lib.all (a: a.assertion) transporting.assertions;
 assert lib.any (a: !a.assertion) badTransport.assertions;
-assert lib.hasInfix "http://10.250.0.1:12378/traefik-network-ready" (waitCommand fetching);
+assert lib.hasInfix "http://10.250.0.1:12378/networks-ready" (waitCommand fetching);
 assert lib.hasSuffix (
   " fetch "
   + lib.escapeShellArgs [

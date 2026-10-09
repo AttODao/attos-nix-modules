@@ -89,7 +89,9 @@ in
       };
 
       karakeep-chrome = {
-        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep-chrome:release";
+        # Official image labels: headless-shell 151.0.7922.47; no version tag exists.
+        # Review browser updates and replace this registry index digest explicitly.
+        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep-chrome:release@sha256:5b19bbb160e9ff60681a3abd97e1c4ec9f64212301410de658c3900ab7ef31e7";
         autoRemoveOnStop = lib.mkDefault false;
         extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
@@ -112,7 +114,7 @@ in
       };
 
       karakeep = {
-        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.33.2";
+        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.33.2@sha256:b069e4307dec06ea06d16989c6861c30a1ff208568be44ed5fb5d422cd3e950c";
         ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:3001:3000");
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) (

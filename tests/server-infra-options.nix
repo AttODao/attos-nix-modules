@@ -143,19 +143,19 @@ let
         "dm_snapshot"
         "dm_thin_pool"
       ];
-      containers.guest = {
+      virtualMachines.guest = {
         metadata = "/srv/images/metadata.tar.xz";
-        rootfs = "/srv/images/rootfs.squashfs";
+        disk = "/srv/images/nixos.qcow2";
         launchConfig = {
           profiles = [ "consumer" ];
-          devices.uinput = {
-            type = "unix-char";
-            path = "/dev/uinput";
-            gid = "174";
-            mode = "0660";
+          devices.web = {
+            type = "proxy";
+            listen = "tcp:127.0.0.1:4444";
+            connect = "tcp:127.0.0.1:8080";
+            nat = "true";
           };
         };
-        managedDeviceNames = [ "uinput" ];
+        managedDeviceNames = [ "web" ];
       };
     };
   };
@@ -190,19 +190,24 @@ let
       swarm = {
         role = "manager";
         advertiseAddress = "192.0.2.1";
-        networkSubnet = "10.251.0.0/24";
-        networkGateway = "10.251.0.1";
+
       };
       traefik = {
         enable = true;
         dataDir = "/srv/traefik";
         environmentFile = "/run/secrets/cloudflare";
         publishedPortRanges = ranges;
+        privateNetworks = [ "10.252.0.0/24" ];
       };
       public-services = {
-        "game.example.test".mineos = {
+        "game.example.test".mcsmanager = {
           enable = true;
           host = "remote";
+          backendUrl = "http://192.0.2.2:23333";
+          daemonBackendUrl = "http://192.0.2.2:24444";
+          backendAddress = "192.0.2.2";
+          tcpPorts = lib.range 25500 25600;
+          udpPorts = lib.range 19132 19137;
         };
         "mail.example.test".mailserver = {
           enable = true;
@@ -306,7 +311,7 @@ assert
   incus.systemd.services.incus-preseed.serviceConfig.ExecStartPre
   == [ "${pkgs.kmod}/bin/modprobe dm_thin_pool" ];
 assert
-  incus.systemd.services.incus-containers.serviceConfig.ExecStartPre == [
+  incus.systemd.services.incus-virtual-machines.serviceConfig.ExecStartPre == [
     "${pkgs.kmod}/bin/modprobe dm_snapshot"
     "${pkgs.kmod}/bin/modprobe dm_thin_pool"
   ];
@@ -314,15 +319,22 @@ assert lib.hasInfix "condition existing" (
   builtins.head incus.systemd.services.incus-preseed.serviceConfig.ExecCondition
 );
 assert
-  incus.systemd.services.incus-containers.unitConfig.RequiresMountsFor
+  incus.systemd.services.incus-virtual-machines.unitConfig.RequiresMountsFor
   == [ "/var/lib/existing-incus-stamps" ];
 assert
-  (manifest incus "incus-containers").containers.guest.launchConfig
-  == incusInput.modules.incus.containers.guest.launchConfig;
-assert (manifest incus "incus-containers").containers.guest.managedDeviceNames == [ "uinput" ];
+  (manifest incus "incus-virtual-machines").virtualMachines.guest.launchConfig
+  == incusInput.modules.incus.virtualMachines.guest.launchConfig;
+assert
+  (manifest incus "incus-virtual-machines").virtualMachines.guest.managedDeviceNames == [ "web" ];
+assert
+  (manifest incus "incus-virtual-machines").virtualMachines.guest.disk == "/srv/images/nixos.qcow2";
+assert !(manifest incus "incus-virtual-machines" ? containers);
+assert lib.elem "kvm" incus.boot.kernelModules;
+assert lib.elem pkgs.qemu_kvm incus.systemd.services.incus.path;
+assert incus.systemd.services.incus.environment.INCUS_EDK2_PATH != "";
 assert
   !(noPreseed.systemd.services ? incus-preseed)
-  && !(lib.elem "incus-preseed.service" noPreseed.systemd.services.incus-containers.requires);
+  && !(lib.elem "incus-preseed.service" noPreseed.systemd.services.incus-virtual-machines.requires);
 assert good gateway;
 assert
   gateway.virtualisation.oci-containers.containers.traefik.ports == [
@@ -337,7 +349,7 @@ assert
     "993:993"
     "4190:4190"
   ];
-assert lib.elem "25500:25500" defaultGateway.virtualisation.oci-containers.containers.traefik.ports;
+assert lib.elem "25565:25565" defaultGateway.virtualisation.oci-containers.containers.traefik.ports;
 assert badRange (ranges ++ [ { start = 8080; } ]);
 assert badRange (ranges ++ [ { start = 80; } ]);
 assert badRange (builtins.tail ranges);

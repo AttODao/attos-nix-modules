@@ -45,6 +45,38 @@ in
       default = null;
       description = "Ordered Docker publication ranges, or null to publish individual generated listeners. Explicit ranges must cover exactly the generated listener ports, without overlaps or additional exposure.";
     };
+    nativeBackendNetwork = mkOption {
+      default = null;
+      description = "Optional dedicated local Docker bridge for gateway access to native backends. Traefik receives a fixed IPv4 address and prefers this bridge for egress. Consumer owns addresses and source/interface firewall rules; no backend ports are opened.";
+      type = types.nullOr (
+        types.submodule {
+          options = {
+            name = mkOption {
+              type = types.strMatching "[a-zA-Z0-9][a-zA-Z0-9_.-]*";
+              default = "traefik-native";
+              description = "Dedicated Docker network name.";
+            };
+            interface = mkOption {
+              type = types.strMatching "[a-zA-Z0-9_.-]{1,15}";
+              default = "br-traefik";
+              description = "Linux bridge interface used by consumer firewall rules.";
+            };
+            subnet = mkOption {
+              type = types.strMatching "([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}";
+              description = "Consumer-reserved IPv4 CIDR; Docker validates address ranges and rejects overlap.";
+            };
+            gateway = mkOption {
+              type = types.strMatching "([0-9]{1,3}\\.){3}[0-9]{1,3}";
+              description = "Host-side IPv4 gateway on this bridge.";
+            };
+            address = mkOption {
+              type = types.strMatching "([0-9]{1,3}\\.){3}[0-9]{1,3}";
+              description = "Fixed Traefik container IPv4 address in the subnet, distinct from gateway.";
+            };
+          };
+        }
+      );
+    };
     certificateDomains = mkOption {
       type = types.listOf (
         types.submodule {

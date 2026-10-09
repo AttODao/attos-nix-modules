@@ -8,11 +8,18 @@ let
     karakeep = "http://karakeep:3000";
     vaultwarden = "http://vaultwarden:80";
     opencloud = "http://opencloud:9200";
-    mineos = "http://web:3000";
     jellyfin = "http://jellyfin:8096";
     ollama = "http://open-webui:8080";
     searxng = "http://searxng:8080";
   };
+  upstream =
+    service: cfg:
+    if (cfg.backendUrl or null) != null then
+      cfg.backendUrl
+    else if cfg.deploy or true then
+      httpBackends.${service} or null
+    else
+      null;
 in
 rec {
   absolutePath = types.addCheck types.str (
@@ -40,7 +47,15 @@ rec {
     mkOption {
       type = types.attrsOf (
         types.submodule {
-          options.${service} = options;
+          options.${service} =
+            options
+            // lib.optionalAttrs (builtins.hasAttr service httpBackends) {
+              backendUrl = mkOption {
+                type = types.nullOr types.nonEmptyStr;
+                default = null;
+                description = "Explicit HTTP(S) upstream; required for deploy=false endpoints. Null uses the managed OCI DNS backend.";
+              };
+            };
         }
       );
     };
@@ -73,7 +88,23 @@ rec {
     };
   };
 
-  network = selected: if selected.standalone then "local-services" else "traefik";
+  network = selected: if selected.standalone then "local-services" else "backend-${selected.service}";
+  # Fixed OCI DNS upstreams need an overlay even when their owner is another OS.
+  backendNetworks =
+    config:
+    lib.unique (
+      map
+        (
+          route:
+          network {
+            standalone = false;
+            inherit (route) service;
+          }
+        )
+        (
+          lib.filter (route: builtins.hasAttr route.service httpBackends && route.cfg.deploy) (routes config)
+        )
+    );
   networkUnit = selected: "docker-network-${network selected}.service";
   url =
     selected: port:
@@ -123,15 +154,13 @@ rec {
           (service: cfg: {
             inherit hostname service;
             cfg = cfg // {
-              backendUrl = cfg.backendUrl or httpBackends.${service};
+              backendUrl = upstream service cfg;
             };
           })
           (
             lib.filterAttrs (
               service: cfg:
-              (cfg.enable or false)
-              && (service != "ollama" || cfg.webui)
-              && (cfg.backendUrl or (httpBackends.${service} or null)) != null
+              (cfg.enable or false) && (service != "ollama" || cfg.webui) && upstream service cfg != null
             ) services
           )
       ) (hosts config)
@@ -153,7 +182,7 @@ rec {
         && (config.modules.${service}.enable or false);
     in
     {
-      inherit standalone;
+      inherit standalone service;
       enabled = standalone || first != null;
       hostname =
         if standalone then

@@ -2,6 +2,7 @@
 """Expose only overlay readiness, never files or Swarm credentials."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import re
 import sys
 
 
@@ -9,7 +10,13 @@ class ReadinessHandler(BaseHTTPRequestHandler):
     timeout = 5
 
     def do_GET(self):
-        ready = self.path == "/traefik-network-ready" and self.server.marker.is_file()
+        name = self.path.removeprefix("/networks-ready/")
+        ready = self.server.marker.joinpath("ready").is_file() and (
+            self.path == "/networks-ready"
+            or (self.path.startswith("/networks-ready/")
+                and re.fullmatch(r"backend-[a-z0-9-]+", name) is not None
+                and self.server.marker.joinpath(name).is_file())
+        )
         body = b"ready\n" if ready else b""
         self.send_response(200 if ready else 404)
         self.send_header("Content-Type", "text/plain")

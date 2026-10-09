@@ -3,6 +3,7 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
 let
@@ -39,13 +40,7 @@ let
       };
     }
   );
-  paseo = pkgs.writeShellApplication {
-    name = "paseo";
-    runtimeInputs = [ pkgs.nodejs ];
-    text = ''
-      exec npx --yes --prefer-online @getpaseo/cli@latest "$@"
-    '';
-  };
+  paseo = attopkgs.paseo;
 in
 {
   config = lib.mkIf cfg.enable {

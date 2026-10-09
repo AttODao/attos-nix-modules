@@ -14,19 +14,24 @@ spec = importlib.util.spec_from_file_location("provision", script)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+# Even a root CLI configured for another remote/project cannot redirect operations.
+with patch.object(module.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="ok")) as cli:
+    module.incus("list", "--format=json")
+    assert cli.call_args.args[0] == ["incus", "--force-local", "--project", "default", "list", "--format=json"]
+
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
-    metadata, rootfs = root / "metadata.tar.xz", root / "rootfs.squashfs"
+    metadata, disk = root / "metadata.tar.xz", root / "disk.qcow2"
     metadata.write_bytes(b"fake metadata")
-    rootfs.write_bytes(b"fake rootfs")
+    disk.write_bytes(b"fake disk")
     definition = {
-        "alias": "consumer-image", "metadata": str(metadata), "rootfs": str(rootfs),
+        "alias": "consumer-image", "metadata": str(metadata), "disk": str(disk),
         "launchConfig": {"profiles": ["consumer"], "devices": {"proxy": {"type": "proxy", "listen": "tcp:127.0.0.1:4444", "connect": "tcp:127.0.0.1:8080"}}},
         "managedDeviceNames": ["proxy"],
     }
-    manifest = {"containers": {"kept": definition, "new": definition}}
+    manifest = {"virtualMachines": {"kept": definition, "new": definition}}
     aliases = {"consumer-image": {"name": "consumer-image", "target": "old-image", "description": "keep"}}
-    instances = {"kept": {"name": "kept", "status": "Running"}}
+    instances = {"kept": {"name": "kept", "status": "Running", "type": "virtual-machine"}}
     calls = []
     fail_import = False
 
@@ -41,6 +46,7 @@ with tempfile.TemporaryDirectory() as directory:
         if arguments[:2] == ("image", "import"):
             if fail_import:
                 raise RuntimeError("fake import failure")
+            assert arguments[2:4] == (str(metadata), str(disk)) or arguments[3].endswith("new-disk.qcow2")
             name = arguments[-1]
             aliases[name] = {"name": name, "target": "new-image"}
         elif arguments[:3] == ("image", "alias", "rename"):
@@ -50,10 +56,12 @@ with tempfile.TemporaryDirectory() as directory:
         elif arguments[:3] == ("image", "alias", "delete"):
             aliases.pop(arguments[3])
         elif arguments[0] == "query":
-            name = unquote(arguments[1].rsplit("/", 1)[1])
+            assert arguments[1].endswith("?project=default")
+            name = unquote(arguments[1].rsplit("/", 1)[1].split("?", 1)[0])
             aliases[name].update(json.loads(arguments[-1]))
         elif arguments[0] == "launch":
-            instances[arguments[2]] = {"name": arguments[2], "status": "Running"}
+            assert "--vm" in arguments
+            instances[arguments[2]] = {"name": arguments[2], "status": "Running", "type": "virtual-machine"}
             assert json.loads(input) == definition["launchConfig"]
         elif arguments[:3] == ("config", "device", "list"):
             return "proxy\nunmanaged\n"
@@ -66,7 +74,15 @@ with tempfile.TemporaryDirectory() as directory:
         return ""
 
     with patch.object(module, "incus", fake_incus):
-        assert module.condition("consumer-pool") == 1 and module.condition("missing") == 0
+        assert module.condition("consumer-pool") == 1
+        try:
+            module.condition("missing")
+        except RuntimeError as error:
+            assert "explicit storage migration" in str(error)
+        else:
+            raise AssertionError("Foreign pool allowed preseed")
+        with patch.object(module, "incus", return_value="[]"):
+            assert module.condition("missing") == 0
         stamps = root / "stamps"
         module.provision(manifest, str(stamps))
         assert aliases["consumer-image"]["target"] == "new-image" and aliases["consumer-image"]["description"] == "keep"
@@ -79,8 +95,21 @@ with tempfile.TemporaryDirectory() as directory:
         assert not any(args[0] == "launch" or args[:2] == ("image", "import") for args, _ in calls)
         # Removed declarations are not guest deletion requests.
         calls.clear()
-        module.provision({"containers": {}}, str(stamps))
+        module.provision({"virtualMachines": {}}, str(stamps))
         assert set(instances) == {"kept", "new"}
+        # All existing targets are type-checked before any import, launch or device mutation.
+        instances["kept"]["type"] = "container"
+        calls.clear()
+        try:
+            module.provision(manifest, str(root / "must-not-exist"))
+        except RuntimeError as error:
+            assert "kept" in str(error) and "expected virtual-machine" in str(error)
+        else:
+            raise AssertionError("Container was silently accepted or replaced")
+        assert [args[0] for args, _ in calls] == ["list"]
+        assert not (root / "must-not-exist").exists()
+        assert instances["kept"]["type"] == "container"
+        instances["kept"]["type"] = "virtual-machine"
         # Unexpected guest state is rejected before image/device mutation.
         instances["kept"]["status"] = "Frozen"
         calls.clear()
@@ -94,10 +123,10 @@ with tempfile.TemporaryDirectory() as directory:
         instances["kept"]["status"] = "Running"
         stamp = stamps / "image-consumer-image.source"
         old_stamp = stamp.read_bytes()
-        newer = root / "new-rootfs.squashfs"
+        newer = root / "new-disk.qcow2"
         newer.write_bytes(b"new source")
         fail_import = True
-        changed = {"containers": {"kept": {**definition, "rootfs": str(newer)}}}
+        changed = {"virtualMachines": {"kept": {**definition, "disk": str(newer)}}}
         try:
             module.provision(changed, str(stamps))
         except RuntimeError:
@@ -106,6 +135,29 @@ with tempfile.TemporaryDirectory() as directory:
             raise AssertionError("Import failure was ignored")
         assert stamp.read_bytes() == old_stamp and aliases["consumer-image"]["target"] == "new-image"
 
+    # Standard metadata/qcow2 output directory discovery; container rootfs is rejected.
+    output = root / "image-output"
+    (output / "tarball").mkdir(parents=True)
+    (output / "tarball" / "metadata.tar.xz").write_bytes(b"metadata")
+    (output / "nixos.qcow2").write_bytes(b"disk")
+    assert module.image_file(str(output), metadata=True) == output / "tarball" / "metadata.tar.xz"
+    assert module.image_file(str(output)) == output / "nixos.qcow2"
+    (output / "second.qcow2").write_bytes(b"disk")
+    rootfs = root / "rootfs.squashfs"
+    rootfs.write_bytes(b"container")
+    for invalid in (str(rootfs), str(output)):
+        try:
+            module.image_file(invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid or ambiguous disk image accepted")
+    try:
+        module.validate({"virtualMachines": {"bad": {**definition, "launchConfig": {"type": "container"}}}})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Container launch config accepted")
     # Verify the actual ExecCondition CLI error status, not a skip/success code.
     executable = root / "incus"
     executable.write_text("#!/bin/sh\nprintf 'not-json\\n'\n")

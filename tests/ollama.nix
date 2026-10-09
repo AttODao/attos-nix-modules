@@ -37,8 +37,7 @@ let
     modules.swarm = {
       role = "manager";
       advertiseAddress = "192.0.2.1";
-      networkSubnet = "10.251.0.0/24";
-      networkGateway = "10.251.0.1";
+
     };
     modules.open-terminal = {
       dataDir = "/srv/existing-terminal";
@@ -50,6 +49,7 @@ let
       enable = true;
       host = "remote";
       deploy = false;
+      backendUrl = "http://searxng.external:8080";
     };
   };
   ui = owner // {
@@ -121,6 +121,7 @@ let
       enable = true;
       host = "nixos";
       deploy = false;
+      backendUrl = "http://webui.external:8080";
     }
   ];
   duplicate = evaluate [
@@ -180,6 +181,7 @@ assert !opts.enable.default && !opts.webui.default && opts.webui.type.check true
 assert !opts.webui.type.check "true";
 assert
   builtins.attrNames opts == [
+    "backendUrl"
     "dataDir"
     "deploy"
     "enable"
@@ -253,7 +255,7 @@ assert
     OLLAMA_NUM_PARALLEL = "1";
     OLLAMA_KEEP_ALIVE = "10m";
   };
-assert defaults.services.ollama.openFirewall && !defaults.services.ollama.syncModels;
+assert !defaults.services.ollama.openFirewall && !defaults.services.ollama.syncModels;
 assert homeOnly.services.ollama.modelsDir == "/srv/other-ollama/models";
 assert nativeHome.services.ollama.modelsDir == "/srv/native-home/models";
 assert lib.all (field: backendOnly.services.ollama.${nativeField field} == customInput.${field}) (
@@ -262,7 +264,8 @@ assert lib.all (field: backendOnly.services.ollama.${nativeField field} == custo
 assert backendOnly.services.ollama.environmentVariables.OLLAMA_CONTEXT_LENGTH == "16384";
 assert backendOnly.services.ollama.environmentVariables.OLLAMA_VULKAN == "1";
 assert backendOnly.services.ollama.environmentVariables.OLLAMA_NO_CLOUD == "1";
-assert lib.elem 11435 backendOnly.networking.firewall.allowedTCPPorts;
+assert !backendOnly.services.ollama.openFirewall;
+assert !lib.elem 11435 backendOnly.networking.firewall.allowedTCPPorts;
 assert
   backendOnly.systemd.services.ollama.unitConfig.RequiresMountsFor == [
     "/srv/existing-ollama"
@@ -280,7 +283,8 @@ assert lib.all
     && lib.elem unit local.systemd.services.docker-open-webui.after
   )
   [
-    "docker-network-traefik.service"
+    "docker-network-backend-ollama.service"
+    "docker-network-backend-open-terminal.service"
     "ollama.service"
     "ollama-model-loader.service"
   ];

@@ -83,7 +83,8 @@ in
     };
 
     virtualisation.oci-containers.containers.ytdl-sub = {
-      image = lib.mkDefault "ghcr.io/jmbannon/ytdl-sub:latest";
+      # Review image/tool updates together; startup must use the packaged yt-dlp.
+      image = lib.mkDefault "ghcr.io/jmbannon/ytdl-sub:2026.08.26.post1@sha256:f96bcf1d2896da0177f9c7964407c27830571d1eb96a5886abd605140c69e278";
       pull = lib.mkDefault "always";
       environment = lib.mapAttrs (_: lib.mkDefault) {
         PUID = uid;
@@ -92,7 +93,7 @@ in
         CRON_SCHEDULE = "15 */3 * * *";
         CRON_RUN_ON_START = "false";
         CRON_SCRIPT = "/config/cron";
-        UPDATE_YT_DLP_ON_START = "stable";
+        UPDATE_YT_DLP_ON_START = "";
       };
       autoRemoveOnStop = lib.mkDefault false;
       extraOptions = [ "--restart=unless-stopped" ];

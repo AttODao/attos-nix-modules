@@ -14,7 +14,8 @@ in
       host = lib.mkDefault cfg.listenAddress;
       port = lib.mkDefault cfg.port;
       loadModels = lib.mkDefault cfg.loadModels;
-      openFirewall = lib.mkDefault (!s.standalone);
+      # Backend access belongs to the consumer's source/interface firewall policy.
+      openFirewall = lib.mkDefault false;
       syncModels = lib.mkDefault false;
       environmentVariables = lib.mapAttrs (_: lib.mkDefault) (
         {

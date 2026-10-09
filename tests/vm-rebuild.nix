@@ -10,9 +10,9 @@ let
     modules.incus = {
       rebuild.flakeFile = "/srv/server-dotfiles/flake.nix";
       stateDir = "/srv/incus-state";
-      containers.desktop = {
+      virtualMachines.desktop = {
         metadata = ./lib.nix;
-        rootfs = ./lib.nix;
+        disk = ./lib.nix;
         launchConfig = { };
       };
     };
@@ -23,7 +23,7 @@ let
     { modules.incus.enable = true; }
   ];
   noRebuild = t.cfgFor [ { modules.incus.enable = true; } ];
-  installed = c: lib.filter (p: (p.name or "") == "container-rebuild") c.environment.systemPackages;
+  installed = c: lib.filter (p: (p.name or "") == "vm-rebuild") c.environment.systemPackages;
   invalid = t.cfgFor [
     input
     {

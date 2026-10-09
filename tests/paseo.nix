@@ -63,7 +63,11 @@ assert lib.hasInfix "paseo-config.json" service.Service.ExecStartPre.text;
 assert lib.hasSuffix " daemon run --home ${lib.escapeShellArg "/srv/dev/paseo"}" (
   builtins.head service.Service.ExecStart
 );
-assert builtins.any (p: p.name == "paseo") enabled.home.packages;
+assert builtins.elem t.attopkgs.paseo enabled.home.packages;
+assert t.attopkgs.paseo.version == "0.11.1";
+assert lib.hasPrefix "${t.attopkgs.paseo}/bin/paseo " (builtins.head service.Service.ExecStart);
+assert !lib.hasInfix "npx" (builtins.head service.Service.ExecStart);
+assert !lib.hasInfix "@latest" (builtins.readFile ../modules/paseo/home.nix);
 assert !(invalid "enable" "yes").success;
 assert !(invalid "hostname" "").success;
 assert standalone.modules.paseo.hostname == "localhost";

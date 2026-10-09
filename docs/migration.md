@@ -91,12 +91,12 @@ modules.public-services."vault.example.org".vaultwarden = {
 サービスごとに次の非自明な契約も照合する（詳細は該当Wiki・実装）:
 
 - mount条件・`ConditionPathExists`・`LoadCredential` は秘密を復号せず、rotation時の再起動も保証しない。producerからconsumerへの供給・順序を別に維持する。
-- Swarmは既存cluster/networkのidentity・driver/subnet等を自動照合/更新しない。既存workerにもruntime join tokenファイルの読取が必要。managerのport 2378はreadiness用でtoken配布ではない。
+- Swarmは既存clusterを作り直さず、公開OCI用encrypted `backend-<service>` overlaysをmanagerが作成しworkerが待機する。旧共有overlayの削除は別工程。既存workerにもruntime join tokenファイルの読取が必要。managerのport 2378はreadiness用で、token配布は明示tokenTransportを有効にした場合だけ。
 - Incus preseedは指定poolが存在すると全体をskipする。欠けたprofile/networkを修復せず、`stateDir` はstamp用でguest/storageのbackupではない。`launchConfig` はstore内JSONへ入るため秘密を埋め込まない。image archiveにも秘密を同梱しない。
 - Incusは既存instanceでもimage入力を要求し、宣言したStopped instanceを起動する。import判定はsource pathベースなので同じpathの内容変更は更新にならない場合がある。instance名変更を既存guestのrename/移行と扱わない。managed deviceの変更も別に確認する。
 - Mailserverのnative保存先を上書きする場合、`dataDir` 由来のtmpfiles・mount条件も照合する。Groupwareの `dataDir` はRadicale用で、Roundcubeのdes_key・PostgreSQL・mailのstateは別。Groupwareの受信accountにはruntime bcrypt `hashedPasswordFile` が必要。
 - MailserverのRspamdは既定 `127.0.0.1:53` / `kresd@1.service` に依存する。共有 `modules.dns` はdnsmasqで、enableしてもkresdは作られない。既存Knot Resolverを保持するか、Rspamdのresolver設定と依存unitを両方整合させる。ACME供給とSMTP/IMAP/DKIM等は実機で確認する。
-- Piの手編集settings/provider/model/extensionはactivation前にbackup・引継ぎ方針を確認する。Paseoは毎起動 `~/paseo/config.json` を置換し、実行時npm `@latest` を使う。HMのbackup suffixで全可変stateが守られると思わない。
+- Piの手編集settings/provider/model/extensionはactivation前にbackup・引継ぎ方針を確認する。Paseoは毎起動 `~/paseo/config.json` を置換し、固定 `attopkgs.paseo` CLIを使う（実行時npm latest取得なし）。HMのbackup suffixで全可変stateが守られると思わない。
 - SSH clientの生成configはactivationで手編集を置換する。標準HMへ追加設定を移し、`ssh -G` でalias/FQDN・port・user・鍵policyを比較する。code-serverの旧release/font/packageとデータ/実行ユーザー、Sunshineのheadless/device/audio/pairing/streaming条件も自動継承とは限らない。
 
 SOPSの既定はactivation復号で、`sops-install-secrets.service` は `sops.useSystemdActivation = true` の場合だけ存在する。

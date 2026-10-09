@@ -69,7 +69,7 @@ let
   disabled = evaluate [
     { modules.public-services."disabled.example.test".wireguard-server.enable = false; }
     {
-      modules.incus.containers.unused.launchConfig = { };
+      modules.incus.virtualMachines.unused.launchConfig = { };
       modules.incus.preseed.storage_pools = [ ];
     }
   ];
@@ -93,9 +93,9 @@ let
     modules.incus = {
       enable = true;
       stateDir = "/srv/incus/stamps";
-      containers.guest = {
+      virtualMachines.guest = {
         metadata = "/srv/images/metadata.tar.xz";
-        rootfs = "/srv/images/rootfs.squashfs";
+        disk = "/srv/images/disk.qcow2";
         launchConfig = {
           profiles = [ "consumer" ];
           devices.root = {
@@ -142,7 +142,7 @@ let
         ]).systemd.services.incus-preseed.serviceConfig.ExecCondition
         true
     );
-  guestManifest = manifestFor guests "incus-containers";
+  guestManifest = manifestFor guests "incus-virtual-machines";
   bad = modules: lib.any (a: !a.assertion) (evaluate modules).assertions;
   missingDownload = builtins.tryEval (
     builtins.deepSeq
@@ -164,10 +164,15 @@ assert
   base.home-manager.users == { } && !base.modules.ytdl-sub.enable && !base.modules.incus.enable;
 assert base.networking.wireguard.interfaces == { } && !base.virtualisation.incus.enable;
 assert
-  !(base.systemd.services ? incus-containers) && !(base.systemd.services ? wireguard-peer-sync);
+  !(base.systemd.services ? incus-virtual-machines) && !(base.systemd.services ? wireguard-peer-sync);
 assert ytdl.home-manager.users == { } && ytdl.modules.docker.enable && !ytdl.modules.swarm.enable;
 assert lib.all (a: a.assertion) ytdl.assertions;
-assert c.image == "ghcr.io/jmbannon/ytdl-sub:latest" && c.pull == "always" && !c.autoRemoveOnStop;
+assert
+  c.image
+  == "ghcr.io/jmbannon/ytdl-sub:2026.08.26.post1@sha256:f96bcf1d2896da0177f9c7964407c27830571d1eb96a5886abd605140c69e278"
+  && c.pull == "always"
+  && !c.autoRemoveOnStop;
+assert c.environment.UPDATE_YT_DLP_ON_START == "";
 assert c.environment.PUID == "1100" && c.environment.PGID == "1101";
 assert lib.elem "/run/secrets/cookies.txt:/config/cookies.txt" c.volumes;
 assert lib.hasInfix "install" ytdl.systemd.services.ytdl-sub-config.script;
@@ -230,7 +235,7 @@ assert lib.all
 assert
   !disabled.virtualisation.incus.enable
   && !(disabled.systemd.services ? incus-preseed)
-  && !(disabled.systemd.services ? incus-containers);
+  && !(disabled.systemd.services ? incus-virtual-machines);
 assert bad [
   wireguard
   {
@@ -264,23 +269,26 @@ assert guests.systemd.services.incus-preseed.restartIfChanged == false;
 assert lib.hasInfix "condition consumer-pool" (
   builtins.head guests.systemd.services.incus-preseed.serviceConfig.ExecCondition
 );
-assert lib.elem "incus-preseed.service" guests.systemd.services.incus-containers.requires;
+assert lib.elem "incus-preseed.service" guests.systemd.services.incus-virtual-machines.requires;
 assert
-  guests.systemd.services.incus-containers.unitConfig.RequiresMountsFor == [ "/srv/incus/stamps" ];
+  guests.systemd.services.incus-virtual-machines.unitConfig.RequiresMountsFor
+  == [ "/srv/incus/stamps" ];
 assert
-  nativeIncus.virtualisation.incus.enable && !(nativeIncus.systemd.services ? incus-containers);
-assert guestManifest.containers.guest.alias == "server-dotfiles-guest";
-assert !(guests.modules.incus ? initializePool) && !(guests.modules.incus.containers.guest ? alias);
-assert guestManifest.containers.guest.metadata == "/srv/images/metadata.tar.xz";
-assert guestManifest.containers.guest.rootfs == "/srv/images/rootfs.squashfs";
+  nativeIncus.virtualisation.incus.enable && !(nativeIncus.systemd.services ? incus-virtual-machines);
+assert guestManifest.virtualMachines.guest.alias == "server-dotfiles-guest";
 assert
-  guestManifest.containers.guest.launchConfig
-  == incusModule.modules.incus.containers.guest.launchConfig;
-assert guestManifest.containers.guest.managedDeviceNames == [ ];
+  !(guests.modules.incus ? initializePool) && !(guests.modules.incus.virtualMachines.guest ? alias);
+assert guestManifest.virtualMachines.guest.metadata == "/srv/images/metadata.tar.xz";
+assert guestManifest.virtualMachines.guest.disk == "/srv/images/disk.qcow2";
+assert
+  guestManifest.virtualMachines.guest.launchConfig
+  == incusModule.modules.incus.virtualMachines.guest.launchConfig;
+assert guestManifest.virtualMachines.guest.managedDeviceNames == [ ];
 assert lib.all (a: a.assertion) nullPreseed.assertions;
 assert
   !(nativeIncus.systemd.services ? incus-preseed) && !(nullPreseed.systemd.services ? incus-preseed);
-assert !(lib.elem "incus-preseed.service" nullPreseed.systemd.services.incus-containers.requires);
+assert
+  !(lib.elem "incus-preseed.service" nullPreseed.systemd.services.incus-virtual-machines.requires);
 assert lib.all
   (
     pools:

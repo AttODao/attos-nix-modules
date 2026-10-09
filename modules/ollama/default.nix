@@ -20,6 +20,19 @@ let
   searchRoutes = lib.filter (route: route.service == "searxng") (ps.routes config);
   localSearch = ps.select config "searxng";
   searchEnabled = !s.standalone || config.modules.searxng.enable;
+  transports = [
+    s
+  ]
+  ++ lib.optional terminalEnabled {
+    standalone = s.standalone;
+    service = "open-terminal";
+  }
+  ++
+    lib.optional (searchEnabled && (s.standalone || lib.any (route: route.cfg.deploy) searchRoutes))
+      {
+        standalone = s.standalone;
+        service = "searxng";
+      };
   searxngUrl =
     if s.standalone then
       "http://127.0.0.1:8081/search"
@@ -88,17 +101,17 @@ in
       ];
       systemd.services.docker-open-webui = {
         unitConfig.RequiresMountsFor = [ root ] ++ lib.optional terminalEnabled environmentFile;
-        wants = lib.optional (!s.standalone) (ps.networkUnit s) ++ [
+        wants = lib.optionals (!s.standalone) (map ps.networkUnit transports) ++ [
           "ollama.service"
           "ollama-model-loader.service"
         ];
-        after = lib.optional (!s.standalone) (ps.networkUnit s) ++ [
+        after = lib.optionals (!s.standalone) (map ps.networkUnit transports) ++ [
           "ollama.service"
           "ollama-model-loader.service"
         ];
       };
       virtualisation.oci-containers.containers.open-webui = {
-        image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.11.4";
+        image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.11.4@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f";
         environmentFiles = lib.mkDefault (lib.optional terminalEnabled environmentFile);
         environment = lib.mapAttrs (_: lib.mkDefault) (
           {
@@ -166,7 +179,7 @@ in
         dependsOn =
           lib.optional terminalEnabled "open-terminal"
           ++ lib.optional (localSearch.enabled && (!s.standalone || searchEnabled)) "searxng";
-        networks = lib.mkDefault (lib.optional (!s.standalone) (ps.network s));
+        networks = lib.mkDefault (lib.optionals (!s.standalone) (map ps.network transports));
       };
     })
   ];

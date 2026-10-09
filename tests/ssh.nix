@@ -69,7 +69,69 @@ let
     }
   ];
   invalidHost = builtins.tryEval (t.cfgFor [ { modules.ssh.extra = "invalid"; } ]).modules.ssh.extra;
+  server = extra: t.cfgFor ([ { modules.openssh.enable = true; } ] ++ extra);
+  password = server [ { modules.openssh.passwordAuthentication = true; } ];
+  passwordNative = server [
+    {
+      modules.openssh.passwordAuthentication = true;
+      services.openssh.settings = {
+        PasswordAuthentication = true;
+        KbdInteractiveAuthentication = true;
+        PermitRootLogin = "no";
+        AllowUsers = [ "operator" ];
+      };
+    }
+  ];
+  rejected =
+    extra: lib.any (a: !a.assertion && lib.hasPrefix "openssh:" a.message) (server extra).assertions;
+  noPasswordNative = server [
+    {
+      modules.openssh.passwordAuthentication = true;
+      services.openssh.settings = {
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+      };
+    }
+  ];
+  invalidPassword =
+    builtins.tryEval
+      (server [ { modules.openssh.passwordAuthentication = "yes"; } ])
+      .modules.openssh.passwordAuthentication;
 in
+assert !base.modules.openssh.passwordAuthentication;
+assert password.services.openssh.settings.PasswordAuthentication;
+assert password.services.openssh.settings.KbdInteractiveAuthentication;
+assert lib.all (a: a.assertion) passwordNative.assertions;
+assert passwordNative.services.openssh.settings.PermitRootLogin == "no";
+assert passwordNative.services.openssh.settings.AllowUsers == [ "operator" ];
+assert lib.all (a: a.assertion) noPasswordNative.assertions;
+assert rejected [ { services.openssh.settings.PasswordAuthentication = true; } ];
+assert rejected [ { services.openssh.settings.KbdInteractiveAuthentication = true; } ];
+assert rejected [ { modules.openssh.settings.PasswordAuthentication = true; } ];
+assert rejected [
+  {
+    modules.openssh.passwordAuthentication = true;
+    services.openssh.settings.PasswordAuthentication = false;
+  }
+];
+# Native auth options require bool/null, not sshd_config string spellings.
+assert lib.all
+  (
+    value:
+    !(builtins.tryEval
+      (server [
+        {
+          modules.openssh.settings.PasswordAuthentication = value;
+        }
+      ]).services.openssh.settings.PasswordAuthentication
+    ).success
+  )
+  [
+    "no"
+    "yes"
+  ];
+assert rejected [ { services.openssh.settings.PasswordAuthentication = null; } ];
+assert !invalidPassword.success;
 assert !invalidHost.success;
 assert !disabled.programs.ssh.enable;
 assert !(disabled.programs.ssh.settings ? extra);

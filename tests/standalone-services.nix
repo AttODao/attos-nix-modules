@@ -38,12 +38,6 @@ let
       uid = 1000;
       gid = 1000;
     };
-    mineos = paths "mineos" // {
-      uid = 1000;
-      gid = 1000;
-      tcpPorts = [ 25565 ];
-      udpPorts = [ 19132 ];
-    };
     jellyfin.dataDir = "/srv/jellyfin";
     searxng.environmentFile = "/run/secrets/searxng.env";
   };
@@ -63,7 +57,6 @@ let
     karakeep = "karakeep";
     vaultwarden = "vaultwarden";
     opencloud = "opencloud";
-    mineos = "mineos-web";
     jellyfin = "jellyfin";
     searxng = "searxng";
   };
@@ -73,7 +66,6 @@ let
     karakeep = "127.0.0.1:3001:3000";
     vaultwarden = "127.0.0.1:8000:80";
     opencloud = "127.0.0.1:9200:9200";
-    mineos = "127.0.0.1:3002:3000";
     jellyfin = "127.0.0.1:8096:8096";
     searxng = "127.0.0.1:8081:8080";
   };
@@ -221,6 +213,7 @@ let
         enable = true;
         host = "nixos";
         deploy = false;
+        backendUrl = "http://vaultwarden.external:8080";
       };
     }
   ];
@@ -228,6 +221,17 @@ let
     builtins.tryEval
       (cfg [ { modules.vaultwarden.dataDir = "relative"; } ]).modules.vaultwarden.dataDir;
   badType = builtins.tryEval (cfg [ { modules.ollama.webui = "yes"; } ]).modules.ollama.webui;
+  badSignup =
+    builtins.tryEval
+      (cfg [ { modules.vaultwarden.signupsAllowed = "yes"; } ]).modules.vaultwarden.signupsAllowed;
+  signups = cfg [
+    {
+      modules.vaultwarden = inputs.vaultwarden // {
+        enable = true;
+        signupsAllowed = true;
+      };
+    }
+  ];
   badHostname =
     builtins.tryEval
       (cfg [ { modules.groupware.hostname = "unsafe'host"; } ]).modules.groupware.hostname;
@@ -250,13 +254,15 @@ assert
 assert
   local.opencloud.virtualisation.oci-containers.containers.opencloud.environment.OC_URL
   == "http://localhost:9200";
+assert !local.vaultwarden.modules.vaultwarden.signupsAllowed;
 assert
-  local.mineos.virtualisation.oci-containers.containers.mineos-web.environment.ORIGIN
-  == "http://localhost:3002";
-assert lib.elem "127.0.0.1:25565:25565/tcp"
-  local.mineos.virtualisation.oci-containers.containers.mineos-api.ports;
-assert lib.elem "127.0.0.1:19132:19132/udp"
-  local.mineos.virtualisation.oci-containers.containers.mineos-api.ports;
+  local.vaultwarden.virtualisation.oci-containers.containers.vaultwarden.environment.SIGNUPS_ALLOWED
+  == "false";
+assert
+  local.vaultwarden.virtualisation.oci-containers.containers.vaultwarden.environment.SIGNUPS_DOMAINS_WHITELIST
+  == "";
+assert lib.hasInfix "/srv/vaultwarden/vw-data/config.json"
+  local.vaultwarden.systemd.services.docker-vaultwarden.preStart;
 assert !local.jellyfin.modules.ytdl-sub.enable;
 assert
   !(lib.any (
@@ -327,5 +333,12 @@ assert valid wg && unrouted wg && wg.networking.wireguard.interfaces.wg0.listenP
 assert
   wg.modules.wireguard-server.hostname == "localhost" && !wg.modules.wireguard-server.ipv4Forwarding;
 assert !valid conflict && valid coexist && valid external;
-assert !badPath.success && !badType.success && !badHostname.success;
+assert !badPath.success && !badType.success && !badHostname.success && !badSignup.success;
+assert
+  signups.virtualisation.oci-containers.containers.vaultwarden.environment.SIGNUPS_ALLOWED == "true";
+assert
+  !(
+    signups.virtualisation.oci-containers.containers.vaultwarden.environment ? SIGNUPS_DOMAINS_WHITELIST
+  );
+assert lib.hasInfix " true" signups.systemd.services.docker-vaultwarden.preStart;
 true

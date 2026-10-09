@@ -19,7 +19,8 @@ with open(os.environ["LOG"], "a") as log:
     log.write(json.dumps([name, *args]) + "\n")
 system = os.environ["SYSTEM"]
 if name == "nix":
-    if args[0] == "eval": print("false" if os.environ.get("NOT_CONTAINER") else "true")
+    if args[0] == "eval":
+        print(json.dumps({"isContainer": bool(os.environ.get("CONTAINER_CONFIG")), "incusAgent": not bool(os.environ.get("NO_AGENT"))}))
     elif os.environ.get("FAIL_BUILD"): sys.exit(1)
     elif "--dry-run" not in args: print(system)
 elif name == "nix-store":
@@ -33,7 +34,7 @@ elif name == "incus":
     assert args[0] == "--force-local"
     if "query" in args:
         assert "--project" not in args and args[-1].endswith("?project=default")
-        print(json.dumps({"type": "container", "status": os.environ.get("STATE", "Running")}))
+        print(json.dumps({"type": os.environ.get("TYPE", "virtual-machine"), "status": os.environ.get("STATE", "Running")}))
     elif "--check-validity" in args:
         assert args[:3] == ["--force-local", "--project", "default"]
         if not os.environ.get("NO_MISSING"): print(system)
@@ -48,7 +49,7 @@ else: sys.exit(92)
 
 
 def check():
-    with tempfile.TemporaryDirectory(prefix="container-rebuild-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="vm-rebuild-") as temporary:
         root = Path(temporary)
         tools = root / "bin"
         tools.mkdir()
@@ -60,7 +61,7 @@ def check():
         flake.parent.mkdir()
         flake.write_text("{}")
         config = root / "config.json"
-        config.write_text(json.dumps({"flakeFile": str(flake), "containers": ["desktop", "development"]}))
+        config.write_text(json.dumps({"flakeFile": str(flake), "virtualMachines": ["desktop", "development"]}))
         log = root / "commands.jsonl"
 
         def invoke(action, name="desktop", flags=(), **changes):
@@ -73,8 +74,14 @@ def check():
         result, commands = invoke("build", flags=("--max-jobs", "2", "--cores", "2"))
         assert result.returncode == 0 and result.stdout.strip() == SYSTEM
         assert len(commands) == 2 and all(command[0] == "nix" for command in commands)
-        assert commands[1][-1] == str(flake.parent) + "#nixosConfigurations.desktop.config.system.build.toplevel"
+        assert commands[1][-1] == "path:" + str(flake.parent) + "#nixosConfigurations.desktop.config.system.build.toplevel"
         assert "--no-write-lock-file" in commands[1] and "--no-link" in commands[1]
+        overrides = ("--override-input", "shared", "path:/tmp/shared with spaces")
+        result, commands = invoke("build", flags=overrides)
+        assert result.returncode == 0
+        for command in commands:
+            index = command.index("--override-input")
+            assert tuple(command[index:index + 3]) == overrides
         for action in ("dry-build", "dry-run"):
             result, commands = invoke(action)
             assert result.returncode == 0 and len(commands) == 2 and "--dry-run" in commands[1]
@@ -92,8 +99,14 @@ def check():
             assert not any("/run/current-system/sw/bin/nixos-rebuild" in command for command in commands)
         result, commands = invoke("switch", STATE="Stopped")
         assert result.returncode != 0 and len(commands) == 1
-        result, commands = invoke("switch", NOT_CONTAINER="1")
-        assert result.returncode != 0 and len(commands) == 2
+        result, commands = invoke("switch", TYPE="container")
+        assert result.returncode != 0 and len(commands) == 1
+        assert "virtual-machine" in result.stderr
+        for invalid in ("CONTAINER_CONFIG", "NO_AGENT"):
+            for action in ("build", "switch"):
+                result, commands = invoke(action, **{invalid: "1"})
+                assert result.returncode != 0 and len(commands) == (2 if action == "switch" else 1)
+                assert not any(command[1] == "build" for command in commands)
         for action, name in (("switch", "attofort"), ("switch", "desktop;bad"), ("delete", "desktop")):
             result, commands = invoke(action, name)
             assert result.returncode != 0 and not commands
@@ -102,7 +115,7 @@ def check():
             result, commands = invoke(action, flags=flags)
             assert result.returncode == 0 and len(commands) == 2
             assert commands[-1][-1] == ("--rollback" if flags else "--no-reexec")
-    print("container rebuild: OK")
+    print("VM rebuild: OK")
 
 
 if __name__ == "__main__":

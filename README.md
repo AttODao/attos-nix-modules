@@ -211,7 +211,7 @@ Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactiva
 AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・scripts・template・snippet）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時は最小helperのみ。認証は配布しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{userSettings,codexAcp.npmPolicy}`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。
 `pi.{settingsMode,piSessionsSource,systemWide}`で宣言的/既存優先merge、extension source、全system userへのCLI導入を選ぶ。pi-review・pi-usage・pi-keep-goingもrevision/hash固定で同梱する。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
-`openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。
+`openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
 
 Noctaliaのsystemd launcher、Hyprlandのheadless bootstrap/input/seatd、PipeWire virtual sink、Sunshineのheadless依存は共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
 [Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。詳細の調整には標準NixOS / HM optionも使う。
@@ -261,12 +261,17 @@ modules.public-services."vault.example.org".vaultwarden = {
 };
 ```
 
-対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mineos`,
+対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `mailserver`, `groupware`, `wireguard-server`,
 `paseo`, `ssh`, `code-server`, `sunshine`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-通常は `private = false`。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
+通常は `private = false`（MCSManagerの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
+
+OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
+Vaultwardenの公開 `signupsAllowed` は既定false。毎起動、既存 `dataDir/vw-data/config.json` の登録boolをatomic更新し、false時はそれを上書きするdomain whitelistも空にする。ADMIN_TOKEN/SMTP/その他stateは保持し、壊れたconfigは起動を拒否する。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。
+
+MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
 
 ### 複数マシンへの配置
 
@@ -278,7 +283,9 @@ DNS・CNAME・gatewayは配備先によらず有効な全endpointを参照する
 `host` はSSH aliasや親ホスト名ではなく、サービスが動くOS自身のhostname。
 
 保存先・runtime secret等のlocal必須値は所有OSだけで要求する。
-backendの到達性、Docker/Swarm network、firewall、ユーザー・secretsの供給はconsumerが管理する。
+backendの到達性、Swarm role/address、firewall、ユーザー・secretsの供給はconsumerが管理する。
+`traefik.nativeBackendNetwork`（既定null）は専用のlocal Docker bridgeを作成/検証し、Traefikに固定IPとgw-priority=1で追加接続する。入力は `name`（既定traefik-native）、`interface`（既定br-traefik）、必須IPv4 `subnet/gateway/address`。既存networkのdriver/scope/interface/IPAM不一致は拒否し、prune後も起動前に再検証する。backend overlayは維持し、IP/firewall/未使用subnetはconsumerが管理する。Dockerのextended network/gw-priority対応が必要。
+公開OCI backendは共有moduleがencrypted `backend-<service>` overlayを作成/待機し、Traefikだけ必要な全backendへ参加する。OpenWebUIは自身とTerminal/SearXNGへの必要な接続だけを持つ。旧共有overlayは自動削除せず、接続container切替後に別途撤去する。
 同一host上のlocal deploymentはサービス種別ごとに1件まで。
 OCI upstreamは既存の内部DNS名・portで固定されるため、別hostの同種サービスを
 FQDNごとに分離する仕組みではない。Groupwareの暗黙Mailserver依存も同じhostを継承する。
@@ -308,10 +315,12 @@ modules.vaultwarden = {
 
 OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要）。data/credential/UID/GID等の既存必須入力はcallerが供給し、portやpackage等の追加調整は標準NixOS optionで行う。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
-サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
+サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
-Forgejo runnerの`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
+Incusの公開 `virtualMachines.<name>.{metadata,disk,launchConfig,managedDeviceNames}` は標準NixOS metadata/qcow2をimportして `--vm` で新規作成する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。既存VM更新は `vm-rebuild`、storage wipeはactivationとは別工程。
+Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.virtualMachines.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-vm-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
+Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。更新はversionとhash/digestを同時に変更してpackage buildと既存state互換性を検証する。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
 localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの
@@ -348,6 +357,8 @@ python3 modules/ytdl-sub/test-stage-config.py
 python3 modules/wireguard-server/test-wireguard-runtime.py
 python3 modules/incus/test-provision.py
 python3 modules/incus/test-rebuild.py
+python3 modules/vaultwarden/test-patch-signups.py
+node modules/mcsmanager/test-bootstrap.cjs
 python3 modules/groupware/test-radicale-users.py
 python3 modules/wireguard-client/test-import-tunnels.py
 python3 modules/atcoder-go/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可

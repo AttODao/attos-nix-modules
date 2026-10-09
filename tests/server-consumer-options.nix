@@ -22,6 +22,9 @@ let
     }
   ];
   runnerModule = {
+    boot.isContainer = lib.mkForce false;
+    boot.loader.grub.enable = false;
+    virtualisation.incus.agent.enable = true;
     modules.forgejo-actions-runner = {
       enable = true;
       dynamicUser = true;
@@ -33,6 +36,7 @@ let
       enable = true;
       host = "remote";
       deploy = false;
+      backendUrl = "http://forgejo.external:8080";
     };
   };
   runner = evaluate [ runnerModule ];
@@ -73,8 +77,7 @@ let
       modules.swarm = {
         role = "manager";
         advertiseAddress = "10.250.0.1";
-        networkSubnet = "10.251.0.0/24";
-        networkGateway = "10.251.0.1";
+
       };
       modules.public-services = {
         "vault.example.test".vaultwarden = {
@@ -82,6 +85,7 @@ let
           host = "nixos";
           dataDir = "/srv/vault";
           environmentFile = "/run/secrets/vault.env";
+          signupsAllowed = true;
           extraHosts."mail.example.test" = "10.250.0.2";
         };
         "keep.example.test".karakeep = {
@@ -153,5 +157,13 @@ assert
 assert
   apps.systemd.services.docker-ytdl-sub.unitConfig.ConditionPathExists
   == "/srv/media/config/subscriptions-youtube.yaml";
+assert
+  apps.virtualisation.oci-containers.containers.vaultwarden.environment.SIGNUPS_ALLOWED == "true";
+assert
+  !(
+    apps.virtualisation.oci-containers.containers.vaultwarden.environment ? SIGNUPS_DOMAINS_WHITELIST
+  );
+assert lib.hasInfix " true" apps.systemd.services.docker-vaultwarden.preStart;
+assert !(apps.virtualisation.oci-containers.containers.vaultwarden.environment ? ADMIN_TOKEN);
 assert lib.all (a: a.assertion) apps.assertions;
 true

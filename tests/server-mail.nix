@@ -76,6 +76,9 @@ let
     }
   ];
   runnerModule = {
+    boot.isContainer = lib.mkForce false;
+    boot.loader.grub.enable = false;
+    virtualisation.incus.agent.enable = true;
     modules.forgejo-actions-runner = {
       enable = true;
       dataDir = "/srv/runner";
@@ -85,6 +88,7 @@ let
       enable = true;
       host = "remote";
       deploy = false;
+      backendUrl = "http://forgejo.external:8080";
     };
   };
   runner = evaluate [ runnerModule ];

@@ -5,13 +5,13 @@
   nix,
   incus,
   flakeFile,
-  containers,
+  virtualMachines,
 }:
 let
-  config = writeText "container-rebuild.json" (builtins.toJSON { inherit flakeFile containers; });
+  config = writeText "vm-rebuild.json" (builtins.toJSON { inherit flakeFile virtualMachines; });
 in
 writeShellApplication {
-  name = "container-rebuild";
+  name = "vm-rebuild";
   runtimeInputs = [
     nix
     incus

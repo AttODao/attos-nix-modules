@@ -75,7 +75,8 @@ in
       };
 
       virtualisation.oci-containers.containers.opencloud = {
-        image = lib.mkDefault "opencloudeu/opencloud-rolling:latest";
+        # Update version and registry index digest together after release review.
+        image = lib.mkDefault "opencloudeu/opencloud-rolling:8.1.0@sha256:8fc64ca861739cc62095cd558814f2eba6a90acf5998d884e439b33a47875da8";
         ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:9200:9200");
         pull = lib.mkDefault "always";
         user = lib.mkDefault "${uid}:${gid}";

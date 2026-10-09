@@ -17,7 +17,7 @@
     ./jellyfin
     ./karakeep
     ./mailserver
-    ./mineos
+    ./mcsmanager
     ./ollama
     ./open-terminal
     ./opencloud

@@ -19,8 +19,6 @@ let
       swarm = {
         role = "manager";
         advertiseAddress = "10.250.0.1";
-        networkSubnet = "10.251.0.0/24";
-        networkGateway = "10.251.0.1";
       };
       traefik = {
         enable = true;
@@ -63,11 +61,13 @@ let
       enable = true;
       host = "remote";
       deploy = false;
+      backendUrl = "http://vault.external:80";
     };
     "search.example.test".searxng = {
       enable = true;
       host = "remote";
       deploy = false;
+      backendUrl = "http://search.external:8080";
       private = true;
     };
     "code.example.test".code-server = {
@@ -131,6 +131,17 @@ let
     };
   };
   protocolRegistry.modules.public-services = {
+    "mine.example.test".mcsmanager = {
+      enable = true;
+      host = "remote";
+      deploy = false;
+      private = true;
+      backendUrl = "http://10.250.0.1:23333";
+      daemonBackendUrl = "http://10.250.0.1:24444";
+      backendAddress = "10.250.0.1";
+      tcpPorts = [ 25565 ];
+      udpPorts = [ 19132 ];
+    };
     "mail.example.test".mailserver = {
       enable = true;
       host = "remote";
@@ -143,6 +154,19 @@ let
     protocolRegistry
   ];
   protocolsDynamic = builtins.fromJSON protocols.environment.etc."traefik/dynamic.yml".source.text;
+  directGames = evaluate [
+    infrastructure
+    protocolRegistry
+    {
+      modules.public-services."mine.example.test".mcsmanager = {
+        tcpPorts = lib.mkForce [ ];
+        udpPorts = lib.mkForce [ ];
+      };
+    }
+  ];
+  directGamesDynamic =
+    builtins.fromJSON
+      directGames.environment.etc."traefik/dynamic.yml".source.text;
   worker = evaluate [
     {
       modules.swarm = {
@@ -188,16 +212,12 @@ let
   ];
   invalidBackendOption =
     service:
-    builtins.tryEval (
-      builtins.deepSeq
-        (evaluate [
-          {
-            modules.public-services."fixed.example.test".${service}.backendUrl =
-              "http://elsewhere.example.test";
-          }
-        ]).modules.public-services
-        true
-    );
+    builtins.tryEval
+      (evaluate [
+        {
+          modules.public-services."fixed.example.test".${service}.backendUrl = 123;
+        }
+      ]).modules.public-services."fixed.example.test".${service}.backendUrl;
   invalidType =
     builtins.tryEval
       (evaluate [ { modules.public-services."bad.example.test".vaultwarden.enable = "yes"; } ])
@@ -232,6 +252,17 @@ assert !base.modules.docker.enable && !base.modules.swarm.enable && !base.module
 assert !(base.systemd.services ? docker-traefik) && !(base.systemd.services ? cloudflare-ddns);
 assert gateway.home-manager.users == { } && lib.all (a: a.assertion) gateway.assertions;
 assert gateway.modules.docker.enable && gateway.modules.swarm.enable;
+assert gateway.virtualisation.oci-containers.containers.traefik.networks == [ ];
+assert !(gateway.systemd.services ? docker-network-traefik);
+assert
+  !lib.any (lib.hasPrefix "docker-network-backend-") gateway.systemd.services.docker-traefik.requires;
+assert
+  static.providers == {
+    file = {
+      filename = "/etc/traefik/dynamic.yml";
+      watch = true;
+    };
+  };
 assert !gateway.modules.paseo.enable && !gateway.modules.openssh.enable;
 assert builtins.attrNames gateway.virtualisation.oci-containers.containers == [ "traefik" ];
 assert
@@ -261,7 +292,6 @@ assert lib.all (service: !(invalidBackendOption service).success) [
   "karakeep"
   "vaultwarden"
   "opencloud"
-  "mineos"
   "jellyfin"
   "ollama"
   "searxng"
@@ -301,7 +331,52 @@ assert lib.hasInfix "%d/join-token"
   worker.systemd.services.docker-swarm-join.serviceConfig.ExecStart;
 assert
   protocolsDynamic.tcp.services."mail-25".loadBalancer.servers == [ { address = "10.250.0.2:25"; } ];
-assert protocols.networking.firewall.allowedUDPPorts == [ ];
+assert lib.all (a: a.assertion) protocols.assertions;
+assert protocols.networking.firewall.allowedUDPPorts == [ 19132 ];
+assert protocols.virtualisation.oci-containers.containers.traefik.networks == [ ];
+assert protocolsDynamic.http.routers."mine.example.test".middlewares == [ "private" ];
+assert protocolsDynamic.http.routers."mine.example.test-daemon".middlewares == [ "private" ];
+assert
+  protocolsDynamic.http.routers."mine.example.test-daemon".rule
+  == "Host(`mine.example.test`) && PathPrefix(`/daemon/`)";
+assert
+  protocolsDynamic.http.routers."mine.example.test-daemon".tls
+  == protocolsDynamic.http.routers."mine.example.test".tls;
+assert builtins.attrNames protocolsDynamic.http.middlewares == [ "private" ];
+assert
+  protocolsDynamic.http.services."mine.example.test".loadBalancer.servers
+  == [ { url = "http://10.250.0.1:23333"; } ];
+assert
+  protocolsDynamic.http.services."mine.example.test-daemon".loadBalancer.servers
+  == [ { url = "http://10.250.0.1:24444"; } ];
+assert protocolsDynamic.tcp.routers.minecraft-25565.middlewares == [ ];
+assert
+  protocolsDynamic.tcp.services.minecraft-25565.loadBalancer.servers
+  == [ { address = "10.250.0.1:25565"; } ];
+assert
+  protocolsDynamic.udp.services.minecraft-bedrock-19132.loadBalancer.servers
+  == [ { address = "10.250.0.1:19132"; } ];
+assert !lib.elem 23333 protocols.networking.firewall.allowedTCPPorts;
+assert !lib.elem 24444 protocols.networking.firewall.allowedTCPPorts;
+assert directGamesDynamic.http == protocolsDynamic.http;
+assert !(directGamesDynamic.tcp.routers ? minecraft-25565);
+assert directGamesDynamic.udp.routers == { };
+assert !lib.elem 25565 directGames.networking.firewall.allowedTCPPorts;
+assert directGames.networking.firewall.allowedUDPPorts == [ ];
+assert bad [
+  infrastructure
+  protocolRegistry
+  {
+    modules.public-services."mine.example.test".mcsmanager.private = lib.mkForce false;
+  }
+];
+assert bad [
+  infrastructure
+  protocolRegistry
+  {
+    modules.public-services."mine.example.test".mcsmanager.tcpPorts = lib.mkForce [ 23333 ];
+  }
+];
 assert bad [ collision ];
 assert bad [ { modules.public-services."bad_name".vaultwarden.enable = false; } ];
 assert bad [

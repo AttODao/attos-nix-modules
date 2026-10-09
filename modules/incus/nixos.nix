@@ -9,14 +9,14 @@ let
   cfg = config.modules.incus;
   native = config.virtualisation.incus;
   ps = import ../public-services/lib.nix { inherit lib; };
-  manifest = pkgs.writeText "incus-containers.json" (
+  manifest = pkgs.writeText "incus-virtual-machines.json" (
     builtins.toJSON {
-      containers = lib.mapAttrs (name: instance: {
+      virtualMachines = lib.mapAttrs (name: instance: {
         alias = "server-dotfiles-${name}";
         inherit (instance) launchConfig managedDeviceNames;
         metadata = toString instance.metadata;
-        rootfs = toString instance.rootfs;
-      }) cfg.containers;
+        disk = toString instance.disk;
+      }) cfg.virtualMachines;
     }
   );
   runner = pkgs.writeShellApplication {
@@ -27,6 +27,7 @@ let
     ];
     text = ''exec python3 ${./provision.py} "$@"'';
   };
+  credentialVMs = lib.filterAttrs (_: vm: vm.credentialFiles != { }) cfg.virtualMachines;
   preseed = native.preseed != null;
   pools = if !preseed then [ ] else native.preseed.storage_pools or [ ];
   singlePool =
@@ -47,23 +48,32 @@ in
       {
         virtualisation.incus = {
           enable = true;
+          package = lib.mkDefault cfg.package;
           preseed = lib.mkDefault cfg.preseed;
         };
         boot.initrd.kernelModules = cfg.initrdKernelModules;
+        # QEMU/KVM and OVMF are supplied by the native Incus module, not libvirtd.
+        boot.kernelModules = [ "kvm" ];
         networking.nftables.enable = lib.mkDefault true;
         environment.systemPackages = lib.optional (cfg.rebuild.flakeFile != null) (
-          attopkgs.container-rebuild {
+          attopkgs.vm-rebuild {
             flakeFile = cfg.rebuild.flakeFile;
-            containers = builtins.attrNames cfg.containers;
+            virtualMachines = builtins.attrNames cfg.virtualMachines;
             incus = native.clientPackage;
           }
         );
         assertions = [
           {
+            assertion = lib.all (vm: vm.credentialRestartUnits == [ ] || vm.credentialFiles != { }) (
+              builtins.attrValues cfg.virtualMachines
+            );
+            message = "modules.incus: credentialRestartUnits require credentialFiles on the same VM.";
+          }
+          {
             assertion =
               cfg.rebuild.flakeFile == null
-              || (lib.hasSuffix "/flake.nix" cfg.rebuild.flakeFile && cfg.containers != { });
-            message = "modules.incus.rebuild.flakeFile must name flake.nix and requires declared containers.";
+              || (lib.hasSuffix "/flake.nix" cfg.rebuild.flakeFile && cfg.virtualMachines != { });
+            message = "modules.incus.rebuild.flakeFile must name flake.nix and requires declared virtualMachines.";
           }
           {
             assertion = !preseed || singlePool;
@@ -84,9 +94,48 @@ in
           };
         };
       })
-      (lib.mkIf (cfg.containers != { }) {
-        systemd.services.incus-containers = {
-          description = "Import explicit Incus images and create missing instances";
+      {
+        systemd.services = lib.mapAttrs' (
+          name: vm:
+          lib.nameValuePair "incus-vm-credentials-${name}" {
+            description = "Deliver runtime credentials to Incus VM ${name}";
+            wantedBy = [ "multi-user.target" ];
+            requires = [ "incus-virtual-machines.service" ];
+            after = [ "incus-virtual-machines.service" ];
+            path = [ native.clientPackage ];
+            unitConfig.RequiresMountsFor = builtins.attrValues vm.credentialFiles;
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              Restart = "on-failure";
+              RestartSec = "5s";
+              UMask = "0077";
+            };
+            script =
+              "set -eu\n"
+              + lib.concatStrings (
+                lib.mapAttrsToList (destination: source: ''
+                  incus --force-local --project default exec ${lib.escapeShellArg name} -- /bin/sh -eu -c ${lib.escapeShellArg ''
+                    PATH=/run/current-system/sw/bin:/bin
+                    [ ! -L "$1" ]
+                    mkdir -p -m 0700 -- "$1"
+                    [ "$(stat -c %u:%g:%a -- "$1")" = "0:0:700" ]
+                  ''} sh ${lib.escapeShellArg (builtins.dirOf destination)}
+                  incus --force-local --project default file push --uid 0 --gid 0 --mode 0600 \
+                    ${lib.escapeShellArg source} ${lib.escapeShellArg "${name}${destination}.new"}
+                  incus --force-local --project default exec ${lib.escapeShellArg name} -- mv -fT -- \
+                    ${lib.escapeShellArg "${destination}.new"} ${lib.escapeShellArg destination}
+                '') vm.credentialFiles
+              )
+              + lib.optionalString (vm.credentialRestartUnits != [ ]) ''
+                incus --force-local --project default exec ${lib.escapeShellArg name} -- systemctl restart ${lib.escapeShellArgs vm.credentialRestartUnits}
+              '';
+          }
+        ) credentialVMs;
+      }
+      (lib.mkIf (cfg.virtualMachines != { }) {
+        systemd.services.incus-virtual-machines = {
+          description = "Import explicit Incus qcow2 images and create missing KVM virtual machines";
           wantedBy = [ "multi-user.target" ];
           after = [
             "incus.service"

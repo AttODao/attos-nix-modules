@@ -2,6 +2,7 @@
 """Opt-in private-link token transport. Plaintext HTTP is not authenticated encryption."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import re
 import sys
 
 
@@ -14,16 +15,25 @@ class TokenHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/worker-token":
             path = self.server.token
-        elif self.path == "/traefik-network-ready":
-            path = self.server.marker
+            try:
+                body = path.read_bytes()
+            except OSError:
+                self.send_error(503)
+                return
         else:
-            self.send_error(404)
-            return
-        try:
-            body = path.read_bytes()
-        except OSError:
-            self.send_error(503)
-            return
+            name = self.path.removeprefix("/networks-ready/")
+            if self.path != "/networks-ready" and not (
+                self.path.startswith("/networks-ready/")
+                and re.fullmatch(r"backend-[a-z0-9-]+", name) is not None
+            ):
+                self.send_error(404)
+                return
+            if not self.server.marker.joinpath("ready").is_file() or (
+                self.path != "/networks-ready" and not self.server.marker.joinpath(name).is_file()
+            ):
+                self.send_error(503)
+                return
+            body = b""
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
