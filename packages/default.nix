@@ -5,6 +5,7 @@
   atcoder-aclogin = pkgs.callPackage ./atcoder-aclogin.nix { };
   atcoder-commands = args: pkgs.callPackage ./atcoder-commands.nix args;
   vm-rebuild = args: pkgs.callPackage ./vm-rebuild.nix args;
+  vm-bootstrap = args: pkgs.callPackage ./vm-bootstrap.nix args;
   mcsmanager = pkgs.callPackage ./mcsmanager.nix { };
   paseo = pkgs.callPackage ./paseo.nix { };
   code-server =

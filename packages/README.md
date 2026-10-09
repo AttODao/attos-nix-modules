@@ -3,6 +3,7 @@
 共有設定に必要なcustom derivation / overrideだけを置く。
 
 実装済み:
+- `vm-bootstrap.nix`: 宣言済みのRunning KVM VMへ、未設定のlogin passwordをTTYで設定、またはユーザーhome内へprivate runtime fileを配送するCLI。既存password/hash/fileは保持し、root/system account、container、停止VM、公開読取file、home外の配送は拒否。hostのprofile/image/storeへ秘密を入れず、service起動は明示指定時のみ行う。
 - `vm-rebuild.nix`: Incus moduleのruntime flake.nix pathと宣言済みVM名を受け取る `attopkgs.vm-rebuild` / `vm-rebuild` CLI。running VM/Incus agentを検査し、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す。local/default project限定、hostのprofileは変更しない。`vm-rebuild <action> <VM> --override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
 - `mcsmanager.nix`: 公式10.19.0のself-contained releaseをhash固定し、単一derivationで `attopkgs.mcsmanager/share/mcsmanager/{web,daemon}` へ配置。npm fetch/node_modulesは不要。PTY等をNixOSへpatchし、upstream daemon keyログを除去する。install checkはtemp-only web/daemonの認証・assets・prefixを確認し、runtime secret/bootstrapはmoduleに残す。
 - `paseo.nix`: Paseo 0.11.1のsource/lock依存hash固定。`attopkgs.paseo` はstore Nodeとnative依存を使うCLIを供給し、起動時npx/npm fetchを行わない。

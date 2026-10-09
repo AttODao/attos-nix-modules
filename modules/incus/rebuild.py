@@ -19,9 +19,17 @@ def run(command, capture=False):
     return result.stdout.strip() if capture else None
 
 
-def guest(name, command):
-    return [*INCUS, "--project", "default", "exec", name,
-            "--env=PATH=/run/current-system/sw/bin:/bin", "--mode=non-interactive", "--", *command]
+def guest(name, command, *, user=None, group=None, interactive=False):
+    identity = [] if user is None else ["--user", str(user), "--group", str(group)]
+    mode = "interactive" if interactive else "non-interactive"
+    return [*INCUS, "--project", "default", "exec", name, *identity,
+            "--env=PATH=/run/current-system/sw/bin:/bin", "--mode=" + mode, "--", *command]
+
+
+def require_running(name):
+    instance = json.loads(run([*INCUS, "query", "/1.0/instances/" + name + "?project=default"], capture=True))
+    if instance.get("type") != "virtual-machine" or instance.get("status") != "Running":
+        raise ValueError("Target must be an existing Running virtual-machine; no instance will be created, converted, deleted or started")
 
 
 def transfer(name, system):
@@ -68,9 +76,7 @@ def main():
         parser.error("--max-jobs and --cores must be nonnegative")
 
     if args.action in APPLY or args.action == "list-generations":
-        instance = json.loads(run([*INCUS, "query", "/1.0/instances/" + args.virtual_machine + "?project=default"], capture=True))
-        if instance.get("type") != "virtual-machine" or instance.get("status") != "Running":
-            raise ValueError("Target must be an existing Running virtual-machine; no instance will be created, converted, deleted or started")
+        require_running(args.virtual_machine)
         native = ["/run/current-system/sw/bin/nixos-rebuild", args.action, "--no-reexec"]
         if args.rollback or args.action == "list-generations":
             run(guest(args.virtual_machine, native + (["--rollback"] if args.rollback else [])))

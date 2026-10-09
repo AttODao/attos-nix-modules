@@ -318,7 +318,7 @@ OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
-Incusの公開 `virtualMachines.<name>.{metadata,disk,launchConfig,managedDeviceNames}` は標準NixOS metadata/qcow2をimportして `--vm` で新規作成する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。既存VM更新は `vm-rebuild`、storage wipeはactivationとは別工程。
+Incusの公開 `virtualMachines.<name>.{metadata,disk,launchConfig,managedDeviceNames}` は標準NixOS metadata/qcow2をimportして `--vm` で新規作成する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。既存VM更新は `vm-rebuild`、初期login password/private fileの再供給は `vm-bootstrap <VM> passwd <user>` / `vm-bootstrap <VM> file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.virtualMachines.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-vm-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
 Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。更新はversionとhash/digestを同時に変更してpackage buildと既存state互換性を検証する。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
 localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
@@ -356,6 +356,7 @@ python3 modules/forgejo/test-networks.py
 python3 modules/ytdl-sub/test-stage-config.py
 python3 modules/wireguard-server/test-wireguard-runtime.py
 python3 modules/incus/test-provision.py
+python3 modules/incus/test-bootstrap.py
 python3 modules/incus/test-rebuild.py
 python3 modules/vaultwarden/test-patch-signups.py
 node modules/mcsmanager/test-bootstrap.cjs

@@ -230,6 +230,8 @@ assert gateway.systemd.services.docker-traefik.environment.DOCKER_HOST == "unix:
 assert lib.hasInfix "network inspect" gateway.systemd.services.docker-traefik.preStart;
 assert lib.elem "wireguard-vpn.service" (ssh false).systemd.services.sshd.wants;
 assert lib.elem "wireguard-vpn.service" (ssh true).systemd.sockets.sshd.after;
+assert lib.any (p: lib.getName p == "vm-bootstrap") vm.environment.systemPackages;
+assert !lib.any (p: lib.getName p == "vm-bootstrap") vmOff.environment.systemPackages;
 assert !(vmOff.systemd.services ? incus-vm-credentials-worker);
 assert !(vmEmpty.systemd.services ? incus-vm-credentials-worker);
 assert delivery.requires == [ "incus-virtual-machines.service" ];

@@ -55,13 +55,20 @@ in
         # QEMU/KVM and OVMF are supplied by the native Incus module, not libvirtd.
         boot.kernelModules = [ "kvm" ];
         networking.nftables.enable = lib.mkDefault true;
-        environment.systemPackages = lib.optional (cfg.rebuild.flakeFile != null) (
-          attopkgs.vm-rebuild {
-            flakeFile = cfg.rebuild.flakeFile;
-            virtualMachines = builtins.attrNames cfg.virtualMachines;
-            incus = native.clientPackage;
-          }
-        );
+        environment.systemPackages =
+          lib.optional (cfg.rebuild.flakeFile != null) (
+            attopkgs.vm-rebuild {
+              flakeFile = cfg.rebuild.flakeFile;
+              virtualMachines = builtins.attrNames cfg.virtualMachines;
+              incus = native.clientPackage;
+            }
+          )
+          ++ lib.optional (cfg.virtualMachines != { }) (
+            attopkgs.vm-bootstrap {
+              virtualMachines = builtins.attrNames cfg.virtualMachines;
+              incus = native.clientPackage;
+            }
+          );
         assertions = [
           {
             assertion = lib.all (vm: vm.credentialRestartUnits == [ ] || vm.credentialFiles != { }) (
