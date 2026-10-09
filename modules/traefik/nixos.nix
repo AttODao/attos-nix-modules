@@ -220,7 +220,12 @@ let
     "${ports}:${ports}" + lib.optionalString (range.protocol == "udp") "/udp";
   # JSON is a YAML subset: no extra renderer or evaluation-time build is needed.
   staticFile = pkgs.writeText "traefik.yml" (builtins.toJSON static);
-  dynamicFile = pkgs.writeText "dynamic.yml" (builtins.toJSON dynamic);
+  # Traefik rejects empty configuration maps (notably UDP routers without listeners).
+  dynamicFile = pkgs.writeText "dynamic.yml" (
+    builtins.toJSON (
+      lib.filterAttrs (_: value: value != { }) (lib.filterAttrsRecursive (_: value: value != { }) dynamic)
+    )
+  );
 in
 {
   config = lib.mkIf cfg.enable {

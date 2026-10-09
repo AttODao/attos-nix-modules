@@ -360,7 +360,7 @@ assert !lib.elem 23333 protocols.networking.firewall.allowedTCPPorts;
 assert !lib.elem 24444 protocols.networking.firewall.allowedTCPPorts;
 assert directGamesDynamic.http == protocolsDynamic.http;
 assert !(directGamesDynamic.tcp.routers ? minecraft-25565);
-assert directGamesDynamic.udp.routers == { };
+assert !(directGamesDynamic ? udp);
 assert !lib.elem 25565 directGames.networking.firewall.allowedTCPPorts;
 assert directGames.networking.firewall.allowedUDPPorts == [ ];
 assert bad [
