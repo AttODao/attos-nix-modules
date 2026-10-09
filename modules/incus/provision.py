@@ -12,7 +12,9 @@ import uuid
 
 
 def incus(*arguments, input=None):
-    result = subprocess.run(["incus", "--force-local", "--project", "default", *arguments], input=input, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Raw query rejects --project; its callers specify ?project=default in the URL.
+    project = [] if arguments[0] == "query" else ["--project", "default"]
+    result = subprocess.run(["incus", "--force-local", *project, *arguments], input=input, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
         raise RuntimeError("Incus operation failed: " + " ".join(arguments[:2]))
     return result.stdout

@@ -18,6 +18,8 @@ spec.loader.exec_module(module)
 with patch.object(module.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="ok")) as cli:
     module.incus("list", "--format=json")
     assert cli.call_args.args[0] == ["incus", "--force-local", "--project", "default", "list", "--format=json"]
+    module.incus("query", "/1.0/images/aliases/consumer-image?project=default", "-X", "PUT", "-d", "{}")
+    assert cli.call_args.args[0] == ["incus", "--force-local", "query", "/1.0/images/aliases/consumer-image?project=default", "-X", "PUT", "-d", "{}"]
 
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
