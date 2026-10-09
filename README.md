@@ -207,7 +207,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 ユーザーごとに別packageを使う場合も標準HMで上書きできる。archiveのURL/hash・licenseはconsumerに残す。
 カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。GTK/icon等の公開API外のユーザー差分は標準NixOS/HM optionを使う。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
-Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。
+Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは従来どおり電源キーを無視する。
 AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・scripts・template・snippet）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時は最小helperのみ。認証は配布しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{userSettings,codexAcp.npmPolicy}`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。
 `pi.{settingsMode,piSessionsSource,systemWide}`で宣言的/既存優先merge、extension source、全system userへのCLI導入を選ぶ。pi-review・pi-usage・pi-keep-goingもrevision/hash固定で同梱する。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。

@@ -66,6 +66,16 @@ let
       modules.hyprland.settings.window_rule = [ moonlightRule ];
     }
   ];
+  headlessVM = t.cfgFor [
+    {
+      boot.isContainer = lib.mkForce false;
+      virtualisation.incus.agent.enable = true;
+      modules.hyprland = {
+        enable = true;
+        headless.enable = true;
+      };
+    }
+  ];
   headlessHM = t.hm headless "test";
   nativeLauncher = t.hmFor [
     {
@@ -285,6 +295,15 @@ assert lib.elem pkgs.neowall laptop.home.packages;
 assert desktopCfg.programs.hyprland.enable && desktopCfg.programs.hyprland.withUWSM;
 assert desktopCfg.programs.dconf.enable && desktopCfg.services.gvfs.enable;
 assert desktopCfg.services.logind.settings.Login.HandlePowerKey == "ignore";
+assert laptopCfg.services.logind.settings.Login.HandlePowerKey == "ignore";
+assert headless.services.logind.settings.Login.HandlePowerKey == "ignore";
+assert headlessVM.services.logind.settings.Login.HandlePowerKey == "poweroff";
+assert headlessVM.services.logind.settings.Login.HandlePowerKeyLongPress == "ignore";
+assert headlessVM.systemd.services.systemd-logind.reloadIfChanged;
+assert
+  headlessVM.systemd.services.systemd-logind.reloadTriggers == [
+    headlessVM.environment.etc."systemd/logind.conf".source
+  ];
 assert laptopCfg.services.logind.settings.Login.HandleLidSwitch == "ignore";
 assert desktopCfg.services.displayManager.noctalia-greeter.settings.output.name == "DP-1";
 assert !(laptopCfg.services.displayManager.noctalia-greeter.settings ? output);

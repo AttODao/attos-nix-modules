@@ -21,7 +21,8 @@ in
     };
 
     services.logind.settings.Login = {
-      HandlePowerKey = "ignore";
+      # Incus uses an ACPI power key event for graceful VM stop/restart.
+      HandlePowerKey = if config.virtualisation.incus.agent.enable then "poweroff" else "ignore";
       HandlePowerKeyLongPress = "ignore";
     }
     // lib.optionalAttrs cfg.lidSwitch.enable {
@@ -36,7 +37,10 @@ in
       enable = true;
       group = lib.mkDefault cfg.headless.seatGroup;
     };
-    systemd.services = lib.mkIf cfg.headless.enable {
+    systemd.services = {
+      systemd-logind.reloadTriggers = [ config.environment.etc."systemd/logind.conf".source ];
+    }
+    // lib.optionalAttrs cfg.headless.enable {
       seatd.environment.SEATD_VTBOUND = "0";
       container-udevd = lib.mkIf config.boot.isContainer {
         description = "Run udevd for dynamic input devices in the desktop container";
