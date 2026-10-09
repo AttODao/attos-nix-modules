@@ -26,6 +26,15 @@ let
     };
   };
   gateway = cfg [ gatewayInput ];
+  gatewayWithBackend = cfg [
+    gatewayInput
+    {
+      modules.public-services."forge.example.test".forgejo = {
+        enable = true;
+        host = "remote";
+      };
+    }
+  ];
   bridgeOff = cfg [ { modules.traefik.nativeBackendNetwork = network; } ];
   ssh =
     socket:
@@ -210,6 +219,11 @@ assert vmOff.virtualisation.incus.package.drvPath == t.pkgs.incus-lts.drvPath;
 assert !(bridgeOff.systemd.services ? docker-network-traefik-native);
 assert lib.elem "name=traefik-native,ip=172.30.99.2,gw-priority=1"
   gateway.virtualisation.oci-containers.containers.traefik.networks;
+assert
+  gatewayWithBackend.virtualisation.oci-containers.containers.traefik.networks == [
+    "name=traefik-native,ip=172.30.99.2,gw-priority=1"
+    "backend-forgejo"
+  ];
 assert lib.elem "docker-network-traefik-native.service"
   gateway.systemd.services.docker-traefik.requires;
 assert gateway.systemd.services.docker-traefik.environment.DOCKER_HOST == "unix:///run/docker.sock";

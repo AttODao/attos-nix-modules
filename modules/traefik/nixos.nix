@@ -384,8 +384,9 @@ in
           ++ map (entry: "${toString entry.port}:${toString entry.port}") tcp
           ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
       );
+      # Docker resolves the primary network locally before attaching lazy Swarm overlays.
       networks = lib.mkDefault (
-        networks ++ lib.optional (native != null) "name=${native.name},ip=${native.address},gw-priority=1"
+        lib.optional (native != null) "name=${native.name},ip=${native.address},gw-priority=1" ++ networks
       );
       environmentFiles = lib.mkDefault [ "/run/traefik-acme/cloudflare.env" ];
       volumes = lib.mkDefault [
