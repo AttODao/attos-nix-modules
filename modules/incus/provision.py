@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Create-only Incus KVM VM provisioning; never convert or delete instances."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -101,14 +102,31 @@ def ensure_image(alias, source, state_dir):
     stamp = state_dir / ("image-" + alias + ".source")
     source_key = "|".join(source)
     aliases = alias_list()
-    if alias in aliases and stamp.is_file() and stamp.read_text().strip() == source_key:
+    if (alias in aliases and aliases[alias].get("type") == "virtual-machine" and stamp.is_file()
+            and stamp.read_text().strip() == source_key + "|" + aliases[alias]["target"]):
         return
+    # Incus split-image fingerprint is SHA-256(metadata archive || qcow2 bytes).
+    digest = hashlib.sha256()
+    for path in source:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    fingerprint = digest.hexdigest()
+    images = json.loads(incus("image", "list", "--format=json"))
+    if not isinstance(images, list) or not all(isinstance(item, dict) for item in images):
+        raise ValueError("Unexpected Incus image list")
+    existing = next((item for item in images if item.get("fingerprint") == fingerprint), None)
     temporary = alias + "-attos-" + uuid.uuid4().hex[:12]
-    # Import first, then change the alias atomically. A failed import keeps the old image usable.
-    incus("image", "import", *source, "--alias", temporary)
+    # A retry after alias-update failure must not reimport an existing fingerprint.
+    if existing is not None:
+        if existing.get("type") != "virtual-machine":
+            raise ValueError("Matching Incus image must have virtual-machine type")
+        incus("image", "alias", "create", temporary, fingerprint)
+    else:
+        incus("image", "import", *source, "--alias", temporary)
     imported = alias_list().get(temporary)
-    if imported is None:
-        raise RuntimeError("Imported Incus image alias is missing")
+    if imported is None or imported["target"] != fingerprint or imported.get("type") != "virtual-machine":
+        raise RuntimeError("Imported Incus image alias does not match the declared VM image")
     if alias in aliases:
         incus("query", "/1.0/images/aliases/" + quote(alias, safe="") + "?project=default", "-X", "PUT", "-d", json.dumps({
             "target": imported["target"], "description": aliases[alias].get("description", ""),
@@ -117,7 +135,7 @@ def ensure_image(alias, source, state_dir):
     else:
         incus("image", "alias", "rename", temporary, alias)
     # ponytail: retain superseded images; add explicit GC only with a consumer-owned retention policy.
-    atomic_stamp(stamp, source_key)
+    atomic_stamp(stamp, source_key + "|" + fingerprint)
 
 
 def provision(manifest, directory):

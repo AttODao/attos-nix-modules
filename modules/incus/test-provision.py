@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import hashlib
 import importlib.util
 import json
 import os
@@ -32,10 +33,13 @@ with tempfile.TemporaryDirectory() as directory:
         "managedDeviceNames": ["proxy"],
     }
     manifest = {"virtualMachines": {"kept": definition, "new": definition}}
-    aliases = {"consumer-image": {"name": "consumer-image", "target": "old-image", "description": "keep"}}
+    fingerprint = hashlib.sha256(metadata.read_bytes() + disk.read_bytes()).hexdigest()
+    images = {"old-image": {"fingerprint": "old-image", "type": "container"}}
+    aliases = {"consumer-image": {"name": "consumer-image", "target": "old-image", "type": "container", "description": "keep"}}
     instances = {"kept": {"name": "kept", "status": "Running", "type": "virtual-machine"}}
     calls = []
     fail_import = False
+    fail_alias_update = False
 
     def fake_incus(*arguments, input=None):
         calls.append((arguments, input))
@@ -45,12 +49,22 @@ with tempfile.TemporaryDirectory() as directory:
             return json.dumps(list(instances.values()))
         if arguments[:3] == ("image", "alias", "list"):
             return json.dumps(list(aliases.values()))
+        if arguments[:2] == ("image", "list"):
+            return json.dumps(list(images.values()))
         if arguments[:2] == ("image", "import"):
             if fail_import:
                 raise RuntimeError("fake import failure")
             assert arguments[2:4] == (str(metadata), str(disk)) or arguments[3].endswith("new-disk.qcow2")
             name = arguments[-1]
-            aliases[name] = {"name": name, "target": "new-image"}
+            target = hashlib.sha256(Path(arguments[2]).read_bytes() + Path(arguments[3]).read_bytes()).hexdigest()
+            if target in images:
+                raise RuntimeError("Image with same fingerprint already exists")
+            images[target] = {"fingerprint": target, "type": "virtual-machine"}
+            aliases[name] = {"name": name, "target": target, "type": "virtual-machine"}
+        elif arguments[:3] == ("image", "alias", "create"):
+            name, target = arguments[3:5]
+            assert target in images
+            aliases[name] = {"name": name, "target": target, "type": images[target]["type"]}
         elif arguments[:3] == ("image", "alias", "rename"):
             entry = aliases.pop(arguments[3])
             entry["name"] = arguments[4]
@@ -58,9 +72,12 @@ with tempfile.TemporaryDirectory() as directory:
         elif arguments[:3] == ("image", "alias", "delete"):
             aliases.pop(arguments[3])
         elif arguments[0] == "query":
+            if fail_alias_update:
+                raise RuntimeError("fake alias update failure")
             assert arguments[1].endswith("?project=default")
             name = unquote(arguments[1].rsplit("/", 1)[1].split("?", 1)[0])
             aliases[name].update(json.loads(arguments[-1]))
+            aliases[name]["type"] = images[aliases[name]["target"]]["type"]
         elif arguments[0] == "launch":
             assert "--vm" in arguments
             instances[arguments[2]] = {"name": arguments[2], "status": "Running", "type": "virtual-machine"}
@@ -86,8 +103,20 @@ with tempfile.TemporaryDirectory() as directory:
         with patch.object(module, "incus", return_value="[]"):
             assert module.condition("missing") == 0
         stamps = root / "stamps"
+        fail_alias_update = True
+        try:
+            module.provision(manifest, str(stamps))
+        except RuntimeError as error:
+            assert "alias update failure" in str(error)
+        else:
+            raise AssertionError("Alias failure was ignored")
+        assert fingerprint in images and aliases["consumer-image"]["target"] == "old-image"
+        assert not (stamps / "image-consumer-image.source").exists()
+        calls.clear()
+        fail_alias_update = False
         module.provision(manifest, str(stamps))
-        assert aliases["consumer-image"]["target"] == "new-image" and aliases["consumer-image"]["description"] == "keep"
+        assert not any(args[:2] == ("image", "import") for args, _ in calls)
+        assert aliases["consumer-image"]["target"] == fingerprint and aliases["consumer-image"]["description"] == "keep"
         assert [args[2] for args, _ in calls if args[0] == "launch"] == ["new"]
         assert not any(args[0] in ("delete", "stop") for args, _ in calls)
         calls.clear()
@@ -135,7 +164,17 @@ with tempfile.TemporaryDirectory() as directory:
             pass
         else:
             raise AssertionError("Import failure was ignored")
-        assert stamp.read_bytes() == old_stamp and aliases["consumer-image"]["target"] == "new-image"
+        assert stamp.read_bytes() == old_stamp and aliases["consumer-image"]["target"] == fingerprint
+        # Content matches are reusable only when the stored image is actually a VM.
+        images[fingerprint]["type"] = "container"
+        calls.clear()
+        try:
+            module.ensure_image("wrong-type", (str(metadata), str(disk)), stamps)
+        except ValueError as error:
+            assert "virtual-machine" in str(error)
+        else:
+            raise AssertionError("Wrong image type accepted")
+        assert not any(args[:2] == ("image", "import") or args[:3] == ("image", "alias", "create") for args, _ in calls)
 
     # Standard metadata/qcow2 output directory discovery; container rootfs is rejected.
     output = root / "image-output"
