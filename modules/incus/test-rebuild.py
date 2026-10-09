@@ -32,6 +32,8 @@ elif name == "nix-store":
     else: sys.exit(90)
 elif name == "incus":
     assert args[0] == "--force-local"
+    if "exec" in args:
+        assert "--env=PATH=/run/current-system/sw/bin:/bin" in args
     if "query" in args:
         assert "--project" not in args and args[-1].endswith("?project=default")
         print(json.dumps({"type": os.environ.get("TYPE", "virtual-machine"), "status": os.environ.get("STATE", "Running")}))

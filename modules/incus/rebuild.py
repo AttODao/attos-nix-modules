@@ -20,7 +20,8 @@ def run(command, capture=False):
 
 
 def guest(name, command):
-    return [*INCUS, "--project", "default", "exec", name, "--mode=non-interactive", "--", *command]
+    return [*INCUS, "--project", "default", "exec", name,
+            "--env=PATH=/run/current-system/sw/bin:/bin", "--mode=non-interactive", "--", *command]
 
 
 def transfer(name, system):
