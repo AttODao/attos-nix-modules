@@ -38,7 +38,7 @@ in
       group = lib.mkDefault cfg.headless.seatGroup;
     };
     systemd.services = {
-      systemd-logind.reloadTriggers = [ config.environment.etc."systemd/logind.conf".source ];
+      systemd-logind.restartTriggers = [ config.environment.etc."systemd/logind.conf".source ];
     }
     // lib.optionalAttrs cfg.headless.enable {
       seatd.environment.SEATD_VTBOUND = "0";

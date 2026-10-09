@@ -301,7 +301,7 @@ assert headlessVM.services.logind.settings.Login.HandlePowerKey == "poweroff";
 assert headlessVM.services.logind.settings.Login.HandlePowerKeyLongPress == "ignore";
 assert headlessVM.systemd.services.systemd-logind.reloadIfChanged;
 assert
-  headlessVM.systemd.services.systemd-logind.reloadTriggers == [
+  headlessVM.systemd.services.systemd-logind.restartTriggers == [
     headlessVM.environment.etc."systemd/logind.conf".source
   ];
 assert laptopCfg.services.logind.settings.Login.HandleLidSwitch == "ignore";
