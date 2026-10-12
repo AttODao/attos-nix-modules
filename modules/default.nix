@@ -12,6 +12,7 @@
     ./forgejo
     ./forgejo-actions-runner
     ./groupware
+    ./hermes
     ./immich
     ./incus
     ./jellyfin

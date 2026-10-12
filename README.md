@@ -173,6 +173,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | foot | HM | Fonts |
 | ssh | NixOS + HM（clientのみ） | — |
 | paseo | HM | Pi |
+| hermes | NixOS | Docker、公開配置時のみSwarm |
 | public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | docker / swarm / traefik / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | Docker / Swarm等、詳細はサーバー設定 |
 | ytdl-sub / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
@@ -263,15 +264,18 @@ modules.public-services."vault.example.org".vaultwarden = {
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `mailserver`, `groupware`, `wireguard-server`,
-`paseo`, `ssh`, `code-server`, `sunshine`。
+`paseo`, `ssh`, `code-server`, `sunshine`, `hermes`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-通常は `private = false`（MCSManagerの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
+通常は `private = false`（MCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。毎起動、既存 `dataDir/vw-data/config.json` の登録boolをatomic更新し、false時はそれを上書きするdomain whitelistも空にする。ADMIN_TOKEN/SMTP/その他stateは保持し、壊れたconfigは起動を拒否する。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。
 
 MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
+
+Hermesは公式0.21.6 image（release receiptに対応するrc.4 tag/index digest固定）のdashboardとブラウザChat/TUIをOCIで隔離する。公式s6 entrypointはcontainer内rootで所有権を準備し、Agent全体を非rootへ落とす。bootstrap/supervision用capabilityだけを残し、`--user` / `--init`で公式entrypointを迂回しない。公開入力は `hermes.{dataDir,uid,gid}`（local配置時必須、UID/GIDは1–65534）、公開recordは `private = true` 必須。公開backendはencrypted `backend-hermes`、単独時だけ `127.0.0.1:9119` をpublishする。consumerが専用account・保存先を用意し、`dataDir` をcontainerの `/opt/data`（`HERMES_HOME`）へmountする。Docker socket・sudo・host homeは渡さない。
+`config.yaml` と `.env` がruntimeで存在するまでunitを起動しない。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。moduleは設定・秘密・認証・履歴を生成/置換せず、messaging gatewayも起動しない。内蔵password認証はVPN/trusted network専用。proxyの実IPまたは専用overlayの限定CIDRをtrustし、HTTPS cookieとWebSocketを適用時に確認する。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/features/web-dashboard.md)。
 
 ### 複数マシンへの配置
 
