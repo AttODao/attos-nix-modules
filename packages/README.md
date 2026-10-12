@@ -16,7 +16,7 @@
 - `pandora-launcher.nix`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
 - `pandoragh.nix`: Pandora用GitHub mod管理CLIとPython coreを同梱。
 - `open-deck-desktop.nix`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
-- `pi.nix`: Pi 1.0.2のversion override。
+- `pi.nix`: Pi 1.0.2のversion override。旧nixpkgsのinstall処理が落とすcodemode/MCP workspaceを補完し、install checkで両moduleのimportを確認する。新しいbaseの既存workspace copyは保持する。
 - `pi-mermaid-studio.nix`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
 - `context-mode.nix`: context-mode 1.0.169のPi adapter / HTML dependenciesを含むoverride。
 - `karakeep-monolith.nix`: 利用ホストの `pkgsStatic.monolith` に既存のSVG USE / archive内fragment navigation修正を適用するoverride。Karakeep containerへ静的binaryを渡す。fragment保持とarchive linkのinstall checkを含む。

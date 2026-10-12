@@ -34,6 +34,24 @@ pi-coding-agent.overrideAttrs (
       runHook postBuild
     '';
 
+    # Older nixpkgs removes these new workspace symlinks without installing them.
+    # Newer bases already copy them, so leave those real directories untouched.
+    postInstall = (previousAttrs.postInstall or "") + ''
+      for workspace in codemode mcp; do
+        target="$out/lib/node_modules/pi-monorepo/node_modules/@earendil-works/pi-$workspace"
+        if [ ! -d "$target" ]; then
+          rm -f "$target"
+          cp -r "packages/$workspace" "$target"
+        fi
+      done
+    '';
+    postInstallCheck = (previousAttrs.postInstallCheck or "") + ''
+      (
+        cd "$out/lib/node_modules/pi-monorepo"
+        node --input-type=module -e 'await import("@earendil-works/pi-codemode/declarations"); await import("@earendil-works/pi-mcp");'
+      )
+    '';
+
     meta = previousAttrs.meta // {
       changelog = "https://github.com/earendil-works/pi/blob/v${finalAttrs.version}/packages/coding-agent/CHANGELOG.md";
     };
