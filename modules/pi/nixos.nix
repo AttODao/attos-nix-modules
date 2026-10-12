@@ -8,7 +8,7 @@
   config = lib.mkIf (config.modules.pi.enable && config.modules.pi.systemWide) {
     environment.systemPackages = [
       attopkgs.pi
-      attopkgs.context-mode
-    ];
+    ]
+    ++ lib.optional config.modules.pi.plugins.context-mode.enable attopkgs.context-mode;
   };
 }

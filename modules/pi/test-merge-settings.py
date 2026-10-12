@@ -24,7 +24,12 @@ def main():
           nixpkgsConfig.allowUnfree = true;
         };
         h = t.hmFor [{
-          modules.pi = { enable = true; settingsMode = "merge"; };
+          modules.pi = {
+            enable = true;
+            settingsMode = "merge";
+            plugins.context-mode.enable = false;
+            skills.ctx-doctor.enable = false;
+          };
           home-manager.users.test.programs.pi-coding-agent = {
             configDir = "/home/test/custom-pi";
             settings = {
@@ -37,6 +42,8 @@ def main():
       in {
         dir = h.programs.pi-coding-agent.configDir;
         defaults = h.programs.pi-coding-agent.settings;
+        contextExtensionEnabled = h.home.file."/home/test/custom-pi/extensions/context-mode".enable;
+        contextSkillEnabled = h.home.file.".agents/skills/ctx-doctor".enable;
         script = h.home.activation.mergePiSettings.data;
       }
     '''
@@ -46,6 +53,7 @@ def main():
         "--arg", "homeManager", home_manager,
     ], cwd=ROOT)
     pi = json.loads(evaluated)
+    assert not pi["contextExtensionEnabled"] and not pi["contextSkillEnabled"]
     with tempfile.TemporaryDirectory(prefix="pi-settings-test-") as directory:
         sandbox = Path(directory)
         defaults = sandbox / "defaults.json"
@@ -73,7 +81,10 @@ def main():
 
         check_file()
         assert json.loads(settings.read_text()) == pi["defaults"]
+        old_context = "/nix/store/" + "a" * 32 + "-context-mode-1.0.169/lib/context-mode"
+        custom_packages = ["npm:custom-extension@1", {"source": old_context, "skills": []}]
         manual = {
+            "packages": [old_context, *custom_packages],
             "defaultProvider": "manual-provider", "defaultModel": "manual-model",
             "providers": {"example": {"model": "manual", "manual": True}},
             "sessions": {"other": True, "autoTitle": {"refreshTurns": 9}},
@@ -83,6 +94,7 @@ def main():
         assert run(dry=True).returncode == 0 and settings.read_bytes() == before
         assert run().returncode == 0
         merged = json.loads(settings.read_text())
+        assert merged["packages"] == custom_packages
         assert merged["defaultProvider"] == "manual-provider"
         assert merged["defaultModel"] == "manual-model"
         assert merged["providers"]["example"] == {"model": "manual", "manual": True, "extra": True}

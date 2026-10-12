@@ -194,7 +194,11 @@ assert lib.elem "network-online.target" socket.systemd.sockets.sshd.after;
 assert lib.elem "network-online.target" socket.systemd.sockets.sshd.wants;
 assert home.programs.pi-coding-agent.enable;
 assert !home.home.file."/home/test/custom-pi/settings.json".enable;
-assert home.home.file."/home/test/custom-pi/extensions/pi-sessions".source == source;
+assert
+  (builtins.fromJSON (
+    builtins.unsafeDiscardStringContext
+      home.home.file."/home/test/custom-pi/extensions/pi-sessions".source.text
+  )).pi.extensions == [ "${source}/extensions/pi-sessions.ts" ];
 assert home.home.sessionVariables.PI_CODING_AGENT_DIR == "/home/test/custom-pi";
 assert lib.hasInfix "/home/test/custom-pi" home.home.activation.mergePiSettings.data;
 assert lib.hasInfix "chmod 0600" home.home.activation.mergePiSettings.data;
@@ -203,7 +207,7 @@ assert home.home.activation.mergePiSettings.after == [ "writeBoundary" ];
 assert home.home.activationPackage.drvPath != "";
 assert home.programs.pi-coding-agent.settings.sessions.autoTitle.refreshTurns == 4;
 assert lib.hasInfix "context-mode-1.0.169" (
-  builtins.head home.programs.pi-coding-agent.settings.packages
+  home.home.file."/home/test/custom-pi/extensions/context-mode".source.text
 );
 assert hasPackage t.attopkgs.pi enabled;
 assert hasPackage t.attopkgs.context-mode enabled;
