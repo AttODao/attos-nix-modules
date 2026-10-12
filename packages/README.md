@@ -17,13 +17,14 @@
 - `pandoragh.nix`: Pandora用GitHub mod管理CLIとPython coreを同梱。
 - `open-deck-desktop.nix`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
 - `pi.nix`: Pi 1.0.2のversion override。
+- `pi-mermaid-studio.nix`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
 - `context-mode.nix`: context-mode 1.0.169のPi adapter / HTML dependenciesを含むoverride。
 - `karakeep-monolith.nix`: 利用ホストの `pkgsStatic.monolith` に既存のSVG USE / archive内fragment navigation修正を適用するoverride。Karakeep containerへ静的binaryを渡す。fragment保持とarchive linkのinstall checkを含む。
 
 - `custom-cursors.nix`: consumerから取得済みアーカイブを受け取り、XcursorからHyprcursorを生成するderivation。package・テーマ・メタデータは汎用名 `Custom-Cursors` を使用。
 - `centered-plymouth-theme.nix`: consumer画像を受け取り、黒背景でlogoを中央配置する汎用Plymouth script theme `centered-logo` を構築。共有側にホスト名・ブランド画像を含めない。
 
-`default.nix` に `{ pkgs }` を渡すと、利用ホストのpkgsでcallPackageした `pi`・`context-mode`・`open-deck-desktop`・`pandora-launcher`・`pandoragh`・`pipeasio`・`karakeep-monolith` のpackage setと、取得済みアーカイブを受け取る `custom-cursors` 関数を返す。flakeではこの関数を `attopkgs` として公開する。
+`default.nix` に `{ pkgs }` を渡すと、利用ホストのpkgsでcallPackageした `pi`・`pi-mermaid-studio`・`context-mode`・`open-deck-desktop`・`pandora-launcher`・`pandoragh`・`pipeasio`・`karakeep-monolith` のpackage setと、取得済みアーカイブを受け取る `custom-cursors` 関数を返す。flakeではこの関数を `attopkgs` として公開する。
 追加の `atcoder-cli`・`atcoder-oj`・`atcoder-aclogin` はpackage値、`atcoder-commands` と `code-server` はconsumer/module引数を受ける関数として同じsetに含む。
 `atcoder-commands { go = <選択package>; homeDirectory = <HMのHOME>; aclogin = <選択package>; }` と
 `code-server { src = <固定したstandalone release>; }` で使用する。
