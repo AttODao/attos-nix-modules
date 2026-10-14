@@ -36,6 +36,7 @@ let
         enable = true;
         plugins.ponytail.enable = false;
         plugins.pi-mermaid-studio.enable = false;
+        plugins.pi-mcp-adapter.enable = false;
         skills.ponytail-review.enable = false;
       };
     }
@@ -89,7 +90,9 @@ assert
     "mermaid_diagram"
   ];
 assert cfg.programs.pi-coding-agent.settings.sessions.autoTitle.refreshTurns == 4;
-assert cfg.programs.pi-coding-agent.settings.packages == [ ];
+assert cfg.programs.pi-coding-agent.settings.packages == [ "npm:pi-mcp-adapter@5.3.0" ];
+assert allOff.programs.pi-coding-agent.settings.packages == [ ];
+assert selective.programs.pi-coding-agent.settings.packages == [ ];
 assert lib.all (
   name:
   let
@@ -103,7 +106,7 @@ assert lib.all (
   && !(base.home.file ? "${dir}/extensions/${name}")
   && (pluginFor relocated name).source == file.source
   && !(pluginFor allOff name).enable
-) (builtins.attrNames resources.plugins);
+) (builtins.attrNames (lib.filterAttrs (_: plugin: plugin ? source) resources.plugins));
 assert lib.all (name: !allOff.home.file.".agents/skills/${name}".enable) (
   builtins.attrNames resources.skills
 );

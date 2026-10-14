@@ -60,6 +60,7 @@ in
       source = "${contextMode}/lib/context-mode";
       entry = "build/adapters/pi/extension.js";
     };
+    pi-mcp-adapter.package = "npm:pi-mcp-adapter@5.3.0";
     pi-sessions = {
       source = piSessions;
       entry = "extensions/pi-sessions.ts";

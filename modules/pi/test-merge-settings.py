@@ -94,13 +94,15 @@ def main():
         assert run(dry=True).returncode == 0 and settings.read_bytes() == before
         assert run().returncode == 0
         merged = json.loads(settings.read_text())
-        assert merged["packages"] == custom_packages
+        assert merged["packages"] == custom_packages + pi["defaults"]["packages"]
         assert merged["defaultProvider"] == "manual-provider"
         assert merged["defaultModel"] == "manual-model"
         assert merged["providers"]["example"] == {"model": "manual", "manual": True, "extra": True}
         assert merged["sessions"] == {"other": True, "autoTitle": {"refreshTurns": 9}}
         assert merged["defaultTools"] == pi["defaults"]["defaultTools"]
         check_file()
+        assert run().returncode == 0
+        assert json.loads(settings.read_text()) == merged
         for invalid in ["invalid JSON", "[]", "null", "42", '"string"', "", "{} {}"]:
             settings.write_text(invalid)
             assert run().returncode != 0

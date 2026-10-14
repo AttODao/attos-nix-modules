@@ -29,7 +29,8 @@ in
       ]
       ++ lib.optional cfg.plugins.context-mode.enable attopkgs.context-mode;
       settings = {
-        packages = [ ];
+        packages =
+          lib.optional cfg.plugins.pi-mcp-adapter.enable resources.plugins.pi-mcp-adapter.package;
         defaultTools = [
           "read"
           "grep"
@@ -79,7 +80,7 @@ in
         )
       );
     }
-    # Autodiscovery must not depend on writable settings.packages in merge mode.
+    # Nix-managed resource discovery must not depend on writable package settings.
     # Reference original entry points so their own runtime dependencies resolve.
     // lib.mapAttrs' (
       name: plugin:
@@ -96,7 +97,7 @@ in
           )
         );
       }
-    ) resources.plugins
+    ) (lib.filterAttrs (_: plugin: plugin ? source) resources.plugins)
     // lib.mapAttrs' (
       name: source:
       lib.nameValuePair ".agents/skills/${name}" {
