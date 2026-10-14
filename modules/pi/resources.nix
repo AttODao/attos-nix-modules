@@ -3,7 +3,6 @@
   pkgs,
   lib,
   attopkgs,
-  piSessionsSource ? null,
 }:
 let
   mattSkills = pkgs.fetchFromGitHub {
@@ -19,16 +18,12 @@ let
     hash = "sha256-FJLz/HfqBWtsJUuKs0w/OmErdyUi5/fKdNiTBpDtT1A=";
   };
   contextMode = attopkgs.context-mode;
-  piSessions =
-    if piSessionsSource != null then
-      piSessionsSource
-    else
-      pkgs.fetchFromGitHub {
-        owner = "thurstonsand";
-        repo = "pi-sessions";
-        rev = "3f7cd305414e95f9350541a5f95cd286a06e3705";
-        hash = "sha256-abHSnNpD0tOXObRfLDJPpZPapm3+kvMaVWED+jEhMO4=";
-      };
+  piSessions = pkgs.fetchFromGitHub {
+    owner = "thurstonsand";
+    repo = "pi-sessions";
+    rev = "80970d062242933272f2c8083dcc2888ab0c94fc";
+    hash = "sha256-xHr/N8PBd9igf3M2EVlHtMNbY22Qn+Lz36OerLd3oe0=";
+  };
   piReview = pkgs.fetchFromGitHub {
     owner = "bacnh85";
     repo = "pi-extensions";

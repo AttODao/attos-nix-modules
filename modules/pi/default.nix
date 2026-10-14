@@ -32,11 +32,6 @@ in
       default = "declarative";
       description = "Manage settings.json declaratively, or merge defaults into a writable user-owned 0600 file, preserving existing settings recursively. Invalid JSON fails activation without replacing the file.";
     };
-    piSessionsSource = lib.mkOption {
-      type = lib.types.nullOr lib.types.package;
-      default = null;
-      description = "Pinned pi-sessions source package retaining extensions/pi-sessions.ts; null uses the shared revision.";
-    };
     systemWide = lib.mkOption {
       type = lib.types.bool;
       default = false;

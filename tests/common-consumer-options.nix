@@ -13,13 +13,11 @@ let
   };
   inherit (t) lib pkgs;
   base = t.cfgFor [ ];
-  source = pkgs.writeTextDir "package.json" "{}";
   cursor = pkgs.writeText "cursor.zip" "";
   inputs = {
     modules = {
       pi = {
         settingsMode = "merge";
-        piSessionsSource = source;
         systemWide = true;
       };
       limine.quietBoot = false;
@@ -195,10 +193,14 @@ assert lib.elem "network-online.target" socket.systemd.sockets.sshd.wants;
 assert home.programs.pi-coding-agent.enable;
 assert !home.home.file."/home/test/custom-pi/settings.json".enable;
 assert
-  (builtins.fromJSON (
-    builtins.unsafeDiscardStringContext
-      home.home.file."/home/test/custom-pi/extensions/pi-sessions".source.text
-  )).pi.extensions == [ "${source}/extensions/pi-sessions.ts" ];
+  lib.hasSuffix "/extensions/pi-sessions.ts" (
+    builtins.head (
+      (builtins.fromJSON (
+        builtins.unsafeDiscardStringContext
+          home.home.file."/home/test/custom-pi/extensions/pi-sessions".source.text
+      )).pi.extensions
+    )
+  );
 assert home.home.sessionVariables.PI_CODING_AGENT_DIR == "/home/test/custom-pi";
 assert lib.hasInfix "/home/test/custom-pi" home.home.activation.mergePiSettings.data;
 assert lib.hasInfix "chmod 0600" home.home.activation.mergePiSettings.data;

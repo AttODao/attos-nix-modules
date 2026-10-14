@@ -12,10 +12,7 @@ let
   settings = pkgs.writeText "pi-settings.json" (
     builtins.toJSON config.programs.pi-coding-agent.settings
   );
-  resources = import ./resources.nix {
-    inherit pkgs lib attopkgs;
-    inherit (cfg) piSessionsSource;
-  };
+  resources = import ./resources.nix { inherit pkgs lib attopkgs; };
 in
 {
   config = lib.mkIf osConfig.modules.pi.enable {
