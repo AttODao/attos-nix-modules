@@ -3,6 +3,8 @@
   writeText,
   python3,
   nix,
+}:
+{
   incus,
   flakeFile,
   virtualMachines,
@@ -17,5 +19,5 @@ writeShellApplication {
     incus
     python3
   ];
-  text = ''exec python3 ${../modules/incus/rebuild.py} --config ${config} "$@"'';
+  text = ''exec python3 ${../../../../modules/incus/rebuild.py} --config ${config} "$@"'';
 }

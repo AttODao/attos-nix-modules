@@ -9,15 +9,16 @@
   libsoup_3,
   libuuid,
   libx11,
-  nerdFont,
+  nerd-fonts,
   openssl,
-  src,
   stdenv,
   stdenvNoCC,
   webkitgtk_4_1,
   woff2,
 }:
+{ src }:
 let
+  nerdFont = nerd-fonts.jetbrains-mono;
   manifest = builtins.fromJSON (builtins.readFile "${src}/package.json");
 in
 stdenvNoCC.mkDerivation {
@@ -43,8 +44,8 @@ stdenvNoCC.mkDerivation {
   ];
   CODE_SERVER_SOURCE = src;
   NERD_FONT_FILE = "${nerdFont}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono-Regular.ttf";
-  NERD_FONT_CSS = ./code-server/nerd-font.css;
-  installPhase = builtins.readFile ./code-server/install.sh;
+  NERD_FONT_CSS = ./nerd-font.css;
+  installPhase = builtins.readFile ./install.sh;
   doInstallCheck = true;
   installCheckPhase = ''
     test -x "$out/bin/code-server"

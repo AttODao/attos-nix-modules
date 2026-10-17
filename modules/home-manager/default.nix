@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   attopkgs,
   ...
 }:
@@ -23,8 +22,6 @@ in
   };
 
   config = {
-    _module.args.attopkgs = import ../../packages { inherit pkgs; };
-
     assertions = [
       {
         assertion = builtins.length users == builtins.length (lib.unique users);

@@ -10,7 +10,17 @@ let
     config = nixpkgsConfig;
   };
   inherit (pkgs) lib;
-  exports = (import ../flake.nix).outputs { home-manager = homeManager; };
+  # flake外の評価でも、未指定inputはflake.lockの固定revisionを使う。
+  lock = builtins.fromJSON (builtins.readFile ../flake.lock);
+  locked = name: builtins.fetchTree lock.nodes.${lock.nodes.root.inputs.${name}}.locked;
+  exports = (import ../flake.nix).outputs {
+    nixpkgs = {
+      outPath = toString nixpkgs;
+      inherit lib;
+    };
+    home-manager = homeManager;
+    claude-code-nix = locked "claude-code-nix";
+  };
 
   usersModule = users: {
     modules.home-manager.users = users;

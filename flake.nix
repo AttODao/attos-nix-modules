@@ -1,23 +1,48 @@
 {
   description = "Shared NixOS configuration with integrated Home Manager for AttODao";
 
-  inputs.home-manager = {
-    url = "github:nix-community/home-manager/acd21c5a3420a9d5fd0ed06299b10828267ef9ba";
-    flake = false;
+  inputs = {
+    # packages出力専用。moduleのattopkgsは利用ホストのpkgsで構築する。
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager = {
+      url = "github:nix-community/home-manager/acd21c5a3420a9d5fd0ed06299b10828267ef9ba";
+      flake = false;
+    };
+    claude-code-nix = {
+      url = "github:sadjow/claude-code-nix";
+      flake = false;
+    };
   };
 
   outputs =
-    { home-manager, ... }:
+    inputs@{ nixpkgs, home-manager, ... }:
     let
-      default = {
-        imports = [
-          "${home-manager}/nixos"
-          ./modules
-        ];
-      };
+      inherit (nixpkgs) lib;
+      attopkgsFor = pkgs: import ./packages { inherit pkgs inputs; };
+      default =
+        { pkgs, ... }:
+        {
+          imports = [
+            "${home-manager}/nixos"
+            ./modules
+          ];
+          _module.args.attopkgs = attopkgsFor pkgs;
+        };
+      legacyPackages = lib.genAttrs [ "x86_64-linux" ] (
+        system:
+        attopkgsFor (
+          import nixpkgs {
+            inherit system;
+            config.allowUnfree = true;
+          }
+        )
+      );
     in
     {
-      attopkgs = import ./packages;
+      attopkgs = { pkgs }: attopkgsFor pkgs;
+      overlays.default = final: _prev: { attopkgs = attopkgsFor final; };
+      inherit legacyPackages;
+      packages = lib.mapAttrs (_: lib.filterAttrs (_: lib.isDerivation)) legacyPackages;
       nixosModules.default = default;
       nixos.default = default;
     };

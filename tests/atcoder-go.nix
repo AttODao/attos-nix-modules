@@ -16,7 +16,7 @@ let
     atcoder-aclogin = dummy "aclogin";
     atcoder-commands =
       args:
-      pkgs.callPackage ../packages/atcoder-commands.nix (
+      pkgs.callPackage ../packages/by-name/at/atcoder-commands/package.nix { } (
         args // { aclogin = args.aclogin or atcoder-aclogin; }
       );
   };

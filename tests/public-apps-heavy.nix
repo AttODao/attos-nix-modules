@@ -400,5 +400,5 @@ assert !(invalid "relative/path").success && !(invalid /tmp).success;
 assert !missingData.success;
 assert dependencyRejected "docker" && dependencyRejected "swarm";
 assert monolith.doInstallCheck && monolith.version == t.pkgs.pkgsStatic.monolith.version;
-assert lib.elem ../packages/karakeep-monolith.patch monolith.patches;
+assert lib.elem ../packages/by-name/ka/karakeep-monolith/karakeep-monolith.patch monolith.patches;
 true

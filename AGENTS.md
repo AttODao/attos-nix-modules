@@ -72,12 +72,13 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 
 1. `modules/default.nix`の静的`imports`へ`./<name>`を追加する。
 2. 通常のpackageは利用ホストの`pkgs`を使う。
-3. custom derivation / overrideが必要な場合だけ`packages/<name>.nix`を作り、`packages/default.nix`へ登録する。
-4. custom packageはmodule引数`attopkgs`から使う。機能module内で直接`callPackage`しない。供給は既存の`modules/home-manager/default.nix`に任せる。
-5. 取得物はversion・hashを固定する。consumer固有のアーカイブURL・hashなどは利用側に残す。
+3. custom derivation / overrideが必要な場合だけ、nixpkgsと同じ`packages/by-name/<先頭2文字>/<name>/package.nix`を作る。登録は自動で、`packages/default.nix`の編集は不要。consumer入力が必要なbuilderは`{ deps }: { args }: ...`のcurried形にし、nixpkgsの同名packageを上書きする場合は`pkgs.<name>`を参照する。
+4. root直下に`package.nix`を持つ外部repoは、`flake.nix`へ`flake = false`のinputを追加し、`packages/default.nix`の外部input表へ1行追加する。
+5. custom packageはmodule引数`attopkgs`から使う。機能module内で直接`callPackage`しない。供給は`flake.nix`の`nixosModules.default`に任せる。
+6. 取得物はversion・hash、またはflake.lockで固定する。consumer固有のアーカイブURL・hashなどは利用側に残す。
 
 通常の機能追加で`flake.nix`へ個別module exportや別のHM読み込みを追加する必要はない。
-Home Manager revision更新や利用側nixpkgs更新を機能追加に混ぜない。
+Home Manager revision・共有nixpkgs・利用側nixpkgsの更新を機能追加に混ぜない。
 
 ## 5. 評価テストを追加する
 

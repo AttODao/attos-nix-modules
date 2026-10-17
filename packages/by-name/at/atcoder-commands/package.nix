@@ -4,6 +4,9 @@
   writeShellApplication,
   coreutils,
   gnugrep,
+}:
+# 呼出し側がtoolchainとHOMEを選ぶbuilder。
+{
   go,
   homeDirectory,
   aclogin ? null,

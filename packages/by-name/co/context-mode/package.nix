@@ -1,5 +1,5 @@
 {
-  context-mode,
+  pkgs,
   fetchurl,
   fetchzip,
   linkFarm,
@@ -31,7 +31,8 @@ let
   ];
 in
 # Remove the override once nixpkgs ships this version and its Pi adapter/dependencies.
-context-mode.overrideAttrs (
+# scope内の同名attrでなく、利用ホストのbase packageを上書きする。
+pkgs.context-mode.overrideAttrs (
   finalAttrs: previousAttrs: {
     version = "1.0.169";
     # Pi loads skills from the package manifest; generic discovery finds duplicate copies.

@@ -1,5 +1,5 @@
+{ pkgs }:
 {
-  pkgs,
   incus,
   virtualMachines,
 }:
@@ -10,8 +10,8 @@ pkgs.writeShellApplication {
   name = "vm-bootstrap";
   runtimeInputs = [ incus ];
   text = ''
-    export PYTHONPATH=${pkgs.writeTextDir "rebuild.py" (builtins.readFile ../modules/incus/rebuild.py)}
+    export PYTHONPATH=${pkgs.writeTextDir "rebuild.py" (builtins.readFile ../../../../modules/incus/rebuild.py)}
     export PYTHONDONTWRITEBYTECODE=1
-    exec ${pkgs.python3}/bin/python3 ${../modules/incus/bootstrap.py} --config ${config} "$@"
+    exec ${pkgs.python3}/bin/python3 ${../../../../modules/incus/bootstrap.py} --config ${config} "$@"
   '';
 }

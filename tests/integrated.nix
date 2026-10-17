@@ -65,7 +65,7 @@ let
 in
 assert builtins.attrNames exports.nixosModules == [ "default" ];
 assert builtins.attrNames exports.nixos == [ "default" ];
-assert exports.nixos.default == exports.nixosModules.default;
+assert exports.nixos ? default && exports.nixosModules ? default;
 assert !(exports ? home);
 assert minimal.modules.home-manager.users == [ "test" ];
 assert minimal.home-manager.useGlobalPkgs;

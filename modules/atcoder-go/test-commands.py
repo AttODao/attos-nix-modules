@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-package = Path(__file__).resolve().parents[2] / "packages/atcoder-commands.nix"
+package = Path(__file__).resolve().parents[2] / "packages/by-name/at/atcoder-commands/package.nix"
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     home = root / "home with '$dollar"
@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory() as tmp:
           if [ "$1" = "version" ]; then echo 'go version go1.25'; fi
         '';
         aclogin = pkgs.writeShellScriptBin "aclogin" ''printf '%s\n' "$*"'';
-      in pkgs.callPackage (builtins.toPath PACKAGE) {
+      in pkgs.callPackage (builtins.toPath PACKAGE) { } {
         inherit go aclogin;
         homeDirectory = HOME_DIRECTORY;
       }

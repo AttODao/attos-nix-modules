@@ -40,7 +40,9 @@ remoteのHEADに依存しないよう、URLの `?ref=main` は省略しない。
 更新は利用側で `nix flake update shared` を明示的に実行し、lock差分を確認する（URLにrevを指定した場合はその値も変更）。
 通常評価では `--no-write-lock-file` を使い、nixpkgs更新を同時に混ぜない。
 
-共有flakeはnixpkgsを持たず、通常package・HMともホストの `pkgs` を使う。
+moduleは通常package・HM・`attopkgs`ともホストの `pkgs` で構築する。
+共有flakeが固定するnixpkgsは `packages` / `legacyPackages` 出力（`nix shell attos-nix-modules#claude-code` 等）専用。
+利用側で重複を避ける場合は `shared.inputs.nixpkgs.follows = "nixpkgs";` を指定できる。
 利用側のnixpkgs pin・overlay・unfree許可を維持する。unfreeが必要ならホストの
 `nixpkgs.config.allowUnfreePredicate` 等で許可し、全許可を導入の必須条件にしない。
 HMは共有flakeがrevision固定したraw source（`flake = false`）から読み込む。
@@ -139,6 +141,8 @@ modules/
     nixos.nix               必要な場合のみ
     <assets>                付随するscript・desktop entry・palette等
 packages/
+  default.nix               by-nameの自動登録と外部source input
+  by-name/<2文字>/<name>/package.nix  nixpkgsと同じshard構成
 tests/
 docs/
 ```
@@ -371,7 +375,7 @@ python3 modules/groupware/test-radicale-users.py
 python3 modules/wireguard-client/test-import-tunnels.py
 python3 modules/atcoder-go/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可
 python3 modules/atcoder-go/test-project.py # bundled scaffold、mock Goのみ
-python3 packages/code-server/test-install.py
+python3 packages/by-name/co/code-server/test-install.py
 python3 tests/test-review-regressions.py /path/to/nixpkgs /path/to/home-manager # activation dry-runと隔離prepare mocks
 ```
 

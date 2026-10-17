@@ -1,4 +1,5 @@
-{ pkgs, cursor }:
+{ pkgs }:
+{ cursor }:
 let
   cursorTheme = "Custom-Cursors";
 in

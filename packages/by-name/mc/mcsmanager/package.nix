@@ -58,7 +58,7 @@ stdenvNoCC.mkDerivation rec {
       echo "Unsafe daemon secret logging remains" >&2
       exit 1
     fi
-    node ${../modules/mcsmanager/test-smoke.cjs} "$out/share/mcsmanager" ${../modules/mcsmanager/bootstrap.cjs}
+    node ${../../../../modules/mcsmanager/test-smoke.cjs} "$out/share/mcsmanager" ${../../../../modules/mcsmanager/bootstrap.cjs}
   '';
   meta = {
     description = "MCSManager native web panel and daemon";
