@@ -29,7 +29,7 @@ modules = [
 ```
 
 利用側ルートの `common.nix` に共通の機能選択・ユーザー差分、`node-a.nix` 等に
-ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストから従来どおりimportする。
+ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストからimportする。
 機能別import、独自resolver、利用側のHM module import・standalone HM出力は不要。
 
 remoteのHEADに依存しないよう、URLの `?ref=main` は省略しない。
@@ -75,9 +75,9 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 - HMのsourceはこのflakeでrevision固定。現在は `acd21c5a3420a9d5fd0ed06299b10828267ef9ba`。
 - HMも利用ホストの `pkgs` を使用し、packageはNixOSユーザー環境へ導入する。
 - ユーザー名・ホームディレクトリはNixOSのユーザー定義から導出する。
-- HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは従来の値を上書き指定し、HM更新に連動して変更しない。
+- HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。
 - `attopkgs` は共有側で利用ホストの `pkgs` から構築し、NixOS / HMへ渡す。
-- 機能選択はNixOS側の `modules.*` に一本化。以前の `home.*` exportとstandalone HM経路は提供しない。
+- 機能選択はNixOS側の `modules.*` に一本化し、`home.*` exportとstandalone HM経路は提供しない。
 
 ユーザー一覧に複数名を指定すると、固定メールアカウント・デバイス設定なども含め、
 有効な機能の共通設定が全HMユーザーへ配布される。credential、secretの配置・権限は共有しない。
@@ -160,7 +160,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 `modules.public-services.<FQDN>.<service>` に指定する。
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
-- `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。旧`monitors`は廃止し、`settings.monitor`へ移す（従来値を保持する場合は各monitorに`scale = 1`を明示）。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
+- `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
 - `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
 - `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`、`convertToX.enable` は既定false。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
@@ -179,10 +179,10 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 archiveのURL/hash・licenseはconsumerに残す。
 カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
-Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは従来どおり電源キーを無視する。
+Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
 AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・scripts・template・snippet）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時は最小helperのみ。認証は配布しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{userSettings,codexAcp.npmPolicy}`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。
-`pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable` / `pi.skills.<name>.enable`（各既定true）で同梱resourceを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterは`npm:pi-mcp-adapter@5.3.0`に固定し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は旧共有context-mode 1.0.169のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
+`pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable` / `pi.skills.<name>.enable`（各既定true）で同梱resourceを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterは`npm:pi-mcp-adapter@5.3.0`に固定し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
 `claude-code.skills.<name>.enable` / `claude-code.contextMode.enable`（各既定true）で、Pi catalogのうちClaude Codeで動くskillとcontext-mode MCP serverを選ぶ。pi-mermaid-studio（Pi tool依存）・ctx-upgrade（Nix管理installの書換え）・find-skills（npxでNix管理外へ追加）は含めない。`claude-code.lsp.{nixd,rust-analyzer,gopls}.enable`（各既定false）でホストpkgsのlanguage serverをClaude CodeのLSPへ登録する。packageは`attopkgs.claude-code`（sadjow/claude-code-nixをrevision/hash固定）。claude-code/context-modeのunfree許可は利用側、settings.json・認証・履歴は管理しない。
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
 
@@ -261,7 +261,7 @@ DNS・CNAME・gatewayは配備先によらず有効な全endpointを参照する
 保存先・runtime secret等のlocal必須値は所有OSだけで要求する。
 backendの到達性、Swarm role/address、firewall、ユーザー・secretsの供給はconsumerが管理する。
 `traefik.nativeBackendNetwork`（既定null）は専用のlocal Docker bridgeを作成/検証し、Traefikに固定IPとgw-priority=1で追加接続する。入力は `name`（既定traefik-native）、`interface`（既定br-traefik）、必須IPv4 `subnet/gateway/address`。既存networkのdriver/scope/interface/IPAM不一致は拒否し、prune後も起動前に再検証する。backend overlayは維持し、IP/firewall/未使用subnetはconsumerが管理する。Dockerのextended network/gw-priority対応が必要。
-公開OCI backendは共有moduleがencrypted `backend-<service>` overlayを作成/待機し、Traefikだけ必要な全backendへ参加する。OpenWebUIは自身とTerminal/SearXNGへの必要な接続だけを持つ。旧共有overlayは自動削除せず、接続container切替後に別途撤去する。
+公開OCI backendは共有moduleがencrypted `backend-<service>` overlayを作成/待機し、Traefikだけ必要な全backendへ参加する。OpenWebUIは自身とTerminal/SearXNGへの必要な接続だけを持つ。宣言から外れたoverlayは自動削除しないため、接続containerを切り替えてから別途撤去する。
 同一host上のlocal deploymentはサービス種別ごとに1件まで。
 OCI upstreamは既存の内部DNS名・portで固定されるため、別hostの同種サービスを
 FQDNごとに分離する仕組みではない。Groupwareの暗黙Mailserver依存も同じhostを継承する。
@@ -270,11 +270,11 @@ code-server / Sunshineも `enable = true; host = "<所有OS>";` でnative実体�
 単独利用は同じtyped入力を`modules.code-server` / `modules.sunshine`へ指定する。
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
 `HASHED_PASSWORD`）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
-旧Nerd Font組み込みpackageは `attopkgs.code-server { src = <固定したstandalone release>; }`
-へ公開 `code-server.packageSource` でstandalone releaseを渡せる。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
+Nerd Font組み込みpackage（`attopkgs.code-server { src = <固定したstandalone release>; }`）は、
+公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
 SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。headless待機とnative autoStartが有効なら、output再作成後にSunshineも起動する。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
-OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。旧公開`open-webui`record・実装directoryは廃止し、保存先・モデル・unit名は保持する。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
+OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。WebUIは独立したrecordを持たず、container/unit名は`open-webui`を使う。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
 
 ### localhost単独利用
 
@@ -289,7 +289,7 @@ modules.vaultwarden = {
 };
 ```
 
-OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要。Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
+OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要。Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
@@ -304,7 +304,7 @@ localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[W
 機器固有の音声設定、Steamのfirewall policy、Wallpaper Engine assets、unfree licenseの許可は利用側で管理する。
 公開APIがある機能はそのoptionで選択し、package導入だけのアプリ、標準OBS設定、外部AAGLは利用側に残す。
 `modules.openssh.enable` はserver有効化、`modules.ssh.enable` はclient設定で別の選択。
-login-pinは従来どおりattodaoのgreetd / TTYに限定する。
+login-pinはattodaoのgreetd / TTYに限定する。
 Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron sandboxは無効。
 
 ## 検証

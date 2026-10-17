@@ -11,19 +11,20 @@
 - `vm-rebuild`: Incus moduleのruntime flake.nix pathと宣言済みVM名を受け取る `attopkgs.vm-rebuild` / `vm-rebuild` CLI。running VM/Incus agentを検査し、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す。local/default project限定、hostのprofileは変更しない。`vm-rebuild <action> <VM> --override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
 - `mcsmanager`: 公式10.19.0のself-contained releaseをhash固定し、単一derivationで `attopkgs.mcsmanager/share/mcsmanager/{web,daemon}` へ配置。npm fetch/node_modulesは不要。PTY等をNixOSへpatchし、upstream daemon keyログを除去する。install checkはtemp-only web/daemonの認証・assets・prefixを確認し、runtime secret/bootstrapはmoduleに残す。
 - `paseo`: Paseo 0.11.1のsource/lock依存hash固定。`attopkgs.paseo` はstore Nodeとnative依存を使うCLIを供給し、起動時npx/npm fetchを行わない。
-- `atcoder-cli`: atcoder-cli 2.2.0。旧consumerのsource hash / npmDepsHashを維持。
+- `atcoder-cli`: atcoder-cli 2.2.0。source hash / npmDepsHash固定。
 - `atcoder-oj`: ホストのonline-judge-tools/API clientへAtCoderのMiB表記対応patchを適用。
-- `atcoder-aclogin`: aclogin 0.2.1、旧revision/hashを維持。cookieを配布・宣言的管理しない。
+- `atcoder-aclogin`: aclogin 0.2.1、revision/hash固定。cookieを配布・宣言的管理しない。
+  `atcoder-cli` と共に定義はproject scaffoldと共有する `modules/atcoder-go/assets/atcoder/nix/` にあり、by-name側はimportするだけ。
 - `atcoder-commands`: 選択したGoとHMユーザーのHOMEを受け取る共通command package。initは既存go.mod/.envrcを保持し、syncは記録済み依存をdownloadするだけ。project固有assetsや未固定libraryの追加・更新は行わない。
 - `code-server`: consumerが固定したx86_64 standalone releaseを包装し、JetBrainsMono Nerd Fontのwoff2/CSSをworkbenchへ組み込む。upstream HTML layoutの変更はreplace-failで検出する。通常は公開 `code-server.packageSource` で選択し、moduleが標準 `services.code-server.package` へ既定値として渡す。
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
 - `pandoragh`: Pandora用GitHub mod管理CLIとPython coreを同梱。
 - `open-deck-desktop`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
-- `pi`: Pi 1.0.2のversion override。旧nixpkgsのinstall処理が落とすcodemode/MCP workspaceを補完し、install checkで両moduleのimportを確認する。新しいbaseの既存workspace copyは保持する。
+- `pi`: Pi 1.0.2のversion override。base nixpkgsのinstall処理がcodemode/MCP workspaceを落とす場合だけ補完し、copy済みのworkspaceは保持する。install checkで両moduleのimportを確認する。固定nixpkgsがPi 1.0.2以上を提供したらoverrideを削除する。
 - `pi-mermaid-studio`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
 - `context-mode`: context-mode 1.0.169のPi adapter / HTML dependenciesを含むoverride。
-- `karakeep-monolith`: 利用ホストの `pkgsStatic.monolith` に既存のSVG USE / archive内fragment navigation修正を適用するoverride。Karakeep containerへ静的binaryを渡す。fragment保持とarchive linkのinstall checkを含む。
+- `karakeep-monolith`: 利用ホストの `pkgsStatic.monolith` にSVG USE / archive内fragment navigation修正patchを適用するoverride。Karakeep containerへ静的binaryを渡す。fragment保持とarchive linkのinstall checkを含む。
 - `custom-cursors`: consumerから取得済みアーカイブを受け取り、XcursorからHyprcursorを生成するderivation。package・テーマ・メタデータは汎用名 `Custom-Cursors` を使用。
 - `centered-plymouth-theme`: consumer画像を受け取り、黒背景でlogoを中央配置する汎用Plymouth script theme `centered-logo` を構築。共有側にホスト名・ブランド画像を含めない。
 
