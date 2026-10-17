@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -29,16 +30,15 @@ in
       }
     ];
 
-    systemd.tmpfiles.rules = [
-      "d ${builtins.toJSON dataDir} 0700 root root -"
-      "d ${builtins.toJSON workspaceDir} 0700 ${toString uid} ${toString gid} -"
-    ];
-    # Reapply the tmpfiles rules once dataDir is mounted (it may be mounted after boot-time tmpfiles).
+    # Not tmpfiles: it refuses a root-owned dataDir below a user-owned home (unsafe path transition).
     systemd.services.open-terminal-prepare = {
       unitConfig.RequiresMountsFor = [ dataDir ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${config.systemd.package}/bin/systemd-tmpfiles --create ${lib.escapeShellArg "--prefix=${dataDir}"}";
+        ExecStart = [
+          "${pkgs.coreutils}/bin/install -d -m 0700 -o root -g root ${lib.escapeShellArg dataDir}"
+          "${pkgs.coreutils}/bin/install -d -m 0700 -o ${toString uid} -g ${toString gid} ${lib.escapeShellArg workspaceDir}"
+        ];
       };
     };
 
