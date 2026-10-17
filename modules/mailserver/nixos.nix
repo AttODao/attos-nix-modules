@@ -131,6 +131,9 @@ in
             defaults.email = lib.mkIf (cfg.acme.email != null) (lib.mkDefault cfg.acme.email);
             certs.${acmeHost} = {
               dnsProvider = lib.mkDefault cfg.acme.dnsProvider;
+              # Check propagation against a public resolver: the host resolver can cache the
+              # challenge NXDOMAIN longer than lego waits (same choice as Traefik DNS-01).
+              dnsResolver = lib.mkDefault "1.1.1.1:53";
               environmentFile = lib.mkDefault (
                 ps.require "mailserver.acme" "environmentFile" cfg.acme.environmentFile
               );
