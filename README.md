@@ -4,12 +4,10 @@ AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機�
 
 各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
 既存構成を移行するエージェントは、編集前に[利用側dotfilesの移行手順](docs/migration.md)を読む。
-対象checkout・全OS/guest/HM/imageの確認から、秘密・永続データの保護、変更前後の比較、評価・適用の区別までを扱う。
 未完了の作業は[残作業台帳](docs/inventory.md)、完了済みの履歴はGit履歴/PR等へ残す。
 
 ## 導入・適用方法（共通）
 
-個別moduleの説明ではなく、どのホストでも必要な導入手順。
 詳しい構成例とチェックリストは[Wikiの導入・適用方法](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
 
 ### 1. inputを固定し、入口を一度importする
@@ -34,17 +32,12 @@ modules = [
 ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストから従来どおりimportする。
 機能別import、独自resolver、利用側のHM module import・standalone HM出力は不要。
 
-初回は意図した導入作業として `nix flake lock` を実行し、利用側の `flake.lock` にsharedとその依存を固定する。
-取得済みのrevisionを確認してlockを版管理する。URL末尾に `&rev=<40桁のcommit>` を追加する固定方法も使える。
 remoteのHEADに依存しないよう、URLの `?ref=main` は省略しない。
-更新は利用側で `nix flake update shared` を明示的に実行し、lock差分を確認する（URLにrevを指定した場合はその値も変更）。
-通常評価では `--no-write-lock-file` を使い、nixpkgs更新を同時に混ぜない。
 
 moduleは通常package・HM・`attopkgs`ともホストの `pkgs` で構築する。
 共有flakeが固定するnixpkgsは `packages` / `legacyPackages` 出力（`nix shell attos-nix-modules#claude-code` 等）専用。
 利用側で重複を避ける場合は `shared.inputs.nixpkgs.follows = "nixpkgs";` を指定できる。
-利用側のnixpkgs pin・overlay・unfree許可を維持する。unfreeが必要ならホストの
-`nixpkgs.config.allowUnfreePredicate` 等で許可し、全許可を導入の必須条件にしない。
+unfreeが必要ならホストの `nixpkgs.config.allowUnfreePredicate` 等で許可し、全許可を導入の必須条件にしない。
 HMは共有flakeがrevision固定したraw source（`flake = false`）から読み込む。
 別のHM input/importや `home-manager.inputs.nixpkgs.follows` は追加しない。
 
@@ -72,52 +65,19 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
   共通HM設定は標準 `home-manager.users` に直接追加したユーザーも含め、全HMユーザーへ適用される。
 - ユーザー作成・shell・group/sudo・linger、hardware、保存先、機器/ネットワーク固有値は利用側の責務。
 - secretsは復号後の `"/run/secrets/..."` のようなruntimeパス文字列を渡す。
-  内容をNix式・パスリテラル・`builtins.readFile` でstoreへ取り込まない。
-  配置、owner/group/mode、読取権限、起動順、rotation時の再起動は利用側で管理する。
   復号unitへの依存はそのunitが存在する場合だけ指定する（SOPSの既定はactivation script）。
-  認証・履歴・既存の可変データを宣言的設定で上書きしない。
 - 通常の機能選択・共通入力は各moduleの公開 `modules.*` optionを優先する。
   公開APIで表さないホスト差分・ユーザーごとの差分は標準NixOS option / `home-manager.users.<name>` へ書く（上書き用escape hatch）。
-  `mkDefault` の値は通常代入で上書きでき、通常優先度の共通値の変更に限り `lib.mkForce` を検討する。
-  自動依存への通常代入のfalseは競合するため、無条件に強制無効化しない。
 - カーソル等の取得可能なassetsは利用側でURL/hashを固定する。壁紙・ゲーム資産・保存先も利用側で維持する。
-  custom package引数 `attopkgs` は共有側が供給するため、別のpackage供給経路は不要。
-
-### 3. 移行を比較し、評価・buildしてから適用する
-
-既存のアプリ・package供給元・生成設定・起動経路を記録し、永続データをバックアップする。
-旧featureの依存が共有側でも同じとは限らないため、必要なソフトはenableまたは
-標準 `home.packages` / `environment.systemPackages` で明示的に保持する。
-全参照を置換し、ホストごとの機能・全HMユーザーの設定の同等性を確認してから、
-旧resolver・featureMatrix・wrapper・重複HM import・不要なstandalone HM経路を削除する。
-
-利用側ルートで実行する例（`HOST` / `USER` は対象に置換）:
-
-```sh
-# 評価のみ
-nix eval --no-write-lock-file --raw '.#nixosConfigurations.HOST.config.system.build.toplevel.drvPath'
-nix eval --no-write-lock-file --raw '.#nixosConfigurations.HOST.config.home-manager.users.USER.home.activationPackage.drvPath'
-# buildのみ。実機へ適用しない
-nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.system.build.toplevel'
-nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.home-manager.users.USER.home.activationPackage'
-```
-
-評価成功・build成功・実機動作は別の確認。生成設定の比較後、利用者の判断で一台ずつ
-`sudo nixos-rebuild switch --flake .#HOST` を実行し、boot/PAM/desktop/user service/機器を確認する。
-失敗時は前のgenerationへ `sudo nixos-rebuild switch --rollback`、起動不能時はboot menuから戻す。
-再評価用にinput指定・lock・設定も元へ戻す。データ変更はgenerationのrollbackでは戻らず、バックアップから復旧する。
-導入手順の記載だけではホストに適用されない。
 
 ## Home Managerの管理
 
 - HMのsourceはこのflakeでrevision固定。現在は `acd21c5a3420a9d5fd0ed06299b10828267ef9ba`。
-- raw source input（`flake = false`）として取得するため、HMのためだけのnixpkgs inputは不要。
 - HMも利用ホストの `pkgs` を使用し、packageはNixOSユーザー環境へ導入する。
 - ユーザー名・ホームディレクトリはNixOSのユーザー定義から導出する。
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは従来の値を上書き指定し、HM更新に連動して変更しない。
 - `attopkgs` は共有側で利用ホストの `pkgs` から構築し、NixOS / HMへ渡す。
 - 機能選択はNixOS側の `modules.*` に一本化。以前の `home.*` exportとstandalone HM経路は提供しない。
-- shared moduleは、標準 `home-manager.users` に直接追加したユーザーにも適用される。
 
 ユーザー一覧に複数名を指定すると、固定メールアカウント・デバイス設定なども含め、
 有効な機能の共通設定が全HMユーザーへ配布される。credential、secretの配置・権限は共有しない。
@@ -184,7 +144,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | fcitx5 / floorp / pandora-launcher / pcmanfm / pi / userDirs / vscode / linux-wallpaperengine | HM | — |
 | claude-code | HM | Piと同じcatalogのskill・context-mode MCP |
 
-依存先を通常代入でfalseにすると競合する。依存を切る変更は、動作条件を確認した上で行う。
+依存先を通常代入でfalseにすると競合する。
 
 ### enable以外の独自option
 
@@ -208,8 +168,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `wireguard-client.{tunnels,secretService}`: tunnelsはinterface名から復号済みruntime絶対パス文字列へのattrset、既定 `{}`。secretServiceは既存復号service名またはnull（既定）で、非空tunnels時だけrequires/afterへ追加。SOPSでは `sops.useSystemdActivation` がtrueの場合だけ指定する。秘密の取得・復号・権限・rotationはconsumerが管理する。
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
-ユーザーごとに別packageを使う場合も標準HMで上書きできる。archiveのURL/hash・licenseはconsumerに残す。
-カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。GTK/icon等の公開API外のユーザー差分は標準NixOS/HM optionを使う。
+archiveのURL/hash・licenseはconsumerに残す。
+カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
 Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは従来どおり電源キーを無視する。
 AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・scripts・template・snippet）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時は最小helperのみ。認証は配布しない。
@@ -219,7 +179,7 @@ AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・s
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
 
 Noctaliaのsystemd launcher、Hyprlandのheadless bootstrap/input/seatd、PipeWire virtual sink、Sunshineのheadless依存は共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
-[Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。詳細の調整には標準NixOS / HM optionも使う。
+[Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。
 
 ### SSH client
 
@@ -250,7 +210,7 @@ Gitは `git.attodao.cc`、GitHubは `github.com` でも同じ設定を使う。
 初回のhost keyは自動登録するが、変更されたkeyは拒否する。
 OpenSSHのowner check対策として、生成したconfigをactivationでユーザー所有の実ファイル（0600）に配置し、
 NixOSの `programs.ssh.systemd-ssh-proxy.enable` は既定falseにする。
-`~/.ssh/config` の手編集は次回activationで置き換わるため、追加設定は標準`programs.ssh.settings`へ書く。
+`~/.ssh/config` の手編集は次回activationで置き換わる。
 鍵・known_hostsは管理せず、sshd・firewall・認証policyも変更しない。
 
 ## サーバー機能
@@ -321,24 +281,22 @@ modules.vaultwarden = {
 };
 ```
 
-OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要）。data/credential/UID/GID等の既存必須入力はcallerが供給し、portやpackage等の追加調整は標準NixOS optionで行う。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
+OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
 Incusの公開 `virtualMachines.<name>.{metadata,disk,launchConfig,managedDeviceNames}` は標準NixOS metadata/qcow2をimportして `--vm` で新規作成する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。既存VM更新は `vm-rebuild`、初期login password/private fileの再供給は `vm-bootstrap <VM> passwd <user>` / `vm-bootstrap <VM> file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.virtualMachines.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-vm-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
-Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。更新はversionとhash/digestを同時に変更してpackage buildと既存state互換性を検証する。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
+Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
 localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの
 
-hardware、ユーザー作成・権限・linger、secrets、stateVersion、保存先、機器固有の音声設定、
-Steamのfirewall policy、Wallpaper Engine assets、unfree licenseの許可は利用側で管理する。
+機器固有の音声設定、Steamのfirewall policy、Wallpaper Engine assets、unfree licenseの許可は利用側で管理する。
 公開APIがある機能はそのoptionで選択し、package導入だけのアプリ、標準OBS設定、外部AAGLは利用側に残す。
 `modules.openssh.enable` はserver有効化、`modules.ssh.enable` はclient設定で別の選択。
-greeterのカーソルアーカイブも利用側で取得する。login-pinは従来どおりattodaoのgreetd / TTYに限定する。
-Pi等の認証・履歴・可変データは管理しない。
+login-pinは従来どおりattodaoのgreetd / TTYに限定する。
 Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron sandboxは無効。
 
 ## 検証
@@ -351,6 +309,4 @@ nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpacka
 ```
 
 利用側では `--override-input shared "path:$(realpath ../attos-nix-modules)"` を付けて全OS・HM・imageを評価する。
-現在の固定revisionは利用側の `flake.lock` を参照する。
-利用側の全構成を比較・評価し、buildと実機確認は別工程として扱う。
 完了条件は[移行手順](docs/migration.md)、次に行う作業は[残作業台帳](docs/inventory.md)を参照。

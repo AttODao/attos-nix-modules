@@ -24,7 +24,6 @@
 - `pi-mermaid-studio`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
 - `context-mode`: context-mode 1.0.169のPi adapter / HTML dependenciesを含むoverride。
 - `karakeep-monolith`: 利用ホストの `pkgsStatic.monolith` に既存のSVG USE / archive内fragment navigation修正を適用するoverride。Karakeep containerへ静的binaryを渡す。fragment保持とarchive linkのinstall checkを含む。
-
 - `custom-cursors`: consumerから取得済みアーカイブを受け取り、XcursorからHyprcursorを生成するderivation。package・テーマ・メタデータは汎用名 `Custom-Cursors` を使用。
 - `centered-plymouth-theme`: consumer画像を受け取り、黒背景でlogoを中央配置する汎用Plymouth script theme `centered-logo` を構築。共有側にホスト名・ブランド画像を含めない。
 
@@ -39,5 +38,4 @@ code-server releaseの取得URL/hash・versionはconsumer inputに固定し、�
 カーソルは `attopkgs.custom-cursors { cursor = pkgs.fetchurl { name = "custom-cursors.zip"; url = "https://example.invalid/cursor.zip"; hash = "sha256-..."; }; }` で組み立てる。実際のURL・hashと取得処理はconsumer側に置き、共有repoへ書かない。
 archiveは展開後のrootに `cursors/` が必要。通常は取得済みarchive packageを `modules.desktop-theme.cursor` へ渡し、共有側が `custom-cursors` を呼ぶ。ユーザーごとに別packageが必要な場合だけ標準HM `home.pointerCursor.package` へ生成結果を渡す。
 Plymouthも通常は `modules.limine.splashImage = ./assets/boot-logo.png;` で選択する。画像のみconsumerに残し、descriptor/script・画像変換の実装は共有側が所有する。nullの場合にこのpackageを作らずupstream themeを維持するのはLimine moduleの契約で、package関数自体のimage引数は必須。
-Pi等のbase package供給元が違う場合は、利用側でpackage setを組み立てる際に現在の供給元を保持する。
 単なるpkgs.git等の再exportや、ホストのpackage一覧は作らない。
