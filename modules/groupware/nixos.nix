@@ -94,11 +94,13 @@ in
     services.radicale = {
       enable = true;
       settings = {
-        # Same endpoint and certificate check as Roundcube's IMAP login.
+        # The mailserver is on this host (asserted). Its public name may resolve to a gateway that
+        # this host cannot reach, so authenticate against the local Dovecot over loopback, where
+        # Dovecot allows plaintext login and credentials never leave the host.
         auth = {
           type = lib.mkDefault "imap";
-          imap_host = lib.mkDefault "${hostname}:993";
-          imap_security = lib.mkDefault "tls";
+          imap_host = lib.mkDefault "127.0.0.1:143";
+          imap_security = lib.mkDefault "none";
           cache_logins = lib.mkDefault true;
         };
         storage.filesystem_folder = lib.mkDefault "${dataDir}/collections";
