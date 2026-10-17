@@ -23,7 +23,7 @@ nix eval --no-write-lock-file --json '.#nixosConfigurations' --apply builtins.at
 ## 2. 置換表と変更前の比較元を残す
 
 旧resolver・feature定義の名前だけでなく、import先、暗黙依存、package供給元、NixOSと全HMユーザーの設定まで追う。
-共有側は採用するrevisionの `modules/default.nix`、対象・依存module、関連 `tests/` を読み、Wikiの説明と実装が異なる場合は採用revisionの実装を確認する。
+共有側は採用するrevisionの `modules/default.nix`、対象・依存moduleを読み、Wikiの説明と実装が異なる場合は採用revisionの実装を確認する。
 
 機能ごとに次を記録する（利用側の作業メモ/PR等で十分。秘密の内容は記録しない）:
 
@@ -131,8 +131,7 @@ nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.home
 
 HMユーザーなしのOSにはHMのコマンドは不要。利用側のchecks・image/package出力があればそれらも確認する。
 新規NixファイルはGit flakeに含まれるよう必要なものだけstageし、既存stageを変更しない。
-共有側の対象・依存・統合テストは[READMEの検証](../README.md#検証)に従い、利用側固定nixpkgs・共有固定HMで実行する。
-共有側の `nix flake check` は `tests/*.nix` の実行に代わらない。
+共有側は[READMEの検証](../README.md#検証)の評価を行う（テストはない）。
 
 評価成功はbuild成功ではなく、image build成功は既存guest更新でも実機動作確認でもない。
 適用は明示的な許可、データbackupと復旧経路を確保して一台ずつ行う。remoteの認証・networkを失う変更は特に分離する。
@@ -144,7 +143,7 @@ HMユーザーなしのOSにはHMのコマンドは不要。利用側のchecks�
 - 全参照の置換と比較後に旧resolver・featureMatrix・wrapper・重複HM importを削除する。guest/imageや別出力からの参照も確認する。
 - `git diff --check` と差分を確認し、credential・暗号化secret/hardwareの意図しない変更・依頼外のpin更新がないことを確かめる。
 - 利用側repo/commit・共有採用revision・対象OS/ユーザー、保持した入力、意図した差分、比較/評価/build結果を報告する。
-- 未実施のbuild・適用・実機確認と確認できない対象を明記する。共有のテスト成功やcommit/pushだけで利用側移行・適用完了にしない。
+- 未実施のbuild・適用・実機確認と確認できない対象を明記する。共有側の評価成功やcommit/pushだけで利用側移行・適用完了にしない。
 - 完了した項目は[残作業台帳](inventory.md)から削除する。履歴・成功ログはGit履歴/PR等へ残し、台帳に完了済み一覧を増やさない。
 
 ## エージェントへの依頼例

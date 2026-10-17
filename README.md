@@ -102,7 +102,6 @@ nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.syst
 nix build --no-write-lock-file --no-link '.#nixosConfigurations.HOST.config.home-manager.users.USER.home.activationPackage'
 ```
 
-共有側の[評価テスト](#検証)も別途実行する。`nix flake check` だけでは `tests/*.nix` は実行されない。
 評価成功・build成功・実機動作は別の確認。生成設定の比較後、利用者の判断で一台ずつ
 `sudo nixos-rebuild switch --flake .#HOST` を実行し、boot/PAM/desktop/user service/機器を確認する。
 失敗時は前のgenerationへ `sudo nixos-rebuild switch --rollback`、起動不能時はboot menuから戻す。
@@ -143,7 +142,6 @@ modules/
 packages/
   default.nix               by-nameの自動登録と外部source input
   by-name/<2文字>/<name>/package.nix  nixpkgsと同じshard構成
-tests/
 docs/
 ```
 
@@ -345,40 +343,14 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 検証
 
-利用ホストで固定したnixpkgs sourceと、このflakeで固定したHM sourceを渡す。
+このrepoはテストを持たない。変更時は次の評価で確認する。
 
 ```sh
-nix-instantiate --eval --strict tests/integrated.nix \
-  --arg nixpkgs /path/to/nixpkgs --arg homeManager /path/to/home-manager
+nix flake check --no-build 'path:.'
+nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpackage
 ```
 
-各機能の`tests/*.nix`も同じ引数で評価する。`tests/desktop-hosts.nix`はattodesk/attolap相当の選択・標準上書き・toplevel/activationのdrvPathを確認する（実機・ビルドの再現性証明ではない）。`tests/lib.nix` は共通helperのため単独評価の対象外。
-sourceの取得・実体化が必要な評価には `--read-write-mode` を追加する。成功時は `true`。
-
-```sh
-python3 modules/login-pin/test-check-login-pin.py
-python3 modules/pipeasio/test-register-steam-prefixes.py
-python3 modules/noctalia/test-recording.py
-python3 modules/pi/test-merge-settings.py /path/to/nixpkgs /path/to/home-manager
-node modules/pi/test-resources.mjs /path/to/pi/lib/node_modules/pi-monorepo /path/to/built-manifest-directory... # home.file extensions/<name>.source
-python3 modules/cloudflare-ddns/test-sync-dns.py
-python3 modules/swarm/test-swarm.py
-python3 modules/forgejo/test-networks.py
-python3 modules/ytdl-sub/test-stage-config.py
-python3 modules/wireguard-server/test-wireguard-runtime.py
-python3 modules/incus/test-provision.py
-python3 modules/incus/test-bootstrap.py
-python3 modules/incus/test-rebuild.py
-python3 modules/vaultwarden/test-patch-signups.py
-node modules/mcsmanager/test-bootstrap.cjs
-python3 modules/groupware/test-radicale-users.py
-python3 modules/wireguard-client/test-import-tunnels.py
-python3 modules/atcoder-go/test-commands.py # NIXPKGS=/path/to/pinned/nixpkgsでsource指定可
-python3 modules/atcoder-go/test-project.py # bundled scaffold、mock Goのみ
-python3 packages/by-name/co/code-server/test-install.py
-python3 tests/test-review-regressions.py /path/to/nixpkgs /path/to/home-manager # activation dry-runと隔離prepare mocks
-```
-
+利用側では `--override-input shared "path:$(realpath ../attos-nix-modules)"` を付けて全OS・HM・imageを評価する。
 現在の固定revisionは利用側の `flake.lock` を参照する。
 利用側の全構成を比較・評価し、buildと実機確認は別工程として扱う。
 完了条件は[移行手順](docs/migration.md)、次に行う作業は[残作業台帳](docs/inventory.md)を参照。

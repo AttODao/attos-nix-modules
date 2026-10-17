@@ -41,12 +41,3 @@ archiveは展開後のrootに `cursors/` が必要。通常は取得済みarchiv
 Plymouthも通常は `modules.limine.splashImage = ./assets/boot-logo.png;` で選択する。画像のみconsumerに残し、descriptor/script・画像変換の実装は共有側が所有する。nullの場合にこのpackageを作らずupstream themeを維持するのはLimine moduleの契約で、package関数自体のimage引数は必須。
 Pi等のbase package供給元が違う場合は、利用側でpackage setを組み立てる際に現在の供給元を保持する。
 単なるpkgs.git等の再exportや、ホストのpackage一覧は作らない。
-
-実行可能check:
-
-```sh
-NIXPKGS=/path/to/pinned/nixpkgs python3 modules/atcoder-go/test-commands.py
-python3 packages/by-name/co/code-server/test-install.py
-```
-
-これらはmock tools/assetsだけを使う。実際のAtCoder packageやstandalone release全体のbuild検証とは別。

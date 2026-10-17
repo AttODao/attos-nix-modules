@@ -11,7 +11,7 @@
 
 - 最初に`git status --short`を確認し、既存のユーザー変更を保持する。
 - `README.md`、`docs/inventory.md`、[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の対象moduleページを読む。
-- `modules/default.nix`、対象・依存module、`tests/`の関連テストを確認する。
+- `modules/default.nix`、対象・依存moduleを確認する。
 - 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。比較・保護・検証は`docs/migration.md`、残作業は`docs/inventory.md`を参照し、現在の設計・APIは採用revisionのREADME・Wiki・実装を確認する。
 - 類似実装や標準NixOS / Home Manager optionを再利用し、独自resolver、ホスト台帳、不要なwrapperを追加しない。
 
@@ -80,49 +80,22 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 通常の機能追加で`flake.nix`へ個別module exportや別のHM読み込みを追加する必要はない。
 Home Manager revision・共有nixpkgs・利用側nixpkgsの更新を機能追加に混ぜない。
 
-## 5. 評価テストを追加する
+## 5. 評価する
 
-`tests/<name>.nix`を追加し、`tests/lib.nix`の`cfgFor`、`hm`、`hmFor`、`evalSystem`を再利用する。
-既存の`tests/thunderbird.nix`や`tests/modules.nix`と同様に、`assert`で検証して最後に`true`を返す。
-
-変更に応じて、次を確認する:
-
-- 未有効時には機能設定・依存が勝手に有効にならない。
-- enable一つで必要なNixOS / HM設定と依存が有効になる。
-- package、生成設定、service、activationの評価が期待どおりになる。
-- 公開optionの型・必須値・上書きが期待どおりに扱われる。
-- ユーザー固有pathを導出でき、複数HMユーザーでも設定が適用される。
-
-scriptに分岐・parser・外部状態の操作を追加した場合は、同じ機能ディレクトリに最小の実行可能テストを残す。既存のPIN・PipeASIOテストを参考にする。
-
-## 6. 検証する
-
-リポジトリルートから実行する。`/path/to/...`は、利用ホストで固定したnixpkgs sourceと、このflakeで固定したHome Manager sourceの実パスに置き換える。
+このrepoはテストを持たない。リポジトリルートから次を実行する。
 
 ```sh
-nix-instantiate --eval --strict tests/<name>.nix \
-  --arg nixpkgs /path/to/nixpkgs --arg homeManager /path/to/home-manager
-
-nix-instantiate --eval --strict tests/integrated.nix \
-  --arg nixpkgs /path/to/nixpkgs --arg homeManager /path/to/home-manager
+nix flake check --no-build 'path:.'
+nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpackage
 ```
 
-- 対象機能、依存・関連機能、統合テストを実行する。共通基盤を変えた場合は`tests/lib.nix`を除く全評価テストを確認する。
-- sourceの取得・実体化が必要な評価だけ`--read-write-mode`を追加する。成功結果は`true`。
-- このflakeは`checks`を公開していないため、`nix flake check`だけで`tests/*.nix`を実行したことにはならない。
-- Flake経由で新規Nixファイルを参照する場合は、未追跡ファイルが含まれない点に注意する。必要なファイルだけ明示的に`git add`し、既存のstage状態を勝手に変えない。
+- 未有効時に機能設定・依存が勝手に有効にならないこと、enable一つで必要な設定が入ることは、利用側の`--override-input`付き評価で確認する。
+- `path:`評価は未追跡ファイルも含む。既存のstage状態を検証のために変えない。
 - 通常のflake評価には`--no-write-lock-file`を使う。依頼されていないlock更新・rebuild・switch・pushはしない。
-
-関連scriptを変更した場合は、対応するテストも実行する:
-
-```sh
-python3 modules/login-pin/test-check-login-pin.py
-python3 modules/pipeasio/test-register-steam-prefixes.py
-```
 
 評価成功はビルド成功・実機動作の保証ではない。boot、PAM、desktop起動、user service、外部機器などは利用側への移行後に別途確認する。
 
-## 7. ドキュメントと差分を確認する
+## 6. ドキュメントと差分を確認する
 
 - `README.md`の機能一覧、scope、依存、独自option、利用側の前提を更新する。
 - moduleのpackage/version・設定項目・設定例・運用上の制約はWikiの対応ページへ記載し、重複する機能別docsを増やさない。custom packageの実装・供給契約は`packages/README.md`へ、未完了の作業だけを`docs/inventory.md`へ記載する。完了した項目・成功ログは台帳から削除し、Git履歴/PR等へ残す。
