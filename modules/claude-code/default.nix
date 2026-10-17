@@ -3,11 +3,11 @@
   options.modules.claude-code = {
     enable = lib.mkEnableOption "shared Claude Code configuration";
     # Pi catalogのうちClaude Codeで動くskillだけを選ぶ。pi-mermaid-studioはPiの
-    # mermaid_diagram tool、ctx-upgradeはread-onlyなNix管理installの書換えに依存する。
+    # mermaid_diagram tool、ctx-upgradeはread-onlyなNix管理installの書換えに依存し、
+    # find-skillsはnpxでNix管理外へskillを追加するため含めない。
     skills =
       lib.genAttrs
         [
-          "find-skills"
           "grilling"
           "improve-codebase-architecture"
           "ponytail"
