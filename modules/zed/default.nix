@@ -7,6 +7,11 @@
 {
   options.modules.zed = {
     enable = lib.mkEnableOption "shared Zed editor configuration";
+    installEditor = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install the Zed editor. Disable on hosts used only as SSH remote targets; their remote server still reads the managed settings.json.";
+    };
     userSettings = lib.mkOption {
       type = (pkgs.formats.json { }).type;
       default = { };
