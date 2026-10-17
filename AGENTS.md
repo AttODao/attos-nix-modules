@@ -1,6 +1,6 @@
 # 共有moduleの作成・利用側への導入
 
-新しい利用側環境の作成は[Wikiの新しい環境の作成手順](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)に従う。
+新しい利用側環境の作成は[Wikiの新しい環境の作成手順](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)に従う。
 利用側への導入には共有入口と既存の公開APIを使い、共有実装の変更・他repo統合・pin更新・build・実機適用・commit/pushを無断で追加しない。
 
 以下は、`attos-nix-modules`で機能moduleを追加・変更するときの手順。
@@ -9,7 +9,7 @@
 ## 1. 既存実装と責務を確認する
 
 - 最初に`git status --short`を確認し、既存のユーザー変更を保持する。
-- `README.md`、[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の対象moduleページを読む。
+- `README.md`、[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の対象moduleページを読む。
 - `modules/default.nix`、対象・依存moduleを確認する。
 - 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。現在の設計・APIは採用revisionのREADME・Wiki・実装を確認する。
 - 類似実装や標準NixOS / Home Manager optionを再利用し、独自resolver、ホスト台帳、不要なwrapperを追加しない。
@@ -62,7 +62,7 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 
 - NixOSの`imports`は静的に宣言し、enableから組み立てない。依存moduleのimportも同様。
 - `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーと単独利用は`public-services/lib.nix`の`select`・`moduleOptions`・`common`・`pathOption`・`require`を再利用し、`select.enabled`で同じ実装を囲む。`select.standalone`の場合だけlocalhost bind/HTTP・通常Docker bridgeを使い、公開record・Swarm・gateway依存を作らない。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
-- 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は[Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各サービスページを参照。
+- 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は[Wikiの公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各サービスページを参照。
 - `home.nix`の実設定は`lib.mkIf osConfig.modules.<name>.enable`で囲む。
 - HM設定は`home-manager.sharedModules`で接続する。特定ユーザーへの直書きや、ユーザー一覧を機能ごとに走査する実装はしない。
 - 有効なHM設定は、標準`home-manager.users`に直接宣言したユーザーを含む全HMユーザーに適用される。固定アカウント・デバイス設定や複数ユーザーでの競合を確認する。

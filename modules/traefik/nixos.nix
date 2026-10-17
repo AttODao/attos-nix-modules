@@ -34,7 +34,21 @@ let
         address = "${ps.require "mailserver" "backendAddress" mail.cfg.backendAddress}:${toString port}";
         private = mail.cfg.private;
       }) mail.cfg.tcpPorts
-    ));
+    ))
+    # Fixed OCI DNS upstream on the backend overlay, like the HTTP route.
+    ++ map (entry: {
+      name = "forgejo-ssh";
+      port = 22;
+      address = "forgejo:22";
+      inherit (entry.cfg) private;
+      addresses = entry.cfg.sshAddresses;
+    }) (lib.filter (entry: entry.cfg.deploy) (ps.entries config "forgejo"));
+  # Address-bound listeners are published individually so other host listeners on the same port keep working.
+  bound = lib.filter (entry: entry.addresses or [ ] != [ ]) tcp;
+  unbound = lib.filter (entry: entry.addresses or [ ] == [ ]) tcp;
+  boundPorts = lib.concatMap (
+    entry: map (address: "${address}:${toString entry.port}:${toString entry.port}") entry.addresses
+  ) bound;
   udp = lib.optionals (game != null) (
     map (port: {
       name = "minecraft-bedrock-${toString port}";
@@ -179,7 +193,7 @@ let
     "80/tcp"
     "443/tcp"
   ]
-  ++ map (entry: "${toString entry.port}/tcp") tcp
+  ++ map (entry: "${toString entry.port}/tcp") unbound
   ++ map (entry: "${toString entry.port}/udp") udp;
   publishedPorts =
     if cfg.publishedPortRanges == null then
@@ -288,11 +302,12 @@ in
       "traefik/dynamic.yml".source = dynamicFile;
     };
     networking.firewall = {
+      # Docker DNATs address-bound listeners before INPUT; opening their ports would expose host listeners on other addresses.
       allowedTCPPorts = [
         80
         443
       ]
-      ++ map (entry: entry.port) tcp;
+      ++ map (entry: entry.port) unbound;
       allowedUDPPorts = map (entry: entry.port) udp;
     };
     systemd.tmpfiles.rules = [
@@ -346,15 +361,18 @@ in
         "--user=0:0"
       ];
       ports = lib.mkDefault (
-        if cfg.publishedPortRanges != null then
-          map publishRange cfg.publishedPortRanges
-        else
-          [
-            "80:80"
-            "443:443"
-          ]
-          ++ map (entry: "${toString entry.port}:${toString entry.port}") tcp
-          ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
+        (
+          if cfg.publishedPortRanges != null then
+            map publishRange cfg.publishedPortRanges
+          else
+            [
+              "80:80"
+              "443:443"
+            ]
+            ++ map (entry: "${toString entry.port}:${toString entry.port}") unbound
+            ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
+        )
+        ++ boundPorts
       );
       # Docker resolves the primary network locally before attaching lazy Swarm overlays.
       networks = lib.mkDefault (

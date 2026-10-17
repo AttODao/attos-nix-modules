@@ -2,12 +2,12 @@
 
 AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機能ごとのenableでシステム設定と全HMユーザーの設定をまとめて有効化する。
 
-各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
-新しい利用側環境の作成手順は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
+各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
+新しい利用側環境の作成手順は[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
 
 ## 導入・適用方法（共通）
 
-詳しい構成例とチェックリストは[Wikiの導入・適用方法](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
+詳しい構成例とチェックリストは[Wikiの導入・適用方法](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
 
 ### 1. inputを固定し、入口を一度importする
 
@@ -17,7 +17,7 @@ AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機�
 ```nix
 # flake.nixのinputsへ追加（既存nixpkgs inputは保持）
 inputs.shared.url =
-  "git+https://forgejo.attodao.cc/AttODao/attos-nix-modules.git?ref=main";
+  "git+https://git.attodao.cc/AttODao/attos-nix-modules.git?ref=main";
 
 # outputsの引数にsharedを受け取り、各nixosSystemのmodulesへ追加
 modules = [
@@ -139,7 +139,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | groupware | NixOS | 同じhostのMailserver |
 | sunshine | NixOS | Hyprland・Steam |
 | mcsmanager / mailserver / wireguard-server / code-server | NixOS | — |
-| public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
+| public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | swarm | NixOS | Docker |
 | traefik | NixOS | Docker・Swarm |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
@@ -158,9 +158,9 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 `modules.public-services.<FQDN>.<service>` に指定する。
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
-- `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
+- `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
 - `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
-- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
@@ -185,7 +185,7 @@ AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・C
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
 
 Noctaliaのsystemd launcher、Hyprlandのheadless bootstrap/input/seatd、PipeWire virtual sink、Sunshineのheadless依存は共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
-[Wikiの公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。
+[Wikiの公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。
 
 ### SSH client
 
@@ -239,6 +239,8 @@ DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `publ
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
+Forgejoは同じhostnameでWebとSSHを提供する。公開時のSSHはTraefikがTCP 22でbackend overlayの `forgejo:22` へ中継し（`private` はHTTPと共通）、Forgejo containerはhostへSSHをpublishしない。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressだけで22をpublishしてfirewallの全体許可を追加せず、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。
+
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上書きするdomain whitelistも空にする。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。設定はNixと `environmentFile` だけが正で、`CONFIG_FILE` を読み書きできないpathに向けるため既存 `dataDir/vw-data/config.json` は読まれず、adminパネルの設定保存は永続化しない。
 
@@ -287,7 +289,7 @@ modules.vaultwarden = {
 };
 ```
 
-OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要。Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
+OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要。Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
@@ -295,7 +297,7 @@ Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平�
 Incusの公開 `virtualMachines.<name>.{launchConfig,managedDeviceNames}` はhost activationでは適用せず、`vm <VM> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足VMだけ `rebuild.flakeFile` の標準NixOS metadata/qcow2をbuild・importして `--vm` で作成し、作成用imageを削除する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。初期login password/private fileの再供給は `vm <VM> passwd <user>` / `vm <VM> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.virtualMachines.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-vm-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
 Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
-localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
+localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの
 

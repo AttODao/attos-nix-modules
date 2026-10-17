@@ -8,6 +8,13 @@ let
   ps = import ../public-services/lib.nix { inherit lib; };
   cfg = config.modules.dns;
   hosts = ps.hosts config;
+  # Forgejo SSH is published only on these gateway addresses; HTTP and SSH share the hostname.
+  sshAddresses =
+    services:
+    if (services.forgejo.enable or false) && services.forgejo.deploy then
+      services.forgejo.sshAddresses
+    else
+      [ ];
   entries = lib.concatLists (
     lib.mapAttrsToList (
       hostname: services:
@@ -18,7 +25,9 @@ let
           else if services.wireguard-server.enable or false then
             [ (ps.require "modules.dns" "wireguardAddress" cfg.wireguardAddress) ]
           else
-            cfg.ingressAddresses;
+            lib.filter (
+              address: sshAddresses services == [ ] || lib.elem address (sshAddresses services)
+            ) cfg.ingressAddresses;
       in
       map (address: "${address} ${hostname}") addresses
     ) hosts
@@ -55,7 +64,13 @@ in
           ) (lib.attrValues hosts);
         message = "modules.dns.ingressAddresses must be supplied for ordinary service hostnames.";
       }
-    ];
+    ]
+    ++ lib.mapAttrsToList (hostname: services: {
+      assertion =
+        sshAddresses services == [ ]
+        || lib.any (address: lib.elem address cfg.ingressAddresses) (sshAddresses services);
+      message = "modules.public-services.${hostname}.forgejo.sshAddresses must include at least one modules.dns.ingressAddresses entry.";
+    }) hosts;
     environment.etc."dnsmasq-public-services".source = hostsFile;
     services.dnsmasq = {
       enable = true;

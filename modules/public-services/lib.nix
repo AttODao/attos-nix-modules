@@ -70,6 +70,7 @@ rec {
         "private"
         "backendUrl"
         "backendAddress"
+        "sshAddresses"
       ]
       // {
         hostname = mkOption {

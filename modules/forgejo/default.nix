@@ -31,8 +31,11 @@ in
       userGid = ownership "Caller-managed Forgejo GID, supplied to the image as USER_GID; no group is created.";
       mailAddress = nullableString "Forgejo sender and envelope-from address.";
       mailHost = nullableString "SMTP server hostname; port and protocol can be overridden through standard OCI environment settings.";
-      sshHost = nullableString "Advertised Forgejo SSH hostname.";
-      sshBindAddress = nullableString "Consumer-selected host IP address on which Docker publishes Forgejo SSH.";
+      sshAddresses = lib.mkOption {
+        type = lib.types.listOf lib.types.nonEmptyStr;
+        default = [ ];
+        description = "Gateway IP addresses on which Traefik publishes Forgejo SSH port 22; empty publishes on all addresses. Local DNS then returns only the ingress addresses in this list for the hostname.";
+      };
     }
   );
 
@@ -48,16 +51,6 @@ in
         mailEnabled = !s.standalone || cfg.mailHost != null || cfg.mailAddress != null;
         mailAddress = if mailEnabled then ps.require "forgejo" "mailAddress" cfg.mailAddress else null;
         mailHost = if mailEnabled then ps.require "forgejo" "mailHost" cfg.mailHost else null;
-        sshHost =
-          if s.standalone && cfg.sshHost == null then
-            s.hostname
-          else
-            ps.require "forgejo" "sshHost" cfg.sshHost;
-        sshBindAddress =
-          if s.standalone && cfg.sshBindAddress == null then
-            "127.0.0.1"
-          else
-            ps.require "forgejo" "sshBindAddress" cfg.sshBindAddress;
         sshPort = if s.standalone then 2222 else 22;
         forgejoDataRoot = "${root}/forgejo";
         forgejoDbRoot = "${root}/postgres";
@@ -138,7 +131,7 @@ in
                 FORGEJO__mailer__SMTP_PORT = "587";
                 FORGEJO__server__DOMAIN = s.hostname;
                 FORGEJO__server__ROOT_URL = "${ps.url s 3000}/";
-                FORGEJO__server__SSH_DOMAIN = sshHost;
+                FORGEJO__server__SSH_DOMAIN = s.hostname;
                 FORGEJO__server__SSH_PORT = toString sshPort;
               }
               // lib.optionalAttrs (mailAddress != null) {
@@ -152,8 +145,12 @@ in
             environmentFiles = lib.mkDefault [ environmentFile ];
             autoRemoveOnStop = lib.mkDefault false;
             extraOptions = lib.mkDefault [ "--restart=always" ];
+            # Published SSH is forwarded by the Traefik gateway over the backend overlay.
             ports = lib.mkDefault (
-              [ "${sshBindAddress}:${toString sshPort}:22" ] ++ lib.optional s.standalone "127.0.0.1:3000:3000"
+              lib.optionals s.standalone [
+                "127.0.0.1:${toString sshPort}:22"
+                "127.0.0.1:3000:3000"
+              ]
             );
             volumes = lib.mkDefault [
               "${forgejoDataRoot}:/data"

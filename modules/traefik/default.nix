@@ -43,7 +43,7 @@ in
         )
       );
       default = null;
-      description = "Ordered Docker publication ranges, or null to publish individual generated listeners. Explicit ranges must cover exactly the generated listener ports, without overlaps or additional exposure.";
+      description = "Ordered Docker publication ranges, or null to publish individual generated listeners. Explicit ranges must cover exactly the generated listener ports, without overlaps or additional exposure; address-bound listeners such as Forgejo sshAddresses are always published individually and excluded.";
     };
     nativeBackendNetwork = mkOption {
       default = null;
