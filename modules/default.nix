@@ -31,6 +31,7 @@
     ./ytdl-sub
     ./zed
     ./atcoder-go
+    ./claude-code
     ./desktop-theme
     ./discord
     ./fcitx5

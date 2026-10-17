@@ -17,6 +17,7 @@
   karakeep-monolith = pkgs.callPackage ./karakeep-monolith.nix { };
   pipeasio = pkgs.callPackage ./pipeasio.nix { };
   pi = pkgs.callPackage ./pi.nix { };
+  claude-code = pkgs.callPackage ./claude-code.nix { };
   pi-mermaid-studio = pkgs.callPackage ./pi-mermaid-studio.nix { };
   context-mode = pkgs.callPackage ./context-mode.nix { };
   open-deck-desktop = pkgs.callPackage ./open-deck-desktop.nix { };
