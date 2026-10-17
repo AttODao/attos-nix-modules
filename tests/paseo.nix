@@ -9,7 +9,11 @@ let
   t = import ./lib.nix {
     inherit nixpkgs homeManager system;
     nixpkgsConfig.allowUnfreePredicate =
-      pkg: (import "${toString nixpkgs}/lib").getName pkg == "context-mode";
+      pkg:
+      builtins.elem ((import "${toString nixpkgs}/lib").getName pkg) [
+        "claude-code"
+        "context-mode"
+      ];
   };
   inherit (t) pkgs lib;
   base =
@@ -40,6 +44,25 @@ let
     option: value:
     builtins.tryEval (t.cfgFor [ { modules.paseo.${option} = value; } ]).modules.paseo.${option};
   standalone = t.cfgFor [ { modules.paseo.enable = true; } ];
+  withClaude = t.hmFor [
+    {
+      modules.paseo.enable = true;
+      modules.claude-code.enable = true;
+    }
+  ];
+  # matchで落ちるcontextを戻し、生成configを実体化して読む。
+  providersOf =
+    home:
+    let
+      text = home.systemd.user.services.paseo-daemon.Service.ExecStartPre.text;
+      drv = lib.findFirst (lib.hasSuffix "-paseo-config.json.drv") null (
+        builtins.attrNames (builtins.getContext text)
+      );
+      file = builtins.head (builtins.match ".*(/nix/store/[a-z0-9]{32}-paseo-config\\.json).*" text);
+    in
+    (builtins.fromJSON (
+      builtins.readFile (builtins.appendContext file { ${drv}.outputs = [ "out" ]; })
+    )).agents.providers;
 in
 assert !base.programs.pi-coding-agent.enable;
 assert enabled.programs.pi-coding-agent.enable;
@@ -71,4 +94,8 @@ assert !lib.hasInfix "@latest" (builtins.readFile ../modules/paseo/home.nix);
 assert !(invalid "enable" "yes").success;
 assert !(invalid "hostname" "").success;
 assert standalone.modules.paseo.hostname == "localhost";
+assert !standalone.modules.claude-code.enable;
+assert !(providersOf enabled).claude.enabled && (providersOf enabled).pi.enabled;
+assert (providersOf withClaude).claude.enabled && (providersOf withClaude).pi.enabled;
+assert builtins.elem withClaude.programs.claude-code.finalPackage withClaude.home.packages;
 true

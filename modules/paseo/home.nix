@@ -26,7 +26,7 @@ let
         relay.enabled = true;
       };
       agents.providers = {
-        claude.enabled = false;
+        claude.enabled = osConfig.modules.claude-code.enable;
         codex.enabled = false;
         copilot.enabled = false;
         omp.enabled = false;

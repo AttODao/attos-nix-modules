@@ -172,7 +172,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | discord | HM | Fcitx5 |
 | foot | HM | Fonts |
 | ssh | NixOS + HM（clientのみ） | — |
-| paseo | HM | Pi |
+| paseo | HM | Pi（claude-code有効時はClaude provider） |
 | hermes | NixOS | Docker、公開配置時のみSwarm |
 | public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | docker / swarm / traefik / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | Docker / Swarm等、詳細はサーバー設定 |
