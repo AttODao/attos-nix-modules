@@ -7,6 +7,7 @@
 {
   config = lib.mkIf osConfig.modules.vscode.enable {
     programs.vscode.enable = true;
+    programs.vscode.profiles.default.userSettings = lib.mkDefault osConfig.modules.vscode.userSettings;
     programs.vscode.profiles.default.keybindings = [
       {
         key = "ctrl+j";
