@@ -29,6 +29,12 @@ in
                 type = ipv4;
                 description = "Unique client IPv4 address without a CIDR suffix; emitted as /32.";
               };
+              ipv6Address = mkOption {
+                type = types.nullOr (types.strMatching "[0-9a-f:]+");
+                default = null;
+                example = "fd00::2";
+                description = "Optional unique client IPv6 address in canonical lowercase form without a CIDR suffix; emitted as /128 and adds ::/0 to the client AllowedIPs. The consumer configures the server wg0 IPv6 address, forwarding and NAT66 or routing.";
+              };
               publicKey = mkOption {
                 type = publicKey;
                 description = "Base64 client public key, declared as a native wg0 peer. Public keys are not secret and are stored in the Nix store.";
@@ -102,7 +108,7 @@ in
         native = config.networking.wireguard.interfaces.${interface};
         clients = lib.mapAttrsToList (name: client: {
           inherit name;
-          inherit (client) address presharedKeyFile;
+          inherit (client) address ipv6Address presharedKeyFile;
           privateKeyFile = require "clients.${name}.privateKeyFile" client.privateKeyFile;
         }) cfg.clients;
         clientEndpoint = "${selected.hostname}:${toString (require "networking.wireguard.interfaces.wg0.listenPort" native.listenPort)}";
@@ -140,7 +146,12 @@ in
           }
           {
             assertion =
-              builtins.length clients == builtins.length (lib.unique (map (client: client.address) clients));
+              let
+                addresses = lib.concatMap (
+                  client: [ client.address ] ++ lib.optional (client.ipv6Address != null) client.ipv6Address
+                ) clients;
+              in
+              builtins.length addresses == builtins.length (lib.unique addresses);
             message = "wireguard-server: client addresses must be unique.";
           }
           {
@@ -158,7 +169,10 @@ in
           peers = lib.mapAttrsToList (name: client: {
             inherit name;
             inherit (client) publicKey presharedKeyFile;
-            allowedIPs = [ "${client.address}/32" ];
+            allowedIPs = [
+              "${client.address}/32"
+            ]
+            ++ lib.optional (client.ipv6Address != null) "${client.ipv6Address}/128";
           }) cfg.clients;
         };
         boot.kernel.sysctl = lib.mkIf cfg.ipv4Forwarding {

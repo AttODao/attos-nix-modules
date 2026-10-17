@@ -18,19 +18,23 @@ func writeKey(t *testing.T, dir, name string) string {
 }
 
 func TestCheckClients(t *testing.T) {
+	v6, mapped, upper := "fd00::2", "::ffff:10.0.0.9", "FD00::3"
 	cases := map[string][]client{
 		"bad name":       {{Name: "Bad", Address: "10.0.0.2"}},
 		"duplicate name": {{Name: "a", Address: "10.0.0.2"}, {Name: "a", Address: "10.0.0.3"}},
 		"leading zero":   {{Name: "a", Address: "10.0.0.02"}},
 		"ipv6":           {{Name: "a", Address: "fd00::2"}},
 		"duplicate addr": {{Name: "a", Address: "10.0.0.2"}, {Name: "b", Address: "10.0.0.2"}},
+		"ipv4 as ipv6":   {{Name: "a", Address: "10.0.0.2", IPv6Address: &mapped}},
+		"non-canonical":  {{Name: "a", Address: "10.0.0.2", IPv6Address: &upper}},
+		"duplicate ipv6": {{Name: "a", Address: "10.0.0.2", IPv6Address: &v6}, {Name: "b", Address: "10.0.0.3", IPv6Address: &v6}},
 	}
 	for label, entries := range cases {
 		if checkClients(entries) == nil {
 			t.Errorf("%s: expected error", label)
 		}
 	}
-	if err := checkClients([]client{{Name: "a_1-b", Address: "10.0.0.2"}}); err != nil {
+	if err := checkClients([]client{{Name: "a_1-b", Address: "10.0.0.2", IPv6Address: &v6}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -64,10 +68,11 @@ func TestSyncConfigs(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "configs")
 	psk := writeKey(t, dir, "psk")
+	bobV6 := "fd00::3"
 	meta := metadata{
 		Clients: []client{
 			{Name: "alice", Address: "10.252.0.2", PrivateKeyFile: writeKey(t, dir, "alice"), PresharedKeyFile: &psk},
-			{Name: "bob", Address: "10.252.0.3", PrivateKeyFile: writeKey(t, dir, "bob")},
+			{Name: "bob", Address: "10.252.0.3", IPv6Address: &bobV6, PrivateKeyFile: writeKey(t, dir, "bob")},
 		},
 		ClientDNS:              "10.252.0.1",
 		ClientEndpoint:         "wg.example.org:51820",
@@ -90,6 +95,10 @@ func TestSyncConfigs(t *testing.T) {
 	bob, _ := os.ReadFile(filepath.Join(root, "bob.conf"))
 	if strings.Contains(string(bob), "PresharedKey") {
 		t.Fatal("unexpected preshared key")
+	}
+	if !strings.Contains(string(bob), "\nAddress = 10.252.0.3/32, fd00::3/128\n") ||
+		!strings.Contains(string(bob), "\nAllowedIPs = 0.0.0.0/0, ::/0\n") {
+		t.Fatalf("missing IPv6 in config:\n%s", bob)
 	}
 	if info, _ := os.Stat(filepath.Join(root, "bob.conf")); info.Mode().Perm() != 0o640 {
 		t.Fatalf("mode %v", info.Mode())

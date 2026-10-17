@@ -19,6 +19,7 @@ import (
 type client struct {
 	Name             string  `json:"name"`
 	Address          string  `json:"address"`
+	IPv6Address      *string `json:"ipv6Address"`
 	PrivateKeyFile   string  `json:"privateKeyFile"`
 	PresharedKeyFile *string `json:"presharedKeyFile"`
 }
@@ -46,6 +47,14 @@ func checkClients(entries []client) error {
 		address, err := netip.ParseAddr(entry.Address)
 		if err != nil || !address.Is4() || address.String() != entry.Address || addresses[entry.Address] {
 			return errors.New("Invalid or duplicate WireGuard client address")
+		}
+		if entry.IPv6Address != nil {
+			address, err := netip.ParseAddr(*entry.IPv6Address)
+			if err != nil || !address.Is6() || address.Is4In6() || address.Zone() != "" ||
+				address.String() != *entry.IPv6Address || addresses[*entry.IPv6Address] {
+				return errors.New("Invalid or duplicate WireGuard client IPv6 address")
+			}
+			addresses[*entry.IPv6Address] = true
 		}
 		names[entry.Name] = true
 		addresses[entry.Address] = true
@@ -118,10 +127,15 @@ func render(meta metadata) (map[string]string, error) {
 			}
 			preshared = "\nPresharedKey = " + key
 		}
+		addresses, allowedIPs := entry.Address+"/32", "0.0.0.0/0"
+		if entry.IPv6Address != nil {
+			addresses += ", " + *entry.IPv6Address + "/128"
+			allowedIPs += ", ::/0"
+		}
 		rendered[entry.Name] = "[Interface]\nPrivateKey = " + privateKey +
-			"\nAddress = " + entry.Address + "/32\nDNS = " + dns.String() +
+			"\nAddress = " + addresses + "\nDNS = " + dns.String() +
 			"\n\n[Peer]\nPublicKey = " + serverKey + preshared +
-			"\nAllowedIPs = 0.0.0.0/0\nEndpoint = " + endpoint +
+			"\nAllowedIPs = " + allowedIPs + "\nEndpoint = " + endpoint +
 			"\nPersistentKeepalive = 25\n"
 	}
 	return rendered, nil
