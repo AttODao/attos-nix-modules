@@ -8,7 +8,7 @@
 
 実装済み:
 - `vm-bootstrap`: 宣言済みのRunning KVM VMへ、未設定のlogin passwordをTTYで設定、またはユーザーhome内へprivate runtime fileを配送するCLI。既存password/hash/fileは保持し、root/system account、container、停止VM、公開読取file、home外の配送は拒否。hostのprofile/image/storeへ秘密を入れず、service起動は明示指定時のみ行う。
-- `vm-rebuild`: Incus moduleのruntime flake.nix pathと宣言済みVM名を受け取る `attopkgs.vm-rebuild` / `vm-rebuild` CLI。running VM/Incus agentを検査し、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す。local/default project限定、hostのprofileは変更しない。`vm-rebuild <action> <VM> --override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
+- `vm`: Incus moduleのruntime flake.nix pathと宣言済みVMのlaunch設定・managed device名・credential配送unitを受け取る `attopkgs.vm` / `vm` CLI。`vm <VM> boot` は不足VMをflakeのmetadata/qcow2から作成して作成用imageを削除し、managed deviceをupsertして起動、agentを待ってcredential配送unitを再起動する。`stop`、TTY確認付きの `delete`（Stopped限定）、`rebuild [action]`（既定switch。適用actionは先にbootし、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す）を持つ。local/default project限定、hostのprofileは変更しない。`--override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
 - `mcsmanager`: 公式10.19.0のself-contained releaseをhash固定し、単一derivationで `attopkgs.mcsmanager/share/mcsmanager/{web,daemon}` へ配置。npm fetch/node_modulesは不要。PTY等をNixOSへpatchし、upstream daemon keyログを除去する。install checkはtemp-only web/daemonの認証・assets・prefixを確認し、runtime secret/bootstrapはmoduleに残す。
 - `paseo`: Paseo 0.11.1のsource/lock依存hash固定。`attopkgs.paseo` はstore Nodeとnative依存を使うCLIを供給し、起動時npx/npm fetchを行わない。
 - `atcoder-cli`: atcoder-cli 2.2.0。source hash / npmDepsHash固定。
@@ -29,7 +29,7 @@
 - `centered-plymouth-theme`: consumer画像を受け取り、黒背景でlogoを中央配置する汎用Plymouth script theme `centered-logo` を構築。共有側にホスト名・ブランド画像を含めない。
 
 `default.nix` に `{ pkgs, inputs }` を渡すと、利用ホストのpkgsで構築したscopeを返す。flakeは `attopkgs { pkgs }`・`overlays.default`（`pkgs.attopkgs`）・共有nixpkgsで構築した `legacyPackages.<system>`、そのうちderivationだけの `packages.<system>` を公開する（`nix shell attos-nix-modules#claude-code` 等）。
-`atcoder-commands`・`code-server`・`custom-cursors`・`centered-plymouth-theme`・`vm-rebuild`・`vm-bootstrap` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
+`atcoder-commands`・`code-server`・`custom-cursors`・`centered-plymouth-theme`・`vm`・`vm-bootstrap` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
 `atcoder-commands { go = <選択package>; homeDirectory = <HMのHOME>; aclogin = <選択package>; }` と
 `code-server { src = <固定したstandalone release>; }` で使用する。
 `centered-plymouth-theme { image = <consumer画像path>; }` も同じsetに含む関数。ImageMagickの `-resize '960x360>'` で縦横比を保ち最大960x360へ縮小し、拡大しない。出力は `share/plymouth/themes/centered-logo/` にdescriptor・script・logo.pngを置く。画像は公開可能なbuild入力としてstoreへ入るため、秘密・可変データを渡さない。

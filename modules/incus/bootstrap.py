@@ -9,7 +9,7 @@ import stat
 import subprocess
 import sys
 
-from rebuild import guest, require_running, run
+from vm import guest, require_running, run
 
 
 INSTALL = r'''
