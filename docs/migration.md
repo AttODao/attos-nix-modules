@@ -23,7 +23,7 @@ input/importの例は[README](../README.md)、個別APIは[Wiki](https://forgejo
 1. 共有flakeが固定したraw HM sourceを使う。別HM input/import・standalone HM経路・重複する `attopkgs` 供給を置換する。
    旧HM revisionと異なる場合は差分を確認し、共有HMやnixpkgsをその場で更新して解消しない。
 2. HMが必要な既存NixOSユーザーだけを `modules.home-manager.users` または標準 `home-manager.users` で管理し、ユーザーごとの従来の `home.stateVersion` を明示する。
-3. 旧設定を公開APIへ置換する。共有featureのunit/script/program/activationの実装をconsumerから書き換えず、不足する型付き入力を共有側へ追加し、disabled/remote・既存state・生成設定を回帰検査する。
+3. 旧設定を公開APIへ置換する。共有featureのunit/script/program/activationの実装をconsumerから書き換えず、不足する型付き入力を共有側へ追加し、disabled/remote・既存state・生成設定を評価で比較する。
    identity/account/hardware/address/secret供給metadata、package-only・未対応外部program、API外のper-user差分は標準NixOS/HMへ残す。これらを減らすためだけのenableや汎用configuration passthroughは作らない。
 
 共通HM設定は**全HMユーザー**へ適用される。追加ユーザーに固定account/deviceを配ったり、Paseo等の固定portで複数daemonを競合させたりしない。

@@ -133,15 +133,23 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | zed | HM | 任意のcodex-acp npm policy |
 | discord | HM | Fcitx5 |
 | foot | HM | Fonts |
-| ssh | NixOS + HM（clientのみ） | — |
+| ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
-| hermes | NixOS | Docker、公開配置時のみSwarm |
+| hermes / forgejo / immich / karakeep / vaultwarden / opencloud / searxng | NixOS | Docker、公開配置時のみSwarm |
+| jellyfin | NixOS | Docker、公開配置時のみSwarm・ytdl-sub |
+| ollama | NixOS | `webui`時のみDocker、公開配置時はSwarm・Open Terminalも |
+| groupware | NixOS | 同じhostのMailserver |
+| sunshine | NixOS | Hyprland・Steam |
+| mcsmanager / mailserver / wireguard-server / code-server | NixOS | — |
 | public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
-| docker / swarm / traefik / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | Docker / Swarm等、詳細はサーバー設定 |
+| swarm | NixOS | Docker |
+| traefik | NixOS | Docker・Swarm |
+| docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | ytdl-sub / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM + 録画時NixOS | 任意のGPU screen recorder support |
 | open-deck-desktop | NixOS + HM | AppImage support |
-| fcitx5 / floorp / pandora-launcher / pcmanfm / pi / userDirs / vscode / linux-wallpaperengine | HM | — |
+| fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | — |
+| pi | HM + `systemWide`時NixOS | — |
 | claude-code | HM | Piと同じcatalogのskill・context-mode MCP |
 
 依存先を通常代入でfalseにすると競合する。
@@ -231,7 +239,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 `paseo`, `ssh`, `code-server`, `sunshine`, `hermes`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-通常は `private = false`（MCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
+通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。毎起動、既存 `dataDir/vw-data/config.json` の登録boolをatomic更新し、false時はそれを上書きするdomain whitelistも空にする。ADMIN_TOKEN/SMTP/その他stateは保持し、壊れたconfigは起動を拒否する。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。
@@ -281,7 +289,7 @@ modules.vaultwarden = {
 };
 ```
 
-OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
+OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要。Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`は従来どおりclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,provisionKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。

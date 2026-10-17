@@ -15,7 +15,7 @@
 - `atcoder-oj`: ホストのonline-judge-tools/API clientへAtCoderのMiB表記対応patchを適用。
 - `atcoder-aclogin`: aclogin 0.2.1、旧revision/hashを維持。cookieを配布・宣言的管理しない。
 - `atcoder-commands`: 選択したGoとHMユーザーのHOMEを受け取る共通command package。initは既存go.mod/.envrcを保持し、syncは記録済み依存をdownloadするだけ。project固有assetsや未固定libraryの追加・更新は行わない。
-- `code-server`: consumerが固定したx86_64 standalone releaseを包装し、JetBrainsMono Nerd Fontのwoff2/CSSをworkbenchへ組み込む。upstream HTML layoutの変更はreplace-failで検出する。実行packageの選択は標準 `services.code-server.package`。
+- `code-server`: consumerが固定したx86_64 standalone releaseを包装し、JetBrainsMono Nerd Fontのwoff2/CSSをworkbenchへ組み込む。upstream HTML layoutの変更はreplace-failで検出する。通常は公開 `code-server.packageSource` で選択し、moduleが標準 `services.code-server.package` へ既定値として渡す。
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
 - `pandoragh`: Pandora用GitHub mod管理CLIとPython coreを同梱。
