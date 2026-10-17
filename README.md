@@ -3,8 +3,7 @@
 AttODaoの共通NixOS設定。全ホストでHome Managerを組み込み、機能ごとのenableでシステム設定と全HMユーザーの設定をまとめて有効化する。
 
 各moduleのpackage/version、設定項目、設定例、注意点は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)を参照。
-既存構成を移行するエージェントは、編集前に[利用側dotfilesの移行手順](docs/migration.md)を読む。
-未完了の作業は[残作業台帳](docs/inventory.md)、完了済みの履歴はGit履歴/PR等へ残す。
+新しい利用側環境の作成手順は[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)を参照。
 
 ## 導入・適用方法（共通）
 
@@ -102,7 +101,6 @@ modules/
 packages/
   default.nix               by-nameの自動登録と外部source input
   by-name/<2文字>/<name>/package.nix  nixpkgsと同じshard構成
-docs/
 ```
 
 公開option・module間の依存は各機能の `default.nix` に置く。
@@ -317,4 +315,3 @@ nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpacka
 ```
 
 利用側では `--override-input shared "path:$(realpath ../attos-nix-modules)"` を付けて全OS・HM・imageを評価する。
-完了条件は[移行手順](docs/migration.md)、次に行う作業は[残作業台帳](docs/inventory.md)を参照。
