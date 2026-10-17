@@ -11,50 +11,17 @@ let
   recordingsDirectory =
     config.programs.noctalia.settings.plugin_settings."noctalia/screen_recorder".directory;
   recorderPackage = osConfig.programs.gpu-screen-recorder.package;
-  recordingToX = pkgs.writeShellApplication {
-    name = "recording-to-x";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.ffmpeg-full
-    ];
-    text =
-      builtins.replaceStrings
-        [ "@RECORDINGS_DIRECTORY@" ]
-        [
-          (lib.escapeShellArg recordingsDirectory)
-        ]
-        (builtins.readFile ./recording-to-x.sh);
-  };
-  recorder = pkgs.writeShellApplication {
-    name = "gpu-screen-recorder";
-    runtimeInputs = [ pkgs.coreutils ];
-    text =
-      builtins.replaceStrings
-        [ "@GPU_SCREEN_RECORDER@" "@RECORDING_TO_X@" "@RECORDINGS_DIRECTORY@" ]
-        [
-          (lib.escapeShellArg "${recorderPackage}/bin/gpu-screen-recorder")
-          (lib.escapeShellArg "${recordingToX}/bin/recording-to-x")
-          (lib.escapeShellArg recordingsDirectory)
-        ]
-        (builtins.readFile ./gpu-screen-recorder-auto-x.sh);
-  };
 in
 {
   config = lib.mkIf cfg.enable {
     home.packages = [
       pkgs.wl-clipboard
     ]
-    ++ lib.optional cfg.screenRecorder.enable recorderPackage
-    ++ lib.optionals (cfg.screenRecorder.enable && cfg.screenRecorder.convertToX.enable) [
-      recordingToX
-      (lib.hiPrio recorder)
-    ];
+    ++ lib.optional cfg.screenRecorder.enable recorderPackage;
 
-    home.activation.ensureNoctaliaRecordingsDir = lib.mkIf cfg.screenRecorder.enable (
-      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        run ${pkgs.coreutils}/bin/install -d -m 755 ${lib.escapeShellArg recordingsDirectory}
-      ''
-    );
+    systemd.user.tmpfiles.rules = lib.mkIf cfg.screenRecorder.enable [
+      "d ${builtins.toJSON recordingsDirectory} 0755 - - -"
+    ];
 
     systemd.user.services = lib.mkIf config.programs.noctalia.systemd.enable {
       noctalia = {

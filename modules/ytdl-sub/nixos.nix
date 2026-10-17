@@ -16,7 +16,8 @@ let
   youtube = require "subscriptionFiles.youtube" cfg.subscriptionFiles.youtube;
   twitch = require "subscriptionFiles.twitch" cfg.subscriptionFiles.twitch;
   commonConfig = pkgs.writeText "ytdl-sub-config.yaml" (builtins.readFile ./config.yaml);
-  cron = pkgs.writeText "ytdl-sub-cron" (builtins.readFile ./cron);
+  # CRON_SCRIPT must be executable inside the container.
+  cron = pkgs.writeScript "ytdl-sub-cron" (builtins.readFile ./cron);
   container = config.virtualisation.oci-containers.containers.ytdl-sub;
   # tmpfiles fields support quoted paths; escape specifiers and control chars.
   quotePath =
@@ -39,42 +40,22 @@ in
       "d ${quotePath root} 0755 root root -"
       "d ${quotePath "${root}/.ytdl-sub-working-directory"} 0755 ${uid} ${gid} -"
       "d ${quotePath "${root}/config"} 0700 ${uid} ${gid} -"
+      # The only legacy cleanup: obsolete generated files. Never touch media, archives or history.
+      "r ${quotePath "${root}/config/config-twitch.yaml"}"
+      "r ${quotePath "${root}/config/subscriptions.yaml"}"
       "d ${quotePath "${root}/YouTube"} 0755 ${uid} ${gid} -"
       "d ${quotePath "${root}/Twitch"} 0755 ${uid} ${gid} -"
     ];
 
-    systemd.services.ytdl-sub-config = {
-      description = "Stage ytdl-sub configuration without replacing mutable state";
-      unitConfig.RequiresMountsFor = [
-        root
-        cookie
-      ];
-      path = [ pkgs.coreutils ];
-      environment = {
-        YTDL_SUB_DATA_DIR = root;
-        YTDL_SUB_COOKIE_FILE = cookie;
-        YTDL_SUB_UID = uid;
-        YTDL_SUB_GID = gid;
-        YTDL_SUB_CONFIG_FILE = toString commonConfig;
-        YTDL_SUB_YOUTUBE_FILE = toString youtube;
-        YTDL_SUB_TWITCH_FILE = toString twitch;
-        YTDL_SUB_CRON_FILE = toString cron;
-      };
-      restartTriggers = [
-        commonConfig
-        youtube
-        twitch
-        cron
-      ];
-      serviceConfig.Type = "oneshot";
-      script = builtins.readFile ./stage-config.sh;
-    };
-
     systemd.services.${container.serviceName} = {
-      requires = [ "ytdl-sub-config.service" ];
-      after = [ "ytdl-sub-config.service" ];
       unitConfig = {
         ConditionPathExists = lib.mkIf (cfg.startConditionFile != null) cfg.startConditionFile;
+        # Docker would create a missing bind source as a directory; fail instead.
+        AssertPathExists = [
+          cookie
+          (toString youtube)
+          (toString twitch)
+        ];
         RequiresMountsFor = [
           root
           cookie
@@ -102,6 +83,10 @@ in
         "${root}:/ytdl-sub"
         "${root}/config:/config"
         "${cookie}:/config/cookies.txt"
+        "${commonConfig}:/config/config.yaml:ro"
+        "${toString youtube}:/config/subscriptions-youtube.yaml:ro"
+        "${toString twitch}:/config/subscriptions-twitch.yaml:ro"
+        "${cron}:/config/cron:ro"
       ];
     };
   };

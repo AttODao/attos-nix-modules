@@ -20,8 +20,8 @@ in
     cookieFile = pathOption "Consumer-owned runtime cookie file; never read into the Nix store. Rotation restarts belong to the caller.";
     startConditionFile = pathOption "Optional runtime configuration file that must exist before the container starts; null disables the condition.";
     subscriptionFiles = {
-      youtube = configFile "Consumer-supplied YouTube subscription YAML file, copied at runtime; do not pass secret contents through Nix.";
-      twitch = configFile "Consumer-supplied Twitch subscription YAML file, copied at runtime; do not pass secret contents through Nix.";
+      youtube = configFile "Consumer-supplied YouTube subscription YAML file, bind-mounted read-only at runtime from this path (not copied into the Nix store); do not pass secret contents through Nix.";
+      twitch = configFile "Consumer-supplied Twitch subscription YAML file, bind-mounted read-only at runtime from this path (not copied into the Nix store); do not pass secret contents through Nix.";
     };
     uid = mkOption {
       type = types.nullOr types.ints.unsigned;

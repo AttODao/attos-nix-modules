@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -18,11 +17,6 @@ let
   localContainers = lib.filterAttrs (
     _: container: lib.elem "local-services" container.networks
   ) config.virtualisation.oci-containers.containers;
-  ensureLocalNetwork =
-    lib.replaceStrings
-      [ "@docker@" "@network@" ]
-      [ (lib.escapeShellArg "${pkgs.docker}/bin/docker") (lib.escapeShellArg "local-services") ]
-      (builtins.readFile ../forgejo/ensure-network.sh);
 in
 {
   options.modules.public-services = mkOption {
@@ -130,27 +124,7 @@ in
         }) (ps.entries config "ssh");
     }
     (lib.mkIf (localContainers != { }) {
-      systemd.services = {
-        docker-network-local-services = {
-          description = "Create the standalone services Docker bridge";
-          requires = [ "docker.service" ];
-          after = [ "docker.service" ];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-          script = ensureLocalNetwork;
-        };
-      }
-      // lib.mapAttrs' (
-        name: _:
-        lib.nameValuePair "docker-${name}" {
-          requires = [ "docker-network-local-services.service" ];
-          after = [ "docker-network-local-services.service" ];
-          # Docker prune can remove an unused bridge while the oneshot stays active.
-          preStart = lib.mkBefore ensureLocalNetwork;
-        }
-      ) localContainers;
+      modules.docker.networks.local-services = { };
     })
     (lib.mkIf (lib.any (entry: ps.isLocal config entry.cfg) (ps.entries config "ssh")) {
       modules.openssh.enable = true;

@@ -13,24 +13,12 @@ let
   environmentFile = ps.require "karakeep" "environmentFile" cfg.environmentFile;
   dataUid = toString (ps.require "karakeep" "dataUid" cfg.dataUid);
   dataGid = toString (ps.require "karakeep" "dataGid" cfg.dataGid);
-  networkSubnet = "172.20.0.0/24";
+  networkSubnet = "172.20.0.0/16";
   networkGateway = "172.20.0.1";
   chromeAddress = "172.20.0.3";
   baseUrl = ps.url s 3001;
 
-  ensureNetwork = lib.replaceStrings [ "@docker@" "@subnet@" "@gateway@" ] (map lib.escapeShellArg [
-    "${pkgs.docker}/bin/docker"
-    networkSubnet
-    networkGateway
-  ]) (builtins.readFile ./ensure-network.sh);
-
-  networkDep = {
-    unitConfig.RequiresMountsFor = [ dataDir ];
-    requires = [ "docker-network-karakeep.service" ];
-    after = [ "docker-network-karakeep.service" ];
-    # Recheck after prune even when the persistent oneshot remains active.
-    preStart = lib.mkBefore ensureNetwork;
-  };
+  mounts.unitConfig.RequiresMountsFor = [ dataDir ];
 
   directory = mode: user: group: {
     d = {
@@ -42,6 +30,11 @@ let
 in
 {
   config = lib.mkIf s.enabled {
+    modules.docker.networks.karakeep = {
+      subnet = networkSubnet;
+      gateway = networkGateway;
+    };
+
     systemd.tmpfiles.settings."10-karakeep" = {
       ${dataDir} = directory "0755" "root" "root";
       "${dataDir}/data" = directory "0755" dataUid dataGid;
@@ -49,24 +42,10 @@ in
     };
 
     systemd.services = {
-      docker-network-karakeep = {
-        description = lib.mkDefault "Create docker network karakeep";
-        wantedBy = [ "multi-user.target" ];
-        after = [
-          "docker.service"
-          "docker.socket"
-        ];
-        requires = [ "docker.service" ];
-        serviceConfig = {
-          Type = lib.mkDefault "oneshot";
-          RemainAfterExit = lib.mkDefault true;
-        };
-        script = lib.mkDefault ensureNetwork;
-      };
-      docker-karakeep-meilisearch = networkDep;
-      docker-karakeep-chrome = networkDep;
+      docker-karakeep-meilisearch = mounts;
+      docker-karakeep-chrome = mounts;
       docker-karakeep = lib.mkMerge [
-        networkDep
+        mounts
         {
           wants = [ (ps.networkUnit s) ];
           after = [ (ps.networkUnit s) ];

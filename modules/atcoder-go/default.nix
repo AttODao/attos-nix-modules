@@ -24,7 +24,7 @@
       type = lib.types.nullOr lib.types.path;
       default = ./assets;
       defaultText = lib.literalExpression "./assets";
-      description = "Complete project scaffold; defaults to the module's bundled scripts, templates, snippet and devenv definitions. Null selects only the minimal shared helpers.";
+      description = "Complete project scaffold; defaults to the module's bundled CLI source, templates and devenv definitions. Null makes atcoder-go init/sync use go.mod as recorded without scaffolding.";
     };
     projectGoPackage = lib.mkOption {
       type = lib.types.package;

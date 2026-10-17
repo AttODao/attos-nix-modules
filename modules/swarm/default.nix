@@ -63,7 +63,7 @@ in
       sourceAddress = mkOption {
         type = types.nullOr types.nonEmptyStr;
         default = null;
-        description = "Optional local source address passed to curl --interface; the consumer owns host addressing.";
+        description = "Optional local source IP address for the token request; the consumer owns host addressing.";
       };
     };
   };

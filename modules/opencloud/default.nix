@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -49,15 +48,13 @@ in
         "d ${builtins.toJSON configDir} 0700 ${uid} ${gid} -"
         "d ${builtins.toJSON dataDir} 0700 ${uid} ${gid} -"
       ];
+      # Reapply the tmpfiles rules once root is mounted (it may be mounted after boot-time tmpfiles).
       systemd.services.opencloud-prepare = {
         unitConfig.RequiresMountsFor = [ root ];
-        serviceConfig.Type = "oneshot";
-        script = ''
-          set -eu
-          ${pkgs.coreutils}/bin/install -d -m 0700 -o root -g root ${lib.escapeShellArg root}
-          ${pkgs.coreutils}/bin/install -d -m 0700 -o ${uid} -g ${gid} ${lib.escapeShellArg configDir}
-          ${pkgs.coreutils}/bin/install -d -m 0700 -o ${uid} -g ${gid} ${lib.escapeShellArg dataDir}
-        '';
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${config.systemd.package}/bin/systemd-tmpfiles --create ${lib.escapeShellArg "--prefix=${root}"}";
+        };
       };
       systemd.services.docker-opencloud = {
         unitConfig.RequiresMountsFor = [

@@ -1,39 +1,75 @@
 { lib, ... }:
 let
   ps = import ../public-services/lib.nix { inherit lib; };
-  tunnelsType = lib.types.addCheck (lib.types.attrsOf ps.absolutePath) (
-    tunnels:
-    lib.all (
-      name: builtins.match "[a-zA-Z0-9_=+.-]{1,15}" name != null && name != "." && name != ".."
-    ) (builtins.attrNames tunnels)
+  inherit (lib) mkOption types;
+  interfaceName = types.addCheck types.str (
+    name: builtins.match "[a-zA-Z0-9_=+.-]{1,15}" name != null && name != "." && name != ".."
   );
+  publicKey = types.strMatching "[A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=";
+  peerType = types.submodule {
+    options = {
+      publicKey = mkOption {
+        type = publicKey;
+        description = "Base64 public key of the server peer. Public keys are not secret and are stored in the Nix store.";
+      };
+      endpoint = mkOption {
+        type = types.nullOr types.singleLineStr;
+        default = null;
+        example = "vpn.example.org:51820";
+        description = "Peer endpoint as host:port; null leaves it unset.";
+      };
+      allowedIPs = mkOption {
+        type = types.listOf types.singleLineStr;
+        example = [ "0.0.0.0/0" ];
+        description = "Addresses with CIDR masks routed to this peer.";
+      };
+      persistentKeepalive = mkOption {
+        type = types.nullOr (types.ints.between 1 65535);
+        default = null;
+        description = "Keepalive interval in seconds; null disables it.";
+      };
+    };
+  };
+  tunnelType = types.submodule {
+    options = {
+      privateKeyFile = mkOption {
+        type = ps.absolutePath;
+        description = "Quoted absolute runtime path of the decrypted client private key, read by nm-file-secret-agent at activation. Nix path literals and store paths are rejected.";
+      };
+      addresses = mkOption {
+        type = types.nonEmptyListOf types.singleLineStr;
+        example = [ "10.0.0.2/32" ];
+        description = "Interface addresses with CIDR masks (IPv4 or IPv6).";
+      };
+      dns = mkOption {
+        type = types.listOf types.singleLineStr;
+        default = [ ];
+        description = "DNS server addresses (IPv4 or IPv6) used while the tunnel is active.";
+      };
+      peers = mkOption {
+        type = types.nonEmptyListOf peerType;
+        description = "WireGuard peers of this tunnel.";
+      };
+    };
+  };
 in
 {
   imports = [ ./nixos.nix ];
 
   options.modules.wireguard-client = {
-    enable = lib.mkEnableOption "temporary NetworkManager WireGuard client profiles";
-    secretService = lib.mkOption {
-      type = lib.types.nullOr (lib.types.strMatching "[-a-zA-Z0-9@_.:]+[.]service");
-      default = null;
-      example = "sops-install-secrets.service";
-      description = "Existing decryption unit to require and order before importing tunnels. Leave null for activation-script decryption (the sops-nix default).";
-    };
-    tunnels = lib.mkOption {
-      type = tunnelsType;
+    enable = lib.mkEnableOption "declarative NetworkManager WireGuard client profiles";
+    tunnels = mkOption {
+      type = types.addCheck (types.attrsOf tunnelType) (
+        tunnels: lib.all interfaceName.check (builtins.attrNames tunnels)
+      );
       default = { };
       description = ''
-        Interface names (1–15 letters, numbers, _, =, +, ., -; not . or ..)
-        mapped to quoted absolute runtime paths of decrypted WireGuard configs.
-        Nix path literals and store paths are rejected. Profiles are named
-        "WireGuard: <interface>" and imported temporarily with autoconnect disabled.
-        Secret discovery, decryption, permissions and rotation belong to the consumer.
-        Files are read with systemd LoadCredential at service start; order decryption
-        using secretService only when the decryption service exists. With sops-nix, order against
-        sops-install-secrets.service only if sops.useSystemdActivation is true;
-        its default activation-script mode installs secrets before services restart.
-        Restart the import unit on rotation.
-        An empty mapping creates no import unit.
+        Tunnels keyed by interface name (1–15 letters, numbers, _, =, +, ., -; not . or ..).
+        Each becomes a runtime NetworkManager profile "WireGuard: <interface>" with autoconnect
+        disabled. Private keys are served from their runtime files by nm-file-secret-agent on
+        activation and never written to the profile. Decryption, permissions and rotation
+        belong to the consumer. Further profile keys can be added through the standard
+        networking.networkmanager.ensureProfiles.profiles."wireguard-<interface>".
       '';
     };
   };

@@ -65,9 +65,9 @@ in
     ++ lib.optional cfg.neowall.enable pkgs.neowall;
 
     # The screenshot bindings below target this child of the configured Pictures directory.
-    home.activation.ensureHyprlandScreenshotsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run ${pkgs.coreutils}/bin/install -d -m 755 ${screenshotDirectory}
-    '';
+    systemd.user.tmpfiles.rules = [
+      "d ${builtins.toJSON "${config.xdg.userDirs.pictures}/Screenshots"} 0755 - - -"
+    ];
 
     xdg.configFile = lib.mkIf cfg.neowall.enable {
       "neowall/config.vibe".text = ''

@@ -8,7 +8,7 @@ let
       default = null;
       description = "Native nginx upstream reachable by the gateway; required when Traefik forwards this service. Do not use Docker's own loopback address.";
     };
-    dataDir = ps.pathOption "Consumer-owned Radicale data directory (collections and generated runtime authentication).";
+    dataDir = ps.pathOption "Consumer-owned Radicale data directory for collections.";
     productName = lib.mkOption {
       type = lib.types.nonEmptyStr;
       default = "Mail";

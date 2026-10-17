@@ -43,28 +43,28 @@ in
       };
     };
 
-    # 旧generationのsymlinkがlinkGenerationで削除される前に引き継ぐ。
+    # declarativeから切り替えた場合も、旧generationのstore symlinkはlinkGenerationが先に削除する。
     home.activation.mergePiSettings = lib.mkIf (cfg.settingsMode == "merge") (
-      lib.hm.dag.entryBetween [ "linkGeneration" ] [ "writeBoundary" ] ''
-        (
-          set -eu
-          agentDir=${lib.escapeShellArg agentDir}
-          run ${pkgs.coreutils}/bin/install -d -m 0755 "$agentDir"
-          if [ -z "''${DRY_RUN_CMD:-}" ]; then
-            input=/dev/null
-            count=1
-            if [ -e "$agentDir/settings.json" ]; then
-              input="$agentDir/settings.json"
-              count=2
-            fi
-            tmp=$(${pkgs.coreutils}/bin/mktemp "$agentDir/.settings.XXXXXX")
-            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-            ${pkgs.jq}/bin/jq -s --argjson count "$count" -f ${./merge-settings.jq} ${settings} "$input" > "$tmp"
-            ${pkgs.coreutils}/bin/chmod 0600 "$tmp"
-            ${pkgs.coreutils}/bin/mv "$tmp" "$agentDir/settings.json"
-          fi
-        )
-      ''
+      lib.hm.dag.entryAfter [ "linkGeneration" ] (
+        lib.hm.generators.mkImpureConfigMerger {
+          inherit pkgs;
+          format = "json";
+          empty = "{}";
+          mode = "600";
+          path = "${agentDir}/settings.json";
+          staticSettings = settings;
+          # User values win; user package order is kept and missing module packages are appended.
+          jqOperation = ''
+            ($static * $dynamic)
+            | if (.packages | type) == "array" then
+                .packages = (
+                  (($dynamic.packages // []) + ($static.packages // []))
+                  | reduce .[] as $package ([]; if (map(. == $package) | any) then . else . + [$package] end)
+                )
+              else . end
+          '';
+        }
+      )
     );
 
     home.packages = [ pkgs.tmux ] ++ lib.optional cfg.plugins.context-mode.enable attopkgs.context-mode;

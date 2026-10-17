@@ -2,20 +2,51 @@
   config,
   lib,
   pkgs,
+  utils,
   attopkgs,
   ...
 }:
 let
   cfg = config.modules.incus;
   native = config.virtualisation.incus;
-  runner = pkgs.writeShellApplication {
-    name = "attos-incus";
-    runtimeInputs = [
-      native.clientPackage
-      pkgs.python3
-    ];
-    text = ''exec python3 ${./preseed.py} "$@"'';
+  vm = lib.getExe attopkgs.vm;
+  definition = name: vm: {
+    inherit (vm)
+      launchConfig
+      managedDeviceNames
+      credentialFiles
+      credentialRestartUnits
+      ;
+    credentialUnit = if vm.credentialFiles == { } then null else "incus-vm-credentials-${name}.service";
   };
+  vmConfig = pkgs.writeText "vm.json" (
+    builtins.toJSON {
+      inherit (cfg.rebuild) flakeFile;
+      virtualMachines = lib.mapAttrs definition cfg.virtualMachines;
+    }
+  );
+  # Per-VM, so a delivery unit only restarts when its own credentials change.
+  credentialConfig =
+    name: vm:
+    pkgs.writeText "vm-credentials-${name}.json" (
+      builtins.toJSON { virtualMachines.${name} = definition name vm; }
+    );
+  vmCli =
+    pkgs.runCommand "vm"
+      {
+        nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+        meta.mainProgram = "vm";
+      }
+      ''
+        makeWrapper ${vm} $out/bin/vm \
+          --add-flags ${lib.escapeShellArg "--config ${vmConfig}"} \
+          --prefix PATH : ${
+            lib.makeBinPath [
+              native.clientPackage
+              config.nix.package
+            ]
+          }
+      '';
   credentialVMs = lib.filterAttrs (_: vm: vm.credentialFiles != { }) cfg.virtualMachines;
   preseed = native.preseed != null;
   pools = if !preseed then [ ] else native.preseed.storage_pools or [ ];
@@ -44,20 +75,7 @@ in
         # QEMU/KVM and OVMF are supplied by the native Incus module, not libvirtd.
         boot.kernelModules = [ "kvm" ];
         networking.nftables.enable = lib.mkDefault true;
-        environment.systemPackages = lib.optionals (cfg.virtualMachines != { }) [
-          (attopkgs.vm {
-            inherit (cfg.rebuild) flakeFile;
-            virtualMachines = lib.mapAttrs (name: vm: {
-              inherit (vm) launchConfig managedDeviceNames;
-              credentialUnit = if vm.credentialFiles == { } then null else "incus-vm-credentials-${name}.service";
-            }) cfg.virtualMachines;
-            incus = native.clientPackage;
-          })
-          (attopkgs.vm-bootstrap {
-            virtualMachines = builtins.attrNames cfg.virtualMachines;
-            incus = native.clientPackage;
-          })
-        ];
+        environment.systemPackages = lib.optional (cfg.virtualMachines != { }) vmCli;
         assertions = [
           {
             assertion = lib.all (vm: vm.credentialRestartUnits == [ ] || vm.credentialFiles != { }) (
@@ -82,9 +100,14 @@ in
       (lib.mkIf preseed {
         systemd.services.incus-preseed = {
           restartIfChanged = false;
+          path = [ native.clientPackage ];
           serviceConfig = {
             ExecCondition = [
-              "${runner}/bin/attos-incus condition ${lib.escapeShellArg initializePool}"
+              (utils.escapeSystemdExecArgs [
+                vm
+                "preseed-condition"
+                initializePool
+              ])
             ];
             ExecStartPre = map (
               module: "${pkgs.kmod}/bin/modprobe ${lib.escapeShellArg module}"
@@ -94,7 +117,7 @@ in
       })
       {
         systemd.services = lib.mapAttrs' (
-          name: vm:
+          name: vm':
           lib.nameValuePair "incus-vm-credentials-${name}" {
             description = "Deliver runtime credentials to Incus VM ${name}";
             wantedBy = [ "multi-user.target" ];
@@ -103,42 +126,23 @@ in
               "incus.service"
               "incus-startup.service"
             ];
-            path = [
-              native.clientPackage
-              pkgs.gawk
-            ];
-            unitConfig.RequiresMountsFor = builtins.attrValues vm.credentialFiles;
+            path = [ native.clientPackage ];
+            unitConfig.RequiresMountsFor = builtins.attrValues vm'.credentialFiles;
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
               Restart = "on-failure";
               RestartSec = "5s";
               UMask = "0077";
+              # Absent/Stopped VMs are skipped; Running ones retry until the agent answers.
+              ExecStart = utils.escapeSystemdExecArgs [
+                vm
+                "--config"
+                (credentialConfig name vm')
+                name
+                "deliver-credentials"
+              ];
             };
-            script = ''
-              set -euo pipefail
-              state=$(incus --force-local --project default list --format csv --columns ns \
-                | awk -F, -v name=${lib.escapeShellArg name} '$1 == name { print $2 }')
-              # Host activation never starts VMs; vm boot restarts this unit after starting one.
-              case "$state" in ""|STOPPED) exit 0 ;; esac
-            ''
-            + lib.concatStrings (
-              lib.mapAttrsToList (destination: source: ''
-                incus --force-local --project default exec ${lib.escapeShellArg name} -- /bin/sh -eu -c ${lib.escapeShellArg ''
-                  PATH=/run/current-system/sw/bin:/bin
-                  [ ! -L "$1" ]
-                  mkdir -p -m 0700 -- "$1"
-                  [ "$(stat -c %u:%g:%a -- "$1")" = "0:0:700" ]
-                ''} sh ${lib.escapeShellArg (builtins.dirOf destination)}
-                incus --force-local --project default file push --uid 0 --gid 0 --mode 0600 \
-                  ${lib.escapeShellArg source} ${lib.escapeShellArg "${name}${destination}.new"}
-                incus --force-local --project default exec ${lib.escapeShellArg name} -- mv -fT -- \
-                  ${lib.escapeShellArg "${destination}.new"} ${lib.escapeShellArg destination}
-              '') vm.credentialFiles
-            )
-            + lib.optionalString (vm.credentialRestartUnits != [ ]) ''
-              incus --force-local --project default exec ${lib.escapeShellArg name} -- systemctl restart ${lib.escapeShellArgs vm.credentialRestartUnits}
-            '';
           }
         ) credentialVMs;
       }

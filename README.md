@@ -144,7 +144,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | traefik | NixOS | Docker・Swarm |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | ytdl-sub / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
-| noctalia | HM + 録画時NixOS | 任意のGPU screen recorder support |
+| noctalia | HM | 任意のGPU screen recorder support |
 | open-deck-desktop | NixOS + HM | AppImage support |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | — |
 | pi | HM + `systemWide`時NixOS | — |
@@ -160,7 +160,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 
 - `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
 - `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
-- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`、`convertToX.enable` は既定false。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
@@ -171,14 +171,14 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `paseo.{hostname,environmentFile}`: 単独時のhostnameは既定`localhost`。公開時は登録FQDNを継承する。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: monitor / wallpaperのリスト。scalingの既定はfill。assetsやユーザーごとの調整は標準HM設定を使う。
-- `wireguard-client.{tunnels,secretService}`: tunnelsはinterface名から復号済みruntime絶対パス文字列へのattrset、既定 `{}`。secretServiceは既存復号service名またはnull（既定）で、非空tunnels時だけrequires/afterへ追加。SOPSでは `sops.useSystemdActivation` がtrueの場合だけ指定する。秘密の取得・復号・権限・rotationはconsumerが管理する。
+- `wireguard-client.tunnels`: interface名からtunnel定義（`privateKeyFile`・`addresses`・`dns`・`peers`）へのattrset、既定 `{}`。標準`networking.networkmanager.ensureProfiles`でautoconnect無効のruntime profileを作り、秘密鍵はnm-file-secret-agentがruntime fileから渡す。秘密の取得・復号・権限・rotationはconsumerが管理する。
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
 archiveのURL/hash・licenseはconsumerに残す。
 カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
 Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
-AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・scripts・template・snippet）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時は最小helperのみ。認証は配布しない。
+AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{installEditor,userSettings,codexAcp.npmPolicy}`、`vscode.userSettings`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
 `pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable` / `pi.skills.<name>.enable`（各既定true）で同梱resourceを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterは`npm:pi-mcp-adapter@5.3.0`に固定し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
 `claude-code.skills.<name>.enable` / `claude-code.contextMode.enable`（各既定true）で、Pi catalogのうちClaude Codeで動くskillとcontext-mode MCP serverを選ぶ。pi-mermaid-studio（Pi tool依存）・ctx-upgrade（Nix管理installの書換え）・find-skills（npxでNix管理外へ追加）は含めない。`claude-code.lsp.{nixd,rust-analyzer,gopls}.enable`（各既定false）でホストpkgsのlanguage serverをClaude CodeのLSPへ登録する。packageは`attopkgs.claude-code`（sadjow/claude-code-nixをrevision/hash固定）。claude-code/context-modeのunfree許可は利用側、settings.json・認証・履歴は管理しない。
@@ -240,7 +240,7 @@ DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `publ
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
-Vaultwardenの公開 `signupsAllowed` は既定false。毎起動、既存 `dataDir/vw-data/config.json` の登録boolをatomic更新し、false時はそれを上書きするdomain whitelistも空にする。ADMIN_TOKEN/SMTP/その他stateは保持し、壊れたconfigは起動を拒否する。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。
+Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上書きするdomain whitelistも空にする。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。設定はNixと `environmentFile` だけが正で、`CONFIG_FILE` を読み書きできないpathに向けるため既存 `dataDir/vw-data/config.json` は読まれず、adminパネルの設定保存は永続化しない。
 
 MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
 
@@ -292,7 +292,7 @@ OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う
 サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
-Incusの公開 `virtualMachines.<name>.{launchConfig,managedDeviceNames}` はhost activationでは適用せず、`vm <VM> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足VMだけ `rebuild.flakeFile` の標準NixOS metadata/qcow2をbuild・importして `--vm` で作成し、作成用imageを削除する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。初期login password/private fileの再供給は `vm-bootstrap <VM> passwd <user>` / `vm-bootstrap <VM> file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
+Incusの公開 `virtualMachines.<name>.{launchConfig,managedDeviceNames}` はhost activationでは適用せず、`vm <VM> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足VMだけ `rebuild.flakeFile` の標準NixOS metadata/qcow2をbuild・importして `--vm` で作成し、作成用imageを削除する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。初期login password/private fileの再供給は `vm <VM> passwd <user>` / `vm <VM> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.virtualMachines.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-vm-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
 Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
 localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://forgejo.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。

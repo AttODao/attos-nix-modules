@@ -50,6 +50,7 @@ stdenvNoCC.mkDerivation rec {
     chmod 755 "$dest"/daemon/lib/*_linux_*
     runHook postInstall
   '';
+  # The bundled-release smoke test runs in mcsmanager-init, which owns runtime bootstrap.
   doInstallCheck = true;
   installCheckPhase = ''
     node --check "$out/share/mcsmanager/web/app.js"
@@ -58,7 +59,6 @@ stdenvNoCC.mkDerivation rec {
       echo "Unsafe daemon secret logging remains" >&2
       exit 1
     fi
-    node ${../../../../modules/mcsmanager/test-smoke.cjs} "$out/share/mcsmanager" ${../../../../modules/mcsmanager/bootstrap.cjs}
   '';
   meta = {
     description = "MCSManager native web panel and daemon";

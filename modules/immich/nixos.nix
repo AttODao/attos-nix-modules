@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -13,23 +12,16 @@ in
     let
       root = ps.require "immich" "dataDir" s.cfg.dataDir;
       environmentFile = ps.require "immich" "environmentFile" s.cfg.environmentFile;
-      ensureNetwork =
-        lib.replaceStrings [ "@docker@" ] [ (lib.escapeShellArg "${pkgs.docker}/bin/docker") ]
-          (builtins.readFile ./ensure-network.sh);
       directory = mode: {
         mode = lib.mkDefault mode;
         user = lib.mkDefault "root";
         group = lib.mkDefault "root";
       };
-      networkDep = {
-        unitConfig.RequiresMountsFor = lib.mkDefault [ root ];
-        requires = [ "docker-network-immich.service" ];
-        after = [ "docker-network-immich.service" ];
-        # The persistent oneshot can outlive a network removed by Docker prune.
-        preStart = lib.mkBefore ensureNetwork;
-      };
+      mounts.unitConfig.RequiresMountsFor = lib.mkDefault [ root ];
     in
     {
+      modules.docker.networks.immich = { };
+
       # Keep both inputs required even if standard OCI defaults are overridden.
       assertions = [
         {
@@ -47,25 +39,11 @@ in
       };
 
       systemd.services = {
-        docker-network-immich = {
-          description = lib.mkDefault "Create docker network immich";
-          wantedBy = lib.mkDefault [ "multi-user.target" ];
-          after = [
-            "docker.service"
-            "docker.socket"
-          ];
-          requires = [ "docker.service" ];
-          serviceConfig = {
-            Type = lib.mkDefault "oneshot";
-            RemainAfterExit = lib.mkDefault true;
-          };
-          script = lib.mkDefault ensureNetwork;
-        };
-        docker-immich-database = networkDep;
-        docker-immich-machine-learning = networkDep;
-        docker-immich-redis = networkDep;
+        docker-immich-database = mounts;
+        docker-immich-machine-learning = mounts;
+        docker-immich-redis = mounts;
         docker-immich-server = lib.mkMerge [
-          networkDep
+          mounts
           {
             wants = [ (ps.networkUnit s) ];
             after = [ (ps.networkUnit s) ];

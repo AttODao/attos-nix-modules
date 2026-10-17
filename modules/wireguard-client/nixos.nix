@@ -1,63 +1,63 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
+{ config, lib, ... }:
 let
   cfg = config.modules.wireguard-client;
-  tunnels = lib.imap0 (index: name: {
-    inherit name;
-    credential = "tunnel-${toString index}";
-    path = cfg.tunnels.${name};
-  }) (builtins.attrNames cfg.tunnels);
-  metadata = pkgs.writeText "wireguard-client-tunnels.json" (
-    builtins.toJSON (map (tunnel: { inherit (tunnel) name credential; }) tunnels)
+  id = name: "WireGuard: ${name}";
+  isIPv6 = lib.hasInfix ":";
+  list = values: lib.concatMapStrings (value: "${value};") values;
+  addresses =
+    values: lib.listToAttrs (lib.imap1 (index: lib.nameValuePair "address${toString index}") values);
+  ipSection =
+    family: tunnel:
+    let
+      select = if family == "ipv6" then isIPv6 else value: !isIPv6 value;
+      tunnelAddresses = lib.filter select tunnel.addresses;
+      dns = lib.filter select tunnel.dns;
+    in
+    if tunnelAddresses == [ ] then
+      { method = "disabled"; }
+    else
+      { method = "manual"; } // addresses tunnelAddresses // lib.optionalAttrs (dns != [ ]) { dns = list dns; };
+  profile = name: tunnel: {
+    connection = {
+      id = id name;
+      type = "wireguard";
+      interface-name = name;
+      autoconnect = false;
+    };
+    # 1 = agent-owned: NetworkManager requests the key from nm-file-secret-agent.
+    wireguard.private-key-flags = 1;
+    ipv4 = ipSection "ipv4" tunnel;
+    ipv6 = ipSection "ipv6" tunnel;
+  }
+  // lib.listToAttrs (
+    map (
+      peer:
+      lib.nameValuePair "wireguard-peer.${peer.publicKey}" (
+        {
+          allowed-ips = list peer.allowedIPs;
+        }
+        // lib.optionalAttrs (peer.endpoint != null) { inherit (peer) endpoint; }
+        // lib.optionalAttrs (peer.persistentKeepalive != null) {
+          persistent-keepalive = peer.persistentKeepalive;
+        }
+      )
+    ) tunnel.peers
   );
-  python = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
-  command = "${lib.getExe python} ${./import-tunnels.py}";
 in
 {
   config = lib.mkIf cfg.enable {
     # A normal assignment deliberately exposes an explicitly false consumer value.
     networking.networkmanager.enable = true;
 
-    systemd.services.wireguard-client-import = lib.mkIf (cfg.tunnels != { }) {
-      description = "Import runtime WireGuard profiles into NetworkManager";
-      wantedBy = [ "multi-user.target" ];
-      requires = [
-        "NetworkManager.service"
-      ]
-      ++ lib.optional (cfg.secretService != null) cfg.secretService;
-      after = [ "NetworkManager.service" ] ++ lib.optional (cfg.secretService != null) cfg.secretService;
-      partOf = [ "NetworkManager.service" ];
-      path = [ pkgs.networkmanager ];
-      environment = {
-        LC_ALL = "C";
-        # NM's typelib embeds the absolute libnm path; no LD_LIBRARY_PATH needed.
-        GI_TYPELIB_PATH = "${pkgs.networkmanager}/lib/girepository-1.0";
-      };
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        User = "root";
-        Group = "root";
-        RuntimeDirectory = "wireguard-client";
-        RuntimeDirectoryMode = "0700";
-        # Retain ownership records if NM deletion fails, so a later start can retry.
-        RuntimeDirectoryPreserve = "yes";
-        UMask = "0077";
-        LoadCredential = map (tunnel: "${tunnel.credential}:${tunnel.path}") tunnels;
-      };
-
-      script = ''
-        exec ${command} start /run/wireguard-client ${metadata}
-      '';
-      # ExecStopPost also runs after a failed or interrupted ExecStart.
-      postStop = ''
-        exec ${command} stop /run/wireguard-client
-      '';
+    networking.networkmanager.ensureProfiles = {
+      profiles = lib.mapAttrs' (name: tunnel: lib.nameValuePair "wireguard-${name}" (profile name tunnel)) cfg.tunnels;
+      secrets.entries = lib.mapAttrsToList (name: tunnel: {
+        matchId = id name;
+        matchType = "wireguard";
+        matchSetting = "wireguard";
+        key = "private-key";
+        file = tunnel.privateKeyFile;
+      }) cfg.tunnels;
     };
   };
 }

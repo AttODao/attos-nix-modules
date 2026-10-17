@@ -2,48 +2,32 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
 
 let
   cfg = config.modules.login-pin;
-  users = [ "attodao" ];
-  allowedUsersJson = builtins.toJSON users;
-  allowedUsersShell = lib.concatStringsSep " " users;
-  loginPinSecret = config.sops.secrets."login-pin/attodao.pbkdf2" or null;
-  loginPinHashDirectory =
-    if loginPinSecret == null then "/etc/security/login-pin" else builtins.dirOf loginPinSecret.path;
+  loginPinSecret = config.sops.secrets."login-pin/pins.db" or null;
+  loginPinDatabase = if loginPinSecret == null then "/etc/security/login-pin/pins.db" else loginPinSecret.path;
 
-  checkLoginPin = pkgs.writeTextFile {
-    name = "check-login-pin";
-    destination = "/bin/check-login-pin";
-    executable = true;
-    text =
-      builtins.replaceStrings
-        [
-          "@PYTHON@"
-          ''["@ALLOWED_USERS@"]''
-          "@PIN_HASH_DIRECTORY@"
-        ]
-        [
-          "${pkgs.python3}/bin/python3"
-          allowedUsersJson
-          loginPinHashDirectory
-        ]
-        (builtins.readFile ./check-login-pin.py);
-  };
-
-  setLoginPin = pkgs.writeShellApplication {
-    name = "set-login-pin";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.python3
-    ];
-
-    text = builtins.replaceStrings [ "@ALLOWED_USERS@" ] [ allowedUsersShell ] (
-      builtins.readFile ./set-login-pin.sh
-    );
-  };
+  setLoginPin =
+    pkgs.runCommand "set-login-pin"
+      {
+        nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+        meta.mainProgram = "set-login-pin";
+      }
+      ''
+        makeBinaryWrapper ${lib.getExe attopkgs.login-pin} $out/bin/set-login-pin \
+          --add-flag set \
+          --prefix PATH : ${
+            lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.mkpasswd
+              (lib.getBin pkgs.db4)
+            ]
+          }
+      '';
 
   pinPamFor =
     serviceName:
@@ -61,20 +45,28 @@ let
       unixAuth = true;
 
       # greetd delegates to login, while direct services authenticate through pam_unix.
+      # pam_userdb stores the prompted PIN as PAM_AUTHTOK, which pam_unix try_first_pass reuses.
       rules.auth.login-pin = {
         order = authRules.${authRuleName}.order - 10;
         control = "sufficient";
-        modulePath = "${config.security.pam.package}/lib/security/pam_exec.so";
+        modulePath = "${config.security.pam.package}/lib/security/pam_userdb.so";
         args = [
-          "quiet"
-          "expose_authtok"
-          "${checkLoginPin}/bin/check-login-pin"
+          # pam_userdb appends ".db" to this path.
+          "db=${lib.removeSuffix ".db" loginPinDatabase}"
+          "crypt=crypt"
         ];
       };
     };
 in
 {
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = lib.hasSuffix ".db" loginPinDatabase;
+        message = "modules.login-pin: sops.secrets.\"login-pin/pins.db\".path must end in .db for pam_userdb.";
+      }
+    ];
+
     environment.systemPackages = lib.optional (loginPinSecret == null) setLoginPin;
 
     system.activationScripts = lib.mkIf (loginPinSecret == null) {

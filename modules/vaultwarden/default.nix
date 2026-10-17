@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -24,7 +23,7 @@ in
       signupsAllowed = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Allow password-based self-registration. Before each start, atomically enforce signups_allowed in /data/config.json. False also clears the signup-domain whitelist in persisted config and environment because it overrides the flag; true preserves any existing whitelist. Credentials, invitation/SSO-specific settings and other fields are preserved.";
+        description = "Allow password-based self-registration. False also clears the signup-domain whitelist because it overrides the flag; true preserves any whitelist from the environment file.";
       };
       extraHosts = lib.mkOption {
         type = lib.types.attrsOf lib.types.nonEmptyStr;
@@ -51,11 +50,6 @@ in
         ];
         wants = [ (ps.networkUnit s) ];
         after = [ (ps.networkUnit s) ];
-        preStart = lib.mkBefore ''
-          ${pkgs.python3}/bin/python3 ${./patch-signups.py} \
-            ${lib.escapeShellArg "${root}/vw-data/config.json"} \
-            ${lib.boolToString s.cfg.signupsAllowed}
-        '';
       };
 
       virtualisation.oci-containers.containers.vaultwarden = {
@@ -67,6 +61,10 @@ in
         environment = lib.mapAttrs (_: lib.mkDefault) (
           {
             TZ = "Asia/Tokyo";
+            # Unreadable and unwritable: ignore any saved config.json and keep admin-page saves out of
+            # persistent state, so Nix and the environment file stay authoritative.
+            CONFIG_FILE = "/dev/null/config.json";
+            DOMAIN = ps.url s 8000;
             SIGNUPS_ALLOWED = lib.boolToString s.cfg.signupsAllowed;
           }
           // lib.optionalAttrs (!s.cfg.signupsAllowed) {

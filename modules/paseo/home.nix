@@ -78,11 +78,10 @@ in
             )
           }"
         ];
-        ExecStartPre = pkgs.writeShellScript "paseo-install-config" ''
-          set -eu
-          ${pkgs.coreutils}/bin/install -d -m 0700 ${lib.escapeShellArg paseoHome}
-          ${pkgs.coreutils}/bin/install -m 0600 ${paseoConfig} ${lib.escapeShellArg "${paseoHome}/config.json"}
-        '';
+        ExecStartPre = [
+          "${pkgs.coreutils}/bin/install -d -m 0700 ${lib.escapeShellArg paseoHome}"
+          "${pkgs.coreutils}/bin/install -m 0600 ${paseoConfig} ${lib.escapeShellArg "${paseoHome}/config.json"}"
+        ];
         ExecStart = "${paseo}/bin/paseo daemon run --home ${lib.escapeShellArg paseoHome}";
         Restart = "on-failure";
         RestartSec = "5s";

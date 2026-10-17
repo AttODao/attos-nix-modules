@@ -12,25 +12,6 @@ let
   dataDir = ps.require "groupware" "dataDir" cfg.dataDir;
   radicale = config.services.radicale;
   productName = lib.replaceStrings [ "\\" "'" ] [ "\\\\" "\\'" ] cfg.productName;
-  accounts = lib.filterAttrs (_: account: !(account.sendOnly or false)) config.mailserver.accounts;
-  hashFiles = lib.mapAttrsToList (_: account: account.hashedPasswordFile) accounts;
-  accountArgs = lib.concatLists (
-    lib.mapAttrsToList (name: account: [
-      name
-      account.hashedPasswordFile
-    ]) accounts
-  );
-  runtimeUsers = pkgs.writeShellScript "radicale-users" ''
-    exec ${pkgs.python3}/bin/python3 ${./radicale-users.py} ${
-      lib.escapeShellArgs (
-        [
-          "${dataDir}/secrets/users"
-          radicale.group
-        ]
-        ++ accountArgs
-      )
-    }
-  '';
   carddavConfig = pkgs.writeText "roundcube-carddav-config.inc.php" ''
     <?php
     $prefs['Personal'] = [
@@ -57,13 +38,6 @@ let
 in
 {
   config = lib.mkIf selected.enabled {
-    assertions = [
-      {
-        assertion = lib.all (path: path != null && ps.absolutePath.check path) hashFiles;
-        message = "groupware: every receiving mailserver.accounts entry needs an absolute runtime hashedPasswordFile containing a bcrypt hash.";
-      }
-    ];
-
     services.roundcube = {
       enable = true;
       hostName = lib.mkDefault hostname;
@@ -115,30 +89,17 @@ in
     systemd.tmpfiles.rules = [
       "d ${builtins.toJSON dataDir} 0750 ${radicale.user} ${radicale.group} -"
       "d ${builtins.toJSON "${dataDir}/collections"} 0750 ${radicale.user} ${radicale.group} -"
-      "d ${builtins.toJSON "${dataDir}/secrets"} 0750 root ${radicale.group} -"
     ];
-    systemd.services.radicale-users = {
-      description = "Generate Radicale users from runtime mail password hashes";
-      requiredBy = [ "radicale.service" ];
-      before = [ "radicale.service" ];
-      restartTriggers = [ runtimeUsers ];
-      unitConfig.RequiresMountsFor = [ dataDir ] ++ hashFiles;
-      serviceConfig.Type = "oneshot";
-      script = "exec ${runtimeUsers}";
-    };
-    systemd.services.radicale = {
-      requires = [ "radicale-users.service" ];
-      after = [ "radicale-users.service" ];
-      restartTriggers = [ runtimeUsers ];
-      unitConfig.RequiresMountsFor = [ dataDir ];
-    };
+    systemd.services.radicale.unitConfig.RequiresMountsFor = [ dataDir ];
     services.radicale = {
       enable = true;
       settings = {
+        # Same endpoint and certificate check as Roundcube's IMAP login.
         auth = {
-          type = lib.mkDefault "htpasswd";
-          htpasswd_filename = lib.mkDefault "${dataDir}/secrets/users";
-          htpasswd_encryption = lib.mkDefault "bcrypt";
+          type = lib.mkDefault "imap";
+          imap_host = lib.mkDefault "${hostname}:993";
+          imap_security = lib.mkDefault "tls";
+          cache_logins = lib.mkDefault true;
         };
         storage.filesystem_folder = lib.mkDefault "${dataDir}/collections";
       };

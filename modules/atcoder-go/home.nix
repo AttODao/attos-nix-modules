@@ -8,6 +8,7 @@
 }:
 let
   cfg = osConfig.modules.atcoder-go;
+  scaffold = cfg.projectAssets != null;
   projectAssets = pkgs.runCommand "atcoder-go-project-assets" { } ''
     mkdir -p "$out/.atcoder"
     cp -R ${lib.escapeShellArg "${cfg.projectAssets}/atcoder/."} "$out/.atcoder/"
@@ -16,19 +17,19 @@ let
     cp ${lib.escapeShellArg "${cfg.projectAssets}/envrc"} "$out/.envrc"
     cp ${lib.escapeShellArg "${cfg.projectAssets}/gitignore"} "$out/.gitignore"
   '';
-  projectCommand = pkgs.writeShellApplication {
-    name = "atcoder-go";
-    runtimeInputs = [
-      cfg.projectGoPackage
-      pkgs.coreutils
-      pkgs.gnugrep
-    ];
-    text = ''
-      export ATCODER_GO_BIN_DIR="${cfg.projectGoPackage}/bin"
-      export ATCODER_PROJECT_ASSETS="${projectAssets}"
-      exec ${pkgs.bash}/bin/bash -euo pipefail ${lib.escapeShellArg "${cfg.projectAssets}/atcoder/scripts/project"} "$@"
-    '';
-  };
+  # The scaffold uses its own toolchain; the minimal CLI follows the user's Go.
+  goPackage = if scaffold then cfg.projectGoPackage else config.programs.go.package;
+  atcoderGo =
+    pkgs.runCommand "atcoder-go"
+      {
+        nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+        meta.mainProgram = "atcoder-go";
+      }
+      ''
+        makeBinaryWrapper ${lib.getExe attopkgs.atcoder-go} "$out/bin/atcoder-go" \
+          --set ATCODER_GO_BIN_DIR ${goPackage}/bin \
+          ${lib.optionalString scaffold "--set ATCODER_PROJECT_ASSETS ${projectAssets}"}
+      '';
 in
 {
   config = lib.mkIf osConfig.modules.atcoder-go.enable {
@@ -50,12 +51,7 @@ in
       attopkgs.atcoder-cli
       attopkgs.atcoder-oj
       attopkgs.atcoder-aclogin
-      (attopkgs.atcoder-commands {
-        go = config.programs.go.package;
-        homeDirectory = config.home.homeDirectory;
-        aclogin = attopkgs.atcoder-aclogin;
-      })
-    ]
-    ++ lib.optional (cfg.projectAssets != null) (lib.hiPrio projectCommand);
+      atcoderGo
+    ];
   };
 }

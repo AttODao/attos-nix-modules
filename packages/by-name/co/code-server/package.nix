@@ -18,7 +18,8 @@
 }:
 { src }:
 let
-  nerdFont = nerd-fonts.jetbrains-mono;
+  nerdFontFile = "${nerd-fonts.jetbrains-mono}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono-Regular.ttf";
+  workbenchCss = "{{WORKBENCH_WEB_BASE_URL}}/out/vs/code/browser/workbench/workbench.css";
   manifest = builtins.fromJSON (builtins.readFile "${src}/package.json");
 in
 stdenvNoCC.mkDerivation {
@@ -42,10 +43,28 @@ stdenvNoCC.mkDerivation {
     stdenv.cc.cc
     webkitgtk_4_1
   ];
-  CODE_SERVER_SOURCE = src;
-  NERD_FONT_FILE = "${nerdFont}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono-Regular.ttf";
-  NERD_FONT_CSS = ./nerd-font.css;
-  installPhase = builtins.readFile ./install.sh;
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p "$out/bin" "$out/libexec/code-server"
+    cp -R ${src}/. "$out/libexec/code-server"
+    chmod -R u+w "$out/libexec/code-server"
+    ln -s ../libexec/code-server/bin/code-server "$out/bin/code-server"
+
+    media="$out/libexec/code-server/src/browser/media"
+    install -m 0644 ${nerdFontFile} "$media/${baseNameOf nerdFontFile}"
+    woff2_compress "$media/${baseNameOf nerdFontFile}"
+    rm "$media/${baseNameOf nerdFontFile}"
+    install -m 0644 ${./nerd-font.css} "$media/nerd-font.css"
+
+    substituteInPlace "$out/libexec/code-server/lib/vscode/out/vs/code/browser/workbench/workbench.html" \
+      --replace-fail \
+      '<link rel="stylesheet" href="${workbenchCss}">' \
+      '<link rel="stylesheet" href="${workbenchCss}">
+            <link rel="stylesheet" href="{{BASE}}/_static/src/browser/media/nerd-font.css">'
+
+    runHook postInstall
+  '';
   doInstallCheck = true;
   installCheckPhase = ''
     test -x "$out/bin/code-server"

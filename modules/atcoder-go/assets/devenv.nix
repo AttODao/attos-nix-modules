@@ -6,7 +6,7 @@ let
   };
   atcoderCli = pkgs.callPackage ./.atcoder/nix/atcoder-cli.nix { };
   aclogin = pkgs.callPackage ./.atcoder/nix/aclogin.nix { };
-  snippet = pkgs.callPackage ./.atcoder/nix/snippet.nix { };
+  atcoderGo = pkgs.callPackage ./.atcoder/nix/atcoder-go.nix { };
   onlineJudgeApiClient = pkgs.python3Packages.online-judge-api-client.overridePythonAttrs (old: {
     postPatch = (old.postPatch or "") + ''
       substituteInPlace onlinejudge/service/atcoder.py \
@@ -25,9 +25,10 @@ let
     ) old.dependencies;
   });
   atcoderConfig = "$DEVENV_ROOT/.devenv/state/config";
-  atcoderScript = name: ''
+  # acc keeps its config and session inside the project.
+  atcoderGoCommand = command: ''
     export XDG_CONFIG_HOME="${atcoderConfig}"
-    exec bash "$DEVENV_ROOT/.atcoder/scripts/${name}" "$@"
+    exec atcoder-go ${command} "$@"
   '';
 in
 {
@@ -44,7 +45,7 @@ in
     onlineJudgeTools
     atcoderCli
     aclogin
-    snippet
+    atcoderGo
   ];
 
   env.GOTOOLCHAIN = "local";
@@ -63,30 +64,10 @@ in
   '';
 
   scripts = {
-    "atcoder-go".exec = ''
-      exec bash "$DEVENV_ROOT/.atcoder/scripts/project" "$@"
-    '';
-    acn.exec = atcoderScript "acn";
-    act.exec = atcoderScript "act";
-    acs.exec = atcoderScript "acs";
-    ats.exec = ''
-      exec atcoder-snippet "$@"
-    '';
-    "aclogin-atcoder".exec = ''
-      oj_cookie="$HOME/.local/share/online-judge-tools/cookie.jar"
-      acc_cookie="$HOME/.config/atcoder-cli-nodejs/session.json"
-      install -d -m 700 "$(dirname "$oj_cookie")" "$(dirname "$acc_cookie")"
-
-      if aclogin --tools oj acc \
-        --oj-cookie-path "$oj_cookie" \
-        --acc-cookie-path "$acc_cookie" "$@"; then
-        config_dir="$(XDG_CONFIG_HOME="${atcoderConfig}" acc config-dir)"
-        install -d -m 700 "$config_dir"
-        ln -sfn "$acc_cookie" "$config_dir/session.json"
-      else
-        status="$?"
-        exit "$status"
-      fi
-    '';
+    acn.exec = atcoderGoCommand "new";
+    act.exec = atcoderGoCommand "test";
+    acs.exec = atcoderGoCommand "submit";
+    ats.exec = atcoderGoCommand "snippet";
+    "aclogin-atcoder".exec = atcoderGoCommand "login";
   };
 }

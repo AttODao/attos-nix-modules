@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
 let
@@ -58,15 +59,21 @@ let
           )
     )
   );
-  swarm = pkgs.writeShellApplication {
-    name = "attos-swarm";
-    runtimeInputs = [
-      pkgs.docker
-      pkgs.coreutils
-      pkgs.curl
-    ];
-    text = builtins.readFile ./swarm.sh;
-  };
+  docker = "${config.virtualisation.docker.package}/bin/docker";
+  swarm =
+    command: args:
+    lib.escapeShellArgs (
+      [
+        "${attopkgs.attos-docker}/bin/attos-docker"
+        "swarm"
+        command
+      ]
+      ++ lib.optionals (command != "fetch" && command != "serve") [
+        "--docker"
+        docker
+      ]
+      ++ args
+    );
   manager = cfg.role == "manager";
   joinUnit = if manager then "docker-swarm-init" else "docker-swarm-join";
   marker = "/run/docker-swarm-network-ready/networks-ready";
@@ -108,14 +115,15 @@ in
             UMask = "0077";
             ExecStart =
               if manager then
-                "${swarm}/bin/attos-swarm manager ${
-                  lib.escapeShellArgs [
-                    (required "advertiseAddress")
-                    cfg.tokenOutputFile
-                  ]
-                }"
+                swarm "manager" [
+                  (required "advertiseAddress")
+                  cfg.tokenOutputFile
+                ]
               else
-                "${swarm}/bin/attos-swarm worker ${lib.escapeShellArg managerAddress} %d/join-token";
+                swarm "worker" [
+                  managerAddress
+                  "%d/join-token"
+                ];
           }
           // lib.optionalAttrs (!manager) {
             LoadCredential = [ "join-token:${required "joinTokenFile"}" ];
@@ -134,10 +142,7 @@ in
             Type = "oneshot";
             RemainAfterExit = true;
             ExecStart =
-              if manager then
-                "${swarm}/bin/attos-swarm network ${lib.escapeShellArgs ([ marker ] ++ networks)}"
-              else
-                "${swarm}/bin/attos-swarm wait ${lib.escapeShellArg networkReadyUrl}";
+              if manager then swarm "network" ([ marker ] ++ networks) else swarm "wait" [ networkReadyUrl ];
           };
         };
       }
@@ -158,12 +163,10 @@ in
                 if manager then
                   "${pkgs.coreutils}/bin/test -f ${marker}/${network}"
                 else
-                  "${swarm}/bin/attos-swarm wait ${
-                    lib.escapeShellArgs [
-                      "${networkReadyUrl}/${network}"
-                      network
-                    ]
-                  }";
+                  swarm "wait" [
+                    "${networkReadyUrl}/${network}"
+                    network
+                  ];
             };
           }
         );
@@ -177,16 +180,14 @@ in
               lib.nameValuePair container.serviceName {
                 preStart = lib.mkBefore (
                   if manager then
-                    "${swarm}/bin/attos-swarm network ${lib.escapeShellArgs ([ marker ] ++ networks)}"
+                    swarm "network" ([ marker ] ++ networks)
                   else
                     lib.concatMapStringsSep "\n" (
                       network:
-                      "${swarm}/bin/attos-swarm wait ${
-                        lib.escapeShellArgs [
-                          "${networkReadyUrl}/${network}"
-                          network
-                        ]
-                      }"
+                      swarm "wait" [
+                        "${networkReadyUrl}/${network}"
+                        network
+                      ]
                     ) (lib.filter (lib.hasPrefix "backend-") container.networks)
                 );
               }
@@ -208,13 +209,16 @@ in
             RuntimeDirectory = "docker-swarm";
             RuntimeDirectoryMode = "0700";
             UMask = "0077";
-            ExecStart = "${swarm}/bin/attos-swarm fetch ${
-              lib.escapeShellArgs [
+            ExecStart = swarm "fetch" (
+              lib.optionals (cfg.tokenFetch.sourceAddress != null) [
+                "--source"
+                cfg.tokenFetch.sourceAddress
+              ]
+              ++ [
                 (ps.require "modules.swarm.tokenFetch" "url" cfg.tokenFetch.url)
-                (if cfg.tokenFetch.sourceAddress == null then "" else cfg.tokenFetch.sourceAddress)
                 (required "joinTokenFile")
               ]
-            }";
+            );
           };
         };
         # Fetch before systemd snapshots LoadCredential, including already joined workers.
@@ -241,22 +245,20 @@ in
           ]
           ++ lib.optional cfg.tokenTransport.enable "docker-swarm-init.service";
           serviceConfig = {
-            ExecStart =
-              if cfg.tokenTransport.enable then
-                "${pkgs.python3}/bin/python3 ${./token-server.py} ${
-                  lib.escapeShellArgs [
-                    cfg.readinessAddress
-                    (toString cfg.readinessPort)
-                  ]
-                } %d/worker-token ${lib.escapeShellArgs ([ marker ] ++ cfg.tokenTransport.allowedAddresses)}"
-              else
-                "${pkgs.python3}/bin/python3 ${./readiness-server.py} ${
-                  lib.escapeShellArgs [
-                    cfg.readinessAddress
-                    (toString cfg.readinessPort)
-                    marker
-                  ]
-                }";
+            ExecStart = swarm "serve" (
+              [
+                "--address"
+                cfg.readinessAddress
+                "--port"
+                (toString cfg.readinessPort)
+                "--marker"
+                marker
+              ]
+              ++ lib.optionals cfg.tokenTransport.enable [
+                "--token"
+                "%d/worker-token"
+              ]
+            );
             DynamicUser = true;
             Restart = "on-failure";
             RestartSec = "2s";
@@ -266,6 +268,9 @@ in
           }
           // lib.optionalAttrs cfg.tokenTransport.enable {
             LoadCredential = [ "worker-token:${cfg.tokenOutputFile}" ];
+            # The kernel drops packets from other peers before they reach the listener.
+            IPAddressAllow = cfg.tokenTransport.allowedAddresses;
+            IPAddressDeny = "any";
           };
         };
       })

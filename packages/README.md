@@ -7,19 +7,24 @@
 - `claude-code`: `flake.nix` の `claude-code-nix`（github:sadjow/claude-code-nix、`flake = false`）root直下の `package.nix` を利用ホストのpkgsで `callPackage` する。versionは共有flake.lockで固定し、`nix flake update claude-code-nix` で更新する。
 
 実装済み:
-- `vm-bootstrap`: 宣言済みのRunning KVM VMへ、未設定のlogin passwordをTTYで設定、またはユーザーhome内へprivate runtime fileを配送するCLI。既存password/hash/fileは保持し、root/system account、container、停止VM、公開読取file、home外の配送は拒否。hostのprofile/image/storeへ秘密を入れず、service起動は明示指定時のみ行う。
-- `vm`: Incus moduleのruntime flake.nix pathと宣言済みVMのlaunch設定・managed device名・credential配送unitを受け取る `attopkgs.vm` / `vm` CLI。`vm <VM> boot` は不足VMをflakeのmetadata/qcow2から作成して作成用imageを削除し、managed deviceをupsertして起動、agentを待ってcredential配送unitを再起動する。`stop`、TTY確認付きの `delete`（Stopped限定）、`rebuild [action]`（既定switch。適用actionは先にbootし、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す）を持つ。local/default project限定、hostのprofileは変更しない。`--override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
+- `build-go-program`: repo内script用のGo builder。`{ build-go-program }: build-go-program { pname = "<name>"; src = ./.; }` で、`src`直下の`.go`（単一 `package main`、標準libraryのみ、go.modなし）を1つの実行ファイル `bin/<pname>` にする。Goは利用ホストの `pkgs.go` をビルド時だけ使い、runtime closureへ入らない。buildで `go vet`、`*_test.go` があればcheckPhaseで `go test` を実行する。srcは`.go`だけをfilesetで取り込むため、package.nixや文書の変更では再ビルドしない。host設定はderivationへ含めず、JSON pathや引数を実行時に渡す。外部moduleが必要になったpackageはgo.mod + `buildGoModule` へ切り替える。
+- `attos-docker`: 共有Docker bridge networkの作成・検査（`network ensure`）とSwarm操作（`swarm manager/worker/network/fetch/wait/serve`）を行う標準libraryのみのGo program。既存networkは再作成せず、不一致は失敗する。tokenやjoin出力をjournalへ出さない。
+- `wireguard-runtime`: wireguard-server moduleのruntime client設定生成（`configs`）とQR表示（`qr`、`wg-qr` wrapper経由）を行うGo program。key fileはruntimeで検査し、file単位でatomic交換する。
+- `cloudflare-cnames`: cloudflare-public-cnames moduleのCNAME同期Go program。ownership commentを持つ記録だけをpruneし、認証情報・response内容を出力しない。
+- `login-pin`: login-pin moduleの`set-login-pin`（`login-pin set`）。mkpasswd（yescrypt）・db_loadでpam_userdb用DBを0600で原子的に置換する。testは実DBを`db_dump`で検査する。
+- `mcsmanager-init`: mcsmanagerのExecStartPreで既存JSONへのruntime設定mergeと初期管理者作成を行うGo program。asset symlinkはmoduleのtmpfilesが作る。testで同梱releaseを一時state・偽credentialで起動するsmoke testを行う（`mcsmanager`をcheck入力に持つ）。
+- `vm`: Incus用のGo CLI（`build-go-program`、標準libraryのみ、`go vet`/`go test`）。host設定は含まず、Incus moduleがbinary wrapperで `--config <JSON>`（runtime flake.nix path・宣言済みVMのlaunch設定・managed device名・credential配送unit/file）とPATH（incus client・nix）を渡す。`vm <VM> boot` は不足VMをflakeのmetadata/qcow2から作成して作成用imageを削除し、managed deviceをupsertして起動、agentを待ってcredential配送unitを再起動する。`stop`、TTY確認付きの `delete`（Stopped限定）、`rebuild [action]`（既定switch。適用actionは先にbootし、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す）を持つ。`passwd <user>` / `push-file <user> <source> <dest> [--system-unit|--user-unit]` は宣言済みRunning VMへ未設定のlogin passwordをTTYで設定、またはユーザーhome内へprivate fileをuser権限・hard linkで非上書き配置する（既存password/hash/file保持、root/system account・container・公開読取file・home外は拒否、unit起動は新規配置時のみ）。`deliver-credentials` はcredential配送unit用、`vm preseed-condition <pool>` はcreate-only preseedのExecCondition。local/default project限定、hostのprofileは変更しない。`--override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
 - `mcsmanager`: 公式10.19.0のself-contained releaseをhash固定し、単一derivationで `attopkgs.mcsmanager/share/mcsmanager/{web,daemon}` へ配置。npm fetch/node_modulesは不要。PTY等をNixOSへpatchし、upstream daemon keyログを除去する。install checkはtemp-only web/daemonの認証・assets・prefixを確認し、runtime secret/bootstrapはmoduleに残す。
 - `paseo`: Paseo 0.11.1のsource/lock依存hash固定。`attopkgs.paseo` はstore Nodeとnative依存を使うCLIを供給し、起動時npx/npm fetchを行わない。
 - `atcoder-cli`: atcoder-cli 2.2.0。source hash / npmDepsHash固定。
 - `atcoder-oj`: ホストのonline-judge-tools/API clientへAtCoderのMiB表記対応patchを適用。
 - `atcoder-aclogin`: aclogin 0.2.1、revision/hash固定。cookieを配布・宣言的管理しない。
   `atcoder-cli` と共に定義はproject scaffoldと共有する `modules/atcoder-go/assets/atcoder/nix/` にあり、by-name側はimportするだけ。
-- `atcoder-commands`: 選択したGoとHMユーザーのHOMEを受け取る共通command package。initは既存go.mod/.envrcを保持し、syncは記録済み依存をdownloadするだけ。project固有assetsや未固定libraryの追加・更新は行わない。
+- `atcoder-go`: `modules/atcoder-go/assets/atcoder/cli/` のGo source（標準libraryのみ）を共有builderで構築するAtCoder CLI。project scaffoldのdevenvも同じsourceを`buildGoModule`で構築する。toolchainとscaffold assetsはmoduleがbinary wrapperの`ATCODER_GO_BIN_DIR`・`ATCODER_PROJECT_ASSETS`で渡す。
+- `pipeasio-steam-prefixes`: `pipeasio-manage list`のSteam targetへ、各ゲームのrunner（umu）でPipeASIOを登録するGo helper。`pipeasio-register-steam-prefixes`と、`pipeasio-register`用WINE `pipeasio-proton-run`を提供する。pipeasio・umuのPATHとdriver DLL pathはwrapperで固定する。
 - `code-server`: consumerが固定したx86_64 standalone releaseを包装し、JetBrainsMono Nerd Fontのwoff2/CSSをworkbenchへ組み込む。upstream HTML layoutの変更はreplace-failで検出する。通常は公開 `code-server.packageSource` で選択し、moduleが標準 `services.code-server.package` へ既定値として渡す。
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
-- `pandoragh`: Pandora用GitHub mod管理CLIとPython coreを同梱。
 - `open-deck-desktop`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
 - `pi`: Pi 1.0.2のversion override。base nixpkgsのinstall処理がcodemode/MCP workspaceを落とす場合だけ補完し、copy済みのworkspaceは保持する。install checkで両moduleのimportを確認する。固定nixpkgsがPi 1.0.2以上を提供したらoverrideを削除する。
 - `pi-mermaid-studio`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
@@ -29,8 +34,7 @@
 - `centered-plymouth-theme`: consumer画像を受け取り、黒背景でlogoを中央配置する汎用Plymouth script theme `centered-logo` を構築。共有側にホスト名・ブランド画像を含めない。
 
 `default.nix` に `{ pkgs, inputs }` を渡すと、利用ホストのpkgsで構築したscopeを返す。flakeは `attopkgs { pkgs }`・`overlays.default`（`pkgs.attopkgs`）・共有nixpkgsで構築した `legacyPackages.<system>`、そのうちderivationだけの `packages.<system>` を公開する（`nix shell attos-nix-modules#claude-code` 等）。
-`atcoder-commands`・`code-server`・`custom-cursors`・`centered-plymouth-theme`・`vm`・`vm-bootstrap` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
-`atcoder-commands { go = <選択package>; homeDirectory = <HMのHOME>; aclogin = <選択package>; }` と
+`code-server`・`custom-cursors`・`centered-plymouth-theme` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
 `code-server { src = <固定したstandalone release>; }` で使用する。
 `centered-plymouth-theme { image = <consumer画像path>; }` も同じsetに含む関数。ImageMagickの `-resize '960x360>'` で縦横比を保ち最大960x360へ縮小し、拡大しない。出力は `share/plymouth/themes/centered-logo/` にdescriptor・script・logo.pngを置く。画像は公開可能なbuild入力としてstoreへ入るため、秘密・可変データを渡さない。
 code-server releaseの取得URL/hash・versionはconsumer inputに固定し、共有側でlatest取得や新しい供給元へ切り替えない。

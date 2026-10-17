@@ -17,10 +17,11 @@ let
   group = required "group";
   listenAddress = if s.standalone then "127.0.0.1" else cfg.listenAddress;
   packageDir = "${attopkgs.mcsmanager}/share/mcsmanager";
+  arch = if pkgs.stdenv.hostPlatform.isAarch64 then "arm64" else "x64";
   settings = pkgs.writeText "mcsmanager-runtime-settings.json" (
     builtins.toJSON {
       dataDir = root;
-      inherit packageDir listenAddress;
+      inherit listenAddress;
       inherit (s) hostname standalone;
       inherit (cfg) webPort daemonPort;
       initialAdmin = cfg.initialAdminFile != null;
@@ -64,7 +65,11 @@ let
       User = lib.mkDefault user;
       Group = lib.mkDefault group;
       WorkingDirectory = lib.mkDefault "${root}/${kind}";
-      ExecStartPre = lib.mkDefault "${pkgs.nodejs}/bin/node ${./bootstrap.cjs} ${kind} ${settings}";
+      ExecStartPre = lib.mkDefault [
+        # Recreate the tmpfiles layout (asset links) for late mounts and package updates, as root.
+        "+${config.systemd.package}/bin/systemd-tmpfiles --create ${lib.escapeShellArg "--prefix=${root}/${kind}"}"
+        "${lib.getExe attopkgs.mcsmanager-init} ${kind} ${settings}"
+      ];
       ExecStart = lib.mkDefault "${pkgs.nodejs}/bin/node ${packageDir}/${kind}/app.js";
       LoadCredential = lib.mkDefault (
         [ "daemon-key:${keyFile}" ]
@@ -162,11 +167,27 @@ in
           message = "mcsmanager: dataDir must be a dedicated service directory, not the filesystem root.";
         }
       ];
-      systemd.tmpfiles.rules = [
-        "d ${builtins.toJSON root} 0711 root root -"
-        "d ${builtins.toJSON "${root}/web"} 0700 ${webUser} ${group} -"
-        "d ${builtins.toJSON "${root}/daemon"} 0700 ${daemonUser} ${group} -"
-      ];
+      systemd.tmpfiles.rules =
+        let
+          dir = path: user: "d ${builtins.toJSON "${root}/${path}"} 0700 ${user} ${group} -";
+          link = path: target: "L+ ${builtins.toJSON "${root}/${path}"} - - - - ${packageDir}/${target}";
+          tool = name: link "daemon/lib/${name}_linux_${arch}" "daemon/lib/${name}_linux_${arch}";
+        in
+        [
+          "d ${builtins.toJSON root} 0711 root root -"
+          (dir "web" webUser)
+          (dir "web/data" webUser)
+          (dir "web/data/User" webUser)
+          (dir "web/logs" webUser)
+          (link "web/public" "web/public")
+          (dir "daemon" daemonUser)
+          (dir "daemon/data" daemonUser)
+          (dir "daemon/logs" daemonUser)
+          (dir "daemon/lib" daemonUser)
+          (tool "pty")
+          (tool "file_zip")
+          (tool "7z")
+        ];
       systemd.services.mcsmanager-key = lib.mkIf cfg.generateDaemonKey {
         description = "Create the native MCSManager daemon credential once";
         after = [ "systemd-tmpfiles-setup.service" ];

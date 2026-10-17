@@ -3,8 +3,6 @@ let
   publicServices = import ../public-services/lib.nix { inherit lib; };
 in
 {
-  imports = [ ./nixos.nix ];
-
   options.modules.noctalia = {
     enable = lib.mkEnableOption "shared Noctalia configuration";
     package = lib.mkOption {
@@ -79,7 +77,6 @@ in
         default = "h264";
         description = "Video codec understood by the Noctalia recorder plugin.";
       };
-      convertToX.enable = lib.mkEnableOption "automatic HDR-to-SDR recording conversion for X (requires screenRecorder.enable)";
     };
   };
 

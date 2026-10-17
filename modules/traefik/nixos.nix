@@ -13,28 +13,8 @@ let
   games = ps.entries config "mcsmanager";
   networks = ps.backendNetworks config;
   native = cfg.nativeBackendNetwork;
-  nativeUnits = lib.optional (native != null) "docker-network-${native.name}.service";
-  networkUnits = map (network: "docker-network-${network}.service") networks ++ nativeUnits;
-  docker = "${config.virtualisation.docker.package}/bin/docker --host=unix:///run/docker.sock";
-  ensureNativeNetwork = lib.optionalString (native != null) ''
-    if ! ${docker} network inspect ${lib.escapeShellArg native.name} >/dev/null 2>&1; then
-      ${docker} network create --driver bridge \
-        --subnet ${lib.escapeShellArg native.subnet} --gateway ${lib.escapeShellArg native.gateway} \
-        --opt ${lib.escapeShellArg "com.docker.network.bridge.name=${native.interface}"} ${lib.escapeShellArg native.name} >/dev/null
-    fi
-    ${docker} network inspect ${lib.escapeShellArg native.name} |
-      ${pkgs.jq}/bin/jq -e ${lib.escapeShellArg ''
-        length == 1 and .[0].Driver == "bridge" and .[0].Scope == "local"
-                and .[0].Options["com.docker.network.bridge.name"] == ${builtins.toJSON native.interface}
-                and .[0].IPAM.Config == ${
-                  builtins.toJSON [
-                    {
-                      Subnet = native.subnet;
-                      Gateway = native.gateway;
-                    }
-                  ]
-                }''} >/dev/null
-  '';
+  # The native bridge unit and its prune recheck come from modules.docker.networks.
+  networkUnits = map (network: "docker-network-${network}.service") networks;
   mails = ps.entries config "mailserver";
   game = if games == [ ] then null else builtins.head games;
   mail = if mails == [ ] then null else builtins.head mails;
@@ -319,52 +299,44 @@ in
       "d ${builtins.toJSON root} 0755 root root -"
       "d ${builtins.toJSON "${root}/acme"} 0700 root root -"
     ];
-    systemd.services =
-      lib.optionalAttrs (native != null) {
-        "docker-network-${native.name}" = {
-          description = "Ensure the dedicated Traefik native-backend bridge";
-          requires = [ "docker.service" ];
-          after = [ "docker.service" ];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-          script = ensureNativeNetwork;
+    modules.docker.networks = lib.optionalAttrs (native != null) {
+      ${native.name} = {
+        inherit (native) subnet gateway;
+        options."com.docker.network.bridge.name" = native.interface;
+      };
+    };
+    systemd.services = {
+      docker-traefik = {
+        environment = lib.optionalAttrs (native != null) {
+          DOCKER_HOST = "unix:///run/docker.sock";
+          DOCKER_CONTEXT = "";
         };
-      }
-      // {
-        docker-traefik = {
-          environment = lib.optionalAttrs (native != null) {
-            DOCKER_HOST = "unix:///run/docker.sock";
-            DOCKER_CONTEXT = "";
-          };
-          unitConfig.RequiresMountsFor = [
-            root
-            environmentFile
-          ];
-          requires = networkUnits;
-          after = networkUnits;
-          restartTriggers = [
-            staticFile
-            dynamicFile
-          ];
-          # Recheck after prune even when the network oneshot remains active.
-          preStart = ensureNativeNetwork + ''
-            : "''${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for Traefik DNS-01}"
-            umask 077
-            token_file=$(mktemp /run/traefik-acme/cloudflare.env.XXXXXX)
-            trap 'rm -f "$token_file"' EXIT
-            printf 'CF_DNS_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN" > "$token_file"
-            chmod 0600 "$token_file"
-            mv -f "$token_file" /run/traefik-acme/cloudflare.env
-          '';
-          serviceConfig = {
-            EnvironmentFile = environmentFile;
-            RuntimeDirectory = "traefik-acme";
-            RuntimeDirectoryMode = "0700";
-          };
+        unitConfig.RequiresMountsFor = [
+          root
+          environmentFile
+        ];
+        requires = networkUnits;
+        after = networkUnits;
+        restartTriggers = [
+          staticFile
+          dynamicFile
+        ];
+        preStart = ''
+          : "''${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for Traefik DNS-01}"
+          umask 077
+          token_file=$(mktemp /run/traefik-acme/cloudflare.env.XXXXXX)
+          trap 'rm -f "$token_file"' EXIT
+          printf 'CF_DNS_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN" > "$token_file"
+          chmod 0600 "$token_file"
+          mv -f "$token_file" /run/traefik-acme/cloudflare.env
+        '';
+        serviceConfig = {
+          EnvironmentFile = environmentFile;
+          RuntimeDirectory = "traefik-acme";
+          RuntimeDirectoryMode = "0700";
         };
       };
+    };
     virtualisation.oci-containers.containers.traefik = {
       image = lib.mkDefault "traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0";
       cmd = lib.mkDefault [ "--configFile=/etc/traefik/traefik.yml" ];

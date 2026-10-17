@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -62,25 +61,16 @@ in
         sshPort = if s.standalone then 2222 else 22;
         forgejoDataRoot = "${root}/forgejo";
         forgejoDbRoot = "${root}/postgres";
-        ensureDockerNetwork =
-          lib.replaceStrings
-            [ "@docker@" "@network@" ]
-            [ (lib.escapeShellArg "${pkgs.docker}/bin/docker") (lib.escapeShellArg "forgejo") ]
-            (builtins.readFile ./ensure-network.sh);
-        networkDep = {
+        mounts = {
           unitConfig.RequiresMountsFor = [
             root
             environmentFile
           ];
-          requires = [ "docker-network-forgejo.service" ];
-          after = [ "docker-network-forgejo.service" ];
-          # The persistent oneshot can stay active after Docker prune removes
-          # an unused bridge. Recheck actual Docker state on every startup.
-          preStart = lib.mkBefore ensureDockerNetwork;
         };
       in
       {
         modules.docker.enable = true;
+        modules.docker.networks.forgejo = { };
         modules.swarm.enable = lib.mkIf (!s.standalone) true;
         assertions = [
           {
@@ -108,23 +98,9 @@ in
         };
 
         systemd.services = {
-          docker-network-forgejo = {
-            description = lib.mkDefault "Create docker network forgejo";
-            wantedBy = [ "multi-user.target" ];
-            after = [
-              "docker.service"
-              "docker.socket"
-            ];
-            requires = [ "docker.service" ];
-            serviceConfig = {
-              Type = lib.mkDefault "oneshot";
-              RemainAfterExit = lib.mkDefault true;
-            };
-            script = lib.mkDefault ensureDockerNetwork;
-          };
-          docker-forgejo-db = networkDep;
+          docker-forgejo-db = mounts;
           docker-forgejo = lib.mkMerge [
-            networkDep
+            mounts
             {
               wants = [ (ps.networkUnit s) ];
               after = [ (ps.networkUnit s) ];

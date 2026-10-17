@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  attopkgs,
   ...
 }:
 let
@@ -15,7 +16,6 @@ let
   records = lib.filter (hostname: hostname != target) (builtins.attrNames publicHosts);
   settings = pkgs.writeText "cloudflare-public-cnames.json" (
     builtins.toJSON {
-      recordType = "CNAME";
       inherit target records;
       inherit (cfg) ttl proxied comment;
     }
@@ -58,7 +58,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = "${pkgs.python3}/bin/python3 ${../cloudflare-ddns/sync-dns.py} /etc/cloudflare/public-cnames.json";
+        ExecStart = "${lib.getExe attopkgs.cloudflare-cnames} /etc/cloudflare/public-cnames.json";
         EnvironmentFile =
           ps.require "modules.cloudflare-public-cnames" "environmentFile"
             cfg.environmentFile;
