@@ -34,7 +34,7 @@ let
     options = {
       privateKeyFile = mkOption {
         type = ps.absolutePath;
-        description = "Quoted absolute runtime path of the decrypted client private key, read by nm-file-secret-agent at activation. Nix path literals and store paths are rejected.";
+        description = "Quoted absolute runtime path of the decrypted client private key, read by NetworkManager-ensure-profiles.service. Nix path literals and store paths are rejected.";
       };
       addresses = mkOption {
         type = types.nonEmptyListOf types.singleLineStr;
@@ -66,9 +66,11 @@ in
       description = ''
         Tunnels keyed by interface name (1–15 letters, numbers, _, =, +, ., -; not . or ..).
         Each becomes a runtime NetworkManager profile "WireGuard: <interface>" with autoconnect
-        disabled. Private keys are served from their runtime files by nm-file-secret-agent on
-        activation and never written to the profile. Decryption, permissions and rotation
-        belong to the consumer. Further profile keys can be added through the standard
+        disabled. Private keys are read from their runtime files when
+        NetworkManager-ensure-profiles.service runs and written into the root-only profile under
+        /run/NetworkManager/system-connections, never into the Nix store. Decryption,
+        permissions and rotation belong to the consumer; restart that service after rotation.
+        Further profile keys can be added through the standard
         networking.networkmanager.ensureProfiles.profiles."wireguard-<interface>".
       '';
     };
