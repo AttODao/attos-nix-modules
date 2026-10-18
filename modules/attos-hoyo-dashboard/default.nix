@@ -11,6 +11,11 @@ in
     // {
       dataDir = ps.pathOption "Persistent root containing the PostgreSQL postgres/ directory.";
       environmentFile = ps.pathOption "Runtime environment file for the app and PostgreSQL: DB_PASSWORD and the same value as POSTGRES_PASSWORD, HOYOLAB_COOKIE_KEY and the first-start INITIAL_ADMIN_PASSWORD.";
+      initialAdminUsername = lib.mkOption {
+        type = lib.types.strMatching "[A-Za-z0-9._-]{1,64}";
+        default = "admin";
+        description = "Administrator created on first start while no users exist; changing it later does not rename existing users.";
+      };
     }
   );
 
