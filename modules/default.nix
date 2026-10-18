@@ -42,6 +42,7 @@
     ./greeter
     ./hermes-desktop
     ./hyprland
+    ./immich-client
     ./linux-wallpaperengine
     ./login-pin
     ./limine
