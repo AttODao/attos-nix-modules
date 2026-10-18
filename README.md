@@ -133,7 +133,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | foot | HM | Fonts |
 | ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
-| hermes / forgejo / immich / karakeep / vaultwarden / opencloud / searxng | NixOS | Docker、公開配置時のみSwarm |
+| hermes / forgejo / immich / karakeep / vaultwarden / opencloud / searxng / attos-hoyo-dashboard | NixOS | Docker、公開配置時のみSwarm |
 | jellyfin | NixOS | Docker、公開配置時のみSwarm・ytdl-sub |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はSwarm・Open Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
@@ -233,7 +233,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 ```
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
-`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `mailserver`, `groupware`, `wireguard-server`,
+`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`,
 `paseo`, `ssh`, `code-server`, `sunshine`, `hermes`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。

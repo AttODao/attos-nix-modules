@@ -3,6 +3,7 @@
   imports = [
     ./home-manager
     ./public-services
+    ./attos-hoyo-dashboard
     ./code-server
     ./sunshine
     ./cloudflare-ddns

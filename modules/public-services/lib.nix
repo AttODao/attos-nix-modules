@@ -5,6 +5,7 @@ let
   httpBackends = {
     forgejo = "http://forgejo:3000";
     immich = "http://immich-server:2283";
+    attos-hoyo-dashboard = "http://attos-hoyo-dashboard:8080";
     karakeep = "http://karakeep:3000";
     vaultwarden = "http://vaultwarden:80";
     opencloud = "http://opencloud:9200";
