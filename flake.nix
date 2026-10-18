@@ -47,7 +47,11 @@
       attopkgs = { pkgs }: attopkgsFor pkgs;
       overlays.default = final: _prev: { attopkgs = attopkgsFor final; };
       inherit legacyPackages;
-      packages = lib.mapAttrs (_: lib.filterAttrs (_: lib.isDerivation)) legacyPackages;
+      # hermes-desktopはupstream nix/lib.nixがeval中にlockfile sourceを読み、--no-buildのflake checkで
+      # 失敗するため、checkされるpackagesから外す（legacyPackagesとattopkgsには残る）。
+      packages = lib.mapAttrs (
+        _: lib.filterAttrs (name: value: lib.isDerivation value && name != "hermes-desktop")
+      ) legacyPackages;
       nixosModules.default = default;
       nixos.default = default;
     };

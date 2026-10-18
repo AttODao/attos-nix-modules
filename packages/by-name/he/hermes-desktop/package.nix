@@ -3,7 +3,6 @@
 {
   lib,
   callPackage,
-  importNpmLock,
   writeText,
   writeShellScriptBin,
   python3,
@@ -14,16 +13,7 @@
 let
   src = hermes-agent-src;
   version = "0.21.6";
-  upstreamNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix; };
-  # upstreamのnpmDepsはeval中にlockfileだけのfileset sourceを読むため、--no-build評価ではpathが無く失敗する。
-  # 取得済みのflake inputから同じlockfileを読む。
-  npmDeps = importNpmLock.importNpmLock {
-    npmRoot = src;
-    package = removeAttrs (lib.importJSON "${src}/package.json") [ "overrides" ];
-  };
-  hermesNpmLib = upstreamNpmLib // {
-    buildNpmPackage = attrs: upstreamNpmLib.buildNpmPackage (attrs // { inherit npmDeps; });
-  };
+  hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix; };
   # icon生成はPillowとresvg-pyだけを使う。
   generatedIcons = callPackage "${src}/nix/icons.nix" {
     venv = python3.withPackages (ps: [
