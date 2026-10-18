@@ -40,13 +40,10 @@ in
       # This index pins 818c13be1dc4fd28987e1e881a9408224afd4535, including web/TUI assets.
       image = lib.mkDefault "nousresearch/hermes-agent:rc.4-v0.21.6@sha256:9774f4f39a9bb8c2f68ce728ed5e99ddbad282163be56764afacf88ed952b784";
       ports = lib.mkDefault (lib.optional selected.standalone "127.0.0.1:9119:9119");
+      # Official layout: s6 supervises the gateway (which runs cron) and the dashboard.
       cmd = lib.mkDefault [
-        "dashboard"
-        "--host"
-        "0.0.0.0"
-        "--port"
-        "9119"
-        "--no-open"
+        "gateway"
+        "run"
       ];
       environment = lib.mapAttrs (_: lib.mkDefault) {
         # The official entrypoint remaps its hermes account, then drops privileges.
@@ -56,9 +53,13 @@ in
         HOME = "/opt/data";
         XDG_CACHE_HOME = "/opt/data/.cache";
         PYTHONUNBUFFERED = "1";
+        HERMES_DASHBOARD = "1";
+        HERMES_DASHBOARD_HOST = "0.0.0.0";
+        HERMES_DASHBOARD_PORT = "9119";
       };
       # config.yaml, .env, provider credentials, skills and sessions are writable state.
-      volumes = lib.mkDefault [ "${dataDir}:/opt/data" ];
+      # A plain list so other modules can add mounts.
+      volumes = [ "${dataDir}:/opt/data" ];
       networks = lib.mkDefault [ (ps.network selected) ];
       autoRemoveOnStop = lib.mkDefault false;
       extraOptions = lib.mkDefault [
