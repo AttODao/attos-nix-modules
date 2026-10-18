@@ -12,10 +12,10 @@ in
     let
       root = ps.require "immich" "dataDir" s.cfg.dataDir;
       environmentFile = ps.require "immich" "environmentFile" s.cfg.environmentFile;
-      directory = mode: {
+      directory = mode: owner: {
         mode = lib.mkDefault mode;
-        user = lib.mkDefault "root";
-        group = lib.mkDefault "root";
+        user = lib.mkDefault owner;
+        group = lib.mkDefault owner;
       };
       mounts.unitConfig.RequiresMountsFor = lib.mkDefault [ root ];
     in
@@ -31,11 +31,12 @@ in
       ];
 
       systemd.tmpfiles.settings."10-immich" = {
-        "${root}".d = directory "0755";
-        "${root}/library".d = directory "0755";
-        "${root}/postgres".d = directory "0755";
-        "${root}/redis".d = directory "0700";
-        "${root}/model-cache".d = directory "0755";
+        "${root}".d = directory "0755" "root";
+        "${root}/library".d = directory "0755" "root";
+        # Postgres and Valkey run as UID/GID 999 and own their mounted data roots.
+        "${root}/postgres".d = directory "0700" "999";
+        "${root}/redis".d = directory "0700" "999";
+        "${root}/model-cache".d = directory "0755" "root";
       };
 
       systemd.services = {
