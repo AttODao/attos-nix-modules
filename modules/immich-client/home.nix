@@ -1,11 +1,14 @@
 {
   osConfig,
+  config,
   lib,
   pkgs,
   ...
 }:
 let
   cfg = osConfig.modules.immich-client;
+  watchDirectories =
+    if cfg.watchDirectories == null then [ config.xdg.userDirs.pictures ] else cfg.watchDirectories;
 in
 {
   config = lib.mkIf cfg.enable {
@@ -28,7 +31,7 @@ in
             "--watch"
             "--no-progress"
           ]
-          ++ cfg.watchDirectories
+          ++ watchDirectories
         );
         Restart = "on-failure";
         RestartSec = 30;
