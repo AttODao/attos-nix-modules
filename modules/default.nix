@@ -40,6 +40,7 @@
     ./fonts
     ./foot
     ./greeter
+    ./hermes-desktop
     ./hyprland
     ./linux-wallpaperengine
     ./login-pin

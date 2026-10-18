@@ -12,6 +12,11 @@
       url = "github:sadjow/claude-code-nix";
       flake = false;
     };
+    # hermes-desktopのsource。hermes moduleのimageと同じreleaseに固定する。
+    hermes-agent = {
+      url = "github:NousResearch/hermes-agent/v0.21.6";
+      flake = false;
+    };
   };
 
   outputs =
