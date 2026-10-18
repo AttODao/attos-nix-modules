@@ -75,6 +75,8 @@ in
               DB_HOST = "db";
               DB_PORT = "5432";
               BIND_ADDR = "0.0.0.0:8080";
+              # Required by the app at startup; only used while the users table is empty.
+              INITIAL_ADMIN_USERNAME = "admin";
               PUBLIC_ORIGIN = ps.url s 8082;
               RP_ID = s.hostname;
               SESSION_TTL_DAYS = "7";
