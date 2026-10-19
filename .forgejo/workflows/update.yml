@@ -11,8 +11,8 @@ env:
   NIX_CONFIG: "experimental-features = nix-command flakes"
   # Consumer hosts evaluated against each update.
   CONSUMERS: >-
-    AttODao/server-dotfiles:attofort,attobox,development,desktop,forgejo-runner
-    AttODao/.dotfiles:attodesk,attolap
+    AttODao/server-nix:attofort,attobox,development,desktop,forgejo-runner
+    AttODao/personal-nix:attodesk,attolap
 
 jobs:
   flake-inputs:
