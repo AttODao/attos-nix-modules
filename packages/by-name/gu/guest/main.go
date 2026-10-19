@@ -19,7 +19,7 @@ commands:
   boot [BUILD]                  create the guest from the flake if missing, then start it
   stop                          shut the guest down
   delete                        delete a stopped guest and its volumes after confirmation
-  rebuild [ACTION] [BUILD] [--rollback]
+  rebuild [ACTION] [FLAKE] [BUILD] [--rollback]
                                 build and apply the guest system like nixos-rebuild
                                 (ACTION: ` + "build, dry-build, dry-run, dry-activate, test, switch (default), boot, list-generations" + `)
   passwd USER                   set an unset/locked login password interactively
@@ -29,7 +29,10 @@ commands:
 
   guest preseed-condition POOL  ExecCondition guard for create-only Incus preseed
 
-BUILD options: --max-jobs N, --cores N, --override-input NAME REFERENCE
+BUILD options: --flake REF, --max-jobs N, --cores N, --override-input NAME REFERENCE
+
+FLAKE / --flake REF selects the flake holding nixosConfigurations.GUEST (default: the
+configured one, e.g. a registry alias). The latest revision is always fetched (--refresh).
 `
 
 var (
@@ -40,6 +43,7 @@ var (
 type buildOptions struct {
 	maxJobs, cores *int
 	overrides      [][2]string
+	flake          string
 }
 
 type command struct {
@@ -150,6 +154,12 @@ func parseCommand(args []string, cfg *config) (command, error) {
 			} else {
 				cmd.build.cores = &n
 			}
+		case takesBuild && arg == "--flake":
+			v, err := value()
+			if err != nil {
+				return command{}, err
+			}
+			cmd.build.flake = v
 		case takesBuild && arg == "--override-input":
 			if i+2 >= len(rest) {
 				return command{}, usageError{"--override-input requires NAME and REFERENCE"}
@@ -181,11 +191,20 @@ func parseCommand(args []string, cfg *config) (command, error) {
 		}
 	case "rebuild":
 		cmd.action = "switch"
-		if len(positional) > 1 {
-			return command{}, usageError{"rebuild takes at most one ACTION"}
+		if len(positional) > 2 {
+			return command{}, usageError{"rebuild takes at most ACTION and FLAKE"}
 		}
-		if len(positional) == 1 {
+		if len(positional) >= 1 {
 			cmd.action = positional[0]
+		}
+		if len(positional) == 2 {
+			if slices.Contains(actions, positional[1]) {
+				return command{}, usageError{"rebuild takes at most one ACTION"}
+			}
+			if cmd.build.flake != "" {
+				return command{}, usageError{"give FLAKE either positionally or with --flake"}
+			}
+			cmd.build.flake = positional[1]
 		}
 		if !slices.Contains(actions, cmd.action) {
 			return command{}, usageError{"invalid rebuild action " + cmd.action}

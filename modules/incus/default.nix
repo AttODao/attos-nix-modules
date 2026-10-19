@@ -31,7 +31,12 @@ in
       default = [ ];
       description = "Kernel modules loaded with modprobe before a non-skipped Incus preseed run.";
     };
-    rebuild.flakeFile = ps.pathOption "Absolute runtime path to a flake.nix checkout; required when guests are declared. The guest CLI builds creation images and guest systems from nixosConfigurations of the same names. The checkout is not copied into the package.";
+    rebuild.flake = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "[^#[:space:]]+");
+      default = null;
+      example = "server-nix";
+      description = "Flake reference without an attribute (a registry alias, git+https URL or path:) whose nixosConfigurations of the same names the guest CLI builds creation images and guest systems from; required when guests are declared. The latest revision is fetched on every build; `guest NAME rebuild ACTION FLAKE` or `--flake` overrides it.";
+    };
 
     guests = lib.mkOption {
       default = { };
@@ -39,7 +44,7 @@ in
         Incus KVM VMs and system containers managed only by the guest CLI; host
         activation never builds images, creates, starts or stops them.
         guest <name> boot builds a missing guest from system.build.metadata plus
-        qemuImage (VM) or squashfs (container) of rebuild.flakeFile, launches it
+        qemuImage (VM) or squashfs (container) of rebuild.flake, launches it
         and deletes the creation image. Without boot.autostart Incus restores the
         last running state at host boot. A same-name instance of the other type is
         an error, never converted or deleted. Removed entries are not deleted.

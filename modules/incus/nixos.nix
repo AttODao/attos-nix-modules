@@ -23,7 +23,7 @@ let
   };
   guestConfig = pkgs.writeText "guest.json" (
     builtins.toJSON {
-      inherit (cfg.rebuild) flakeFile;
+      inherit (cfg.rebuild) flake;
       guests = lib.mapAttrs definition cfg.guests;
     }
   );
@@ -86,12 +86,8 @@ in
             message = "modules.incus: credentialRestartUnits require credentialFiles on the same guest.";
           }
           {
-            assertion =
-              if cfg.rebuild.flakeFile == null then
-                cfg.guests == { }
-              else
-                lib.hasSuffix "/flake.nix" cfg.rebuild.flakeFile && cfg.guests != { };
-            message = "modules.incus.rebuild.flakeFile must name flake.nix and is required exactly when guests are declared.";
+            assertion = (cfg.rebuild.flake == null) == (cfg.guests == { });
+            message = "modules.incus.rebuild.flake is required exactly when guests are declared.";
           }
           {
             assertion = !preseed || singlePool;

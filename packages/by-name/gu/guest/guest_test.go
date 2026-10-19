@@ -9,7 +9,7 @@ import (
 )
 
 const sampleConfig = `{
-  "flakeFile": "/srv/flake.nix",
+  "flake": "path:/srv",
   "guests": {
     "worker": {
       "type": "virtual-machine",
@@ -57,6 +57,14 @@ func TestParseCommand(t *testing.T) {
 	if err != nil || cmd.action != "switch" || !cmd.rollback {
 		t.Errorf("default rebuild: %+v %v", cmd, err)
 	}
+	cmd, err = parseCommand([]string{"worker", "rebuild", "switch", "server-nix"}, cfg)
+	if err != nil || cmd.action != "switch" || cmd.build.flake != "server-nix" {
+		t.Errorf("rebuild FLAKE: %+v %v", cmd, err)
+	}
+	cmd, err = parseCommand([]string{"worker", "boot", "--flake", "path:/w"}, cfg)
+	if err != nil || cmd.build.flake != "path:/w" {
+		t.Errorf("boot --flake: %+v %v", cmd, err)
+	}
 	cmd, err = parseCommand([]string{"worker", "push-file", "dev", "/p/s.env", "app/s.env", "--user-unit", "app.service"}, cfg)
 	if err != nil || cmd.user != "dev" || cmd.source != "/p/s.env" || cmd.destination != "app/s.env" || cmd.userUnit != "app.service" {
 		t.Errorf("push-file: %+v %v", cmd, err)
@@ -67,6 +75,8 @@ func TestParseCommand(t *testing.T) {
 		{"worker", "boot", "extra"},
 		{"worker", "rebuild", "nope"},
 		{"worker", "rebuild", "switch", "boot"},
+		{"worker", "rebuild", "switch", "a", "b"},
+		{"worker", "rebuild", "switch", "a", "--flake", "b"},
 		{"worker", "boot", "--max-jobs", "-1"},
 		{"worker", "boot", "--max-jobs"},
 		{"worker", "stop", "--rollback"},

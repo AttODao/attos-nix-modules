@@ -29,21 +29,19 @@ const agentTimeout = 300 * time.Second
 // flake validates the selected guest configuration against the declared
 // instance type and returns its attribute path plus the nix build argv prefix.
 func flake(cfg *config, name string, build buildOptions) (string, []string, error) {
-	file, err := filepath.EvalSymlinks(cfg.FlakeFile)
-	if err == nil {
-		file, err = filepath.Abs(file)
+	ref := build.flake
+	if ref == "" {
+		ref = cfg.Flake
 	}
-	if err != nil {
-		return "", nil, err
+	if ref == "" || strings.ContainsAny(ref, "#\n") {
+		return "", nil, errors.New("flake must be a flake reference without an attribute (for example server-nix)")
 	}
-	if info, err := os.Stat(file); err != nil || filepath.Base(file) != "flake.nix" || !info.Mode().IsRegular() {
-		return "", nil, errors.New("flakeFile must name an existing flake.nix")
-	}
-	nixArgs := []string{"--no-write-lock-file"}
+	// Always fetch the latest revision of git and registry references.
+	nixArgs := []string{"--no-write-lock-file", "--refresh"}
 	for _, pair := range build.overrides {
 		nixArgs = append(nixArgs, "--override-input", pair[0], pair[1])
 	}
-	configuration := "path:" + filepath.Dir(file) + "#nixosConfigurations." + name + ".config"
+	configuration := ref + "#nixosConfigurations." + name + ".config"
 	shape, err := run(append(append([]string{"nix", "eval"}, nixArgs...), "--json", configuration,
 		"--apply", "c: { isContainer = c.boot.isContainer; incusAgent = c.virtualisation.incus.agent.enable; }"), true, nil)
 	if err != nil {

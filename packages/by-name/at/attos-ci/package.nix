@@ -1,5 +1,9 @@
 {
   writeShellApplication,
+  coreutils,
+  findutils,
+  gnugrep,
+  gnused,
   curl,
   gitMinimal,
   jq,
@@ -10,6 +14,10 @@ writeShellApplication {
   name = "attos-ci";
   # nix comes from the job environment (the nixos/nix container).
   runtimeInputs = [
+    coreutils
+    findutils
+    gnugrep
+    gnused
     curl
     gitMinimal
     jq

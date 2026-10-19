@@ -27,8 +27,8 @@ type guestDefinition struct {
 }
 
 type config struct {
-	FlakeFile string                     `json:"flakeFile"`
-	Guests    map[string]guestDefinition `json:"guests"`
+	Flake  string                     `json:"flake"`
+	Guests map[string]guestDefinition `json:"guests"`
 }
 
 func (c *config) names() []string {
