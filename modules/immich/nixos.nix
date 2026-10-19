@@ -67,7 +67,7 @@ in
         };
 
         immich-machine-learning = {
-          image = lib.mkDefault "ghcr.io/immich-app/immich-machine-learning:v3.2.4@sha256:e16c2f166a8174901959fdf85e2e4c7bd1ebc4b37e0b6655de97c41408a260c4";
+          image = lib.mkDefault "ghcr.io/immich-app/immich-machine-learning:v3.3.3@sha256:73915f07e1f4289ba45b174c58443db74cef47ddf502613f475fc5e52458ea42";
           environmentFiles = lib.mkDefault [ environmentFile ];
           autoRemoveOnStop = lib.mkDefault false;
           extraOptions = lib.mkDefault [ "--restart=unless-stopped" ];
@@ -87,7 +87,7 @@ in
         };
 
         immich-server = {
-          image = lib.mkDefault "ghcr.io/immich-app/immich-server:v3.2.4@sha256:d317916b28090c33eb36b308464ea391f8b7df1d850fcfea227a39ec879718c2";
+          image = lib.mkDefault "ghcr.io/immich-app/immich-server:v3.3.3@sha256:bae7664ff3aa4c2c1fcbdcdd86b40b105643c5f861f3e6a770fc760089f25862";
           ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:2283:2283");
           environmentFiles = lib.mkDefault [ environmentFile ];
           autoRemoveOnStop = lib.mkDefault false;

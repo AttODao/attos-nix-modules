@@ -55,9 +55,13 @@ in
 
     virtualisation.oci-containers.containers = {
       karakeep-meilisearch = {
-        image = lib.mkDefault "getmeili/meilisearch:v1.54.3@sha256:e68913ab7d6f5b159529e472cfd362ce3c741fafd3c127961b2142abbe41b3c9";
+        image = lib.mkDefault "getmeili/meilisearch:v1.55.0@sha256:ff546679970126f8822e15d1b6a06bfbff1f2ce2e43f810cfb5258012f92de5c";
         environmentFiles = lib.mkDefault [ environmentFile ];
-        environment.MEILI_NO_ANALYTICS = lib.mkDefault "true";
+        environment = {
+          MEILI_NO_ANALYTICS = lib.mkDefault "true";
+          # Meilisearch only opens databases from older versions with this opt-in.
+          MEILI_UPGRADE_DB = lib.mkDefault "true";
+        };
         autoRemoveOnStop = lib.mkDefault false;
         extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
@@ -68,9 +72,9 @@ in
       };
 
       karakeep-chrome = {
-        # Official image labels: headless-shell 151.0.7922.47; no version tag exists.
+        # Official image labels: Chrome 154.0.8037.57; no version tag exists.
         # Review browser updates and replace this registry index digest explicitly.
-        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep-chrome:release@sha256:5b19bbb160e9ff60681a3abd97e1c4ec9f64212301410de658c3900ab7ef31e7";
+        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep-chrome:release@sha256:c51a8c8e6c3c1040a50fa0ecfd0b2fc298401b4229262636552458151f6f18fa";
         autoRemoveOnStop = lib.mkDefault false;
         extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
@@ -93,7 +97,7 @@ in
       };
 
       karakeep = {
-        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.33.2@sha256:b069e4307dec06ea06d16989c6861c30a1ff208568be44ed5fb5d422cd3e950c";
+        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.34.0@sha256:151cdd6b5f2e21635645983e126f411675bfa35becb02c028c1a727f45f899c6";
         ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:3001:3000");
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) (

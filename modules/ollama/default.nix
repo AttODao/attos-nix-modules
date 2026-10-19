@@ -111,7 +111,7 @@ in
         ];
       };
       virtualisation.oci-containers.containers.open-webui = {
-        image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.11.4@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f";
+        image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.12.3@sha256:a537bbe1e6b428820f52ed4a029d7fff97062e24d5cf32c365fba36fd0542def";
         environmentFiles = lib.mkDefault (lib.optional terminalEnabled environmentFile);
         environment = lib.mapAttrs (_: lib.mkDefault) (
           {

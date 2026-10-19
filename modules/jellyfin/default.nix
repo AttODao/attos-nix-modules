@@ -42,7 +42,7 @@ in
       };
 
       virtualisation.oci-containers.containers.jellyfin = {
-        image = lib.mkDefault "jellyfin/jellyfin:12.1@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e";
+        image = lib.mkDefault "jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037";
         ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8096:8096");
         user = lib.mkDefault "0:0";
         environment = lib.mapAttrs (_: lib.mkDefault) {

@@ -353,7 +353,7 @@ in
       };
     };
     virtualisation.oci-containers.containers.traefik = {
-      image = lib.mkDefault "traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0";
+      image = lib.mkDefault "traefik:v3.7.15@sha256:0f6150202bc1fed72a7bd2107460eaa510e5b8a905f3fdb5b84f2c8619c33368";
       cmd = lib.mkDefault [ "--configFile=/etc/traefik/traefik.yml" ];
       autoRemoveOnStop = lib.mkDefault false;
       extraOptions = lib.mkDefault [

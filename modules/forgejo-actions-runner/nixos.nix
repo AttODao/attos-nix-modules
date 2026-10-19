@@ -52,7 +52,7 @@ in
         tokenFile = lib.mkDefault tokenFile;
         labels = lib.mkDefault [
           "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-24.04@sha256:62d572b92f9f32d3427b6d220ad1f9dca9c7b6ffad37d295425037dbff78abaf"
-          "docker:docker://node:24.21.0-bookworm@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4"
+          "docker:docker://node:24.22.0-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0"
         ];
         settings.container.docker_host = lib.mkDefault "automount";
       };
