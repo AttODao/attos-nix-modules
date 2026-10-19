@@ -1,12 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "onboarding": false,
-  "enabledManagers": ["custom.regex"],
+  "enabledManagers": [
+    "custom.regex"
+  ],
   "customManagers": [
     {
       "customType": "regex",
       "description": "Pinned OCI images: image = lib.mkDefault \"name:tag@sha256:digest\"",
-      "managerFilePatterns": ["/^modules/.+\\.nix$/"],
+      "managerFilePatterns": [
+        "/^modules/.+\\.nix$/"
+      ],
       "matchStrings": [
         "image = lib\\.mkDefault \"(?<depName>[^:\"@]+(?::\\d+/[^:\"@]+)?):(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""
       ],
@@ -16,14 +19,20 @@
   "packageRules": [
     {
       "description": "One PR per image; review majors separately because they can migrate data.",
-      "matchManagers": ["custom.regex"],
+      "matchManagers": [
+        "custom.regex"
+      ],
       "commitMessagePrefix": "chore(images):",
       "separateMajorMinor": true
     },
     {
       "description": "Keep each PostgreSQL image on its major version; upgrades need a dump/restore.",
-      "matchDepNames": ["/postgres/"],
-      "matchUpdateTypes": ["major"],
+      "matchDepNames": [
+        "/postgres/"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     }
   ]

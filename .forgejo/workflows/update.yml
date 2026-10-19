@@ -20,7 +20,7 @@ jobs:
     container:
       image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
-      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
+      - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-shared
       - run: nix run .#attos-ci -- check-consumers $CONSUMERS
       - run: |
@@ -31,7 +31,7 @@ jobs:
     container:
       image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
-      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
+      - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-packages
       - run: nix run .#attos-ci -- check-consumers $CONSUMERS
       - run: |
@@ -42,12 +42,13 @@ jobs:
     container:
       image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
-      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
+      - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run nixpkgs#renovate
         env:
           RENOVATE_PLATFORM: forgejo
           RENOVATE_ENDPOINT: ${{ github.server_url }}/api/v1
           RENOVATE_TOKEN: ${{ secrets.BOT_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
           RENOVATE_GIT_AUTHOR: attos-bot <bot@attodao.cc>
           LOG_LEVEL: info
