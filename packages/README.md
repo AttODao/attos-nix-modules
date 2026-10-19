@@ -15,8 +15,8 @@
 - `login-pin`: login-pin moduleの`set-login-pin`（`login-pin set`）。mkpasswd（yescrypt）・db_loadでpam_userdb用DBを0600で原子的に置換する。testは実DBを`db_dump`で検査する。
 - `mcsmanager-init`: mcsmanagerのExecStartPreで既存JSONへのruntime設定mergeと初期管理者作成を行うGo program。asset symlinkはmoduleのtmpfilesが作る。testで同梱releaseを一時state・偽credentialで起動するsmoke testを行う（`mcsmanager`をcheck入力に持つ）。
 - `vm`: Incus用のGo CLI（`build-go-program`、標準libraryのみ、`go vet`/`go test`）。host設定は含まず、Incus moduleがbinary wrapperで `--config <JSON>`（runtime flake.nix path・宣言済みVMのlaunch設定・managed device名・credential配送unit/file）とPATH（incus client・nix）を渡す。`vm <VM> boot` は不足VMをflakeのmetadata/qcow2から作成して作成用imageを削除し、managed deviceをupsertして起動、agentを待ってcredential配送unitを再起動する。`stop`、TTY確認付きの `delete`（Stopped限定）、`rebuild [action]`（既定switch。適用actionは先にbootし、local buildとmissing closureのroot import後、guestの標準nixos-rebuildへstore-pathを渡す）を持つ。`passwd <user>` / `push-file <user> <source> <dest> [--system-unit|--user-unit]` は宣言済みRunning VMへ未設定のlogin passwordをTTYで設定、またはユーザーhome内へprivate fileをuser権限・hard linkで非上書き配置する（既存password/hash/file保持、root/system account・container・公開読取file・home外は拒否、unit起動は新規配置時のみ）。`deliver-credentials` はcredential配送unit用、`vm preseed-condition <pool>` はcreate-only preseedのExecCondition。local/default project限定、hostのprofileは変更しない。`--override-input NAME REFERENCE` で未commitの `path:` checkout/inputも評価/buildできる。
-- `mcsmanager`: 公式10.19.0のself-contained releaseをhash固定し、単一derivationで `attopkgs.mcsmanager/share/mcsmanager/{web,daemon}` へ配置。npm fetch/node_modulesは不要。PTY等をNixOSへpatchし、upstream daemon keyログを除去する。install checkはtemp-only web/daemonの認証・assets・prefixを確認し、runtime secret/bootstrapはmoduleに残す。
-- `paseo`: Paseo 0.11.1のsource/lock依存hash固定。`attopkgs.paseo` はstore Nodeとnative依存を使うCLIを供給し、起動時npx/npm fetchを行わない。
+- `mcsmanager`: 公式10.21.2のself-contained releaseをhash固定し、単一derivationで `attopkgs.mcsmanager/share/mcsmanager/{web,daemon}` へ配置。npm fetch/node_modulesは不要。PTY等をNixOSへpatchし、upstream daemon keyログを除去する。install checkはtemp-only web/daemonの認証・assets・prefixを確認し、runtime secret/bootstrapはmoduleに残す。
+- `paseo`: Paseo 0.12.0のsource/lock依存hash固定。`attopkgs.paseo` はstore Nodeとnative依存を使うCLIを供給し、起動時npx/npm fetchを行わない。
 - `atcoder-cli`: atcoder-cli 2.2.0。source hash / npmDepsHash固定。
 - `atcoder-oj`: ホストのonline-judge-tools/API clientへAtCoderのMiB表記対応patchを適用。
 - `atcoder-aclogin`: aclogin 0.2.1、revision/hash固定。cookieを配布・宣言的管理しない。
@@ -27,7 +27,7 @@
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
 - `open-deck-desktop`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
-- `pi`: Pi 1.0.2のversion override。base nixpkgsのinstall処理がcodemode/MCP workspaceを落とす場合だけ補完し、copy済みのworkspaceは保持する。install checkで両moduleのimportを確認する。固定nixpkgsがPi 1.0.2以上を提供したらoverrideを削除する。
+- `pi`: Pi 1.3.0のversion override。base nixpkgsのworkspace一覧はそのPi releaseに従うため、このversionのruntime workspaceをcopyするinstall処理で置き換える。install checkでcodemode/MCP moduleのimportを確認する。固定nixpkgsがPi 1.3.0以上を提供したらoverrideを削除する。
 - `pi-mermaid-studio`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
 - `context-mode`: context-mode 1.0.169のPi adapter / HTML dependenciesを含むoverride。
 - `karakeep-monolith`: 利用ホストの `pkgsStatic.monolith` にSVG USE / archive内fragment navigation修正patchを適用するoverride。Karakeep containerへ静的binaryを渡す。fragment保持とarchive linkのinstall checkを含む。

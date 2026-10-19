@@ -8,10 +8,10 @@
 }:
 stdenvNoCC.mkDerivation rec {
   pname = "mcsmanager";
-  version = "10.19.0";
+  version = "10.21.2";
   src = fetchurl {
     url = "https://github.com/MCSManager/MCSManager/releases/download/v${version}/mcsmanager_linux_release.tar.gz";
-    hash = "sha256-ONYOkOYcICfQUZ7/ATZkFqopYFwIjVqpSH1Btsblkkw=";
+    hash = "sha256-TBmmTGjWNcxuPC6ZJw+/53+Txiiyu1U7Y2Iq1aJDVsY=";
   };
   # The official release app.js bundles dependencies and languages; install.sh
   # explicitly requires no npm installation. No mutable npm downloads are needed.
@@ -24,7 +24,7 @@ stdenvNoCC.mkDerivation rec {
   postPatch = ''
     # Upstream logs the daemon authentication secret to stdout AND its log file.
     substituteInPlace daemon/app.js --replace-fail \
-      'log_1.default.info((0, i18n_1.$t)("TXT_CODE_app.password", { key: config.key }));' \
+      'console.log((0, i18n_1.$t)("TXT_CODE_app.password", { key: config.key }));' \
       '/* Authentication secrets must not be logged. */'
     # Immutable packaged helpers already have executable permissions.
     substituteInPlace daemon/app.js \

@@ -11,13 +11,13 @@
 
 buildNpmPackage {
   pname = "paseo";
-  version = "0.11.1";
+  version = "0.12.0";
 
   # Raw archive hash, not the unpacked hash expected by fetchFromGitHub.
   src = fetchurl {
-    url = "https://codeload.github.com/getpaseo/paseo/tar.gz/ab10a6694ccf068959d1a6b67b6c915e21a9fe91";
-    name = "paseo-0.11.1.tar.gz";
-    hash = "sha256-qM31/hsgQtUA+F18pvQU28C7Ia6OFEe8YnpfeQoBBMQ=";
+    url = "https://codeload.github.com/getpaseo/paseo/tar.gz/cafe4b01c8522ff39560241c5deb01427dc8dc5b";
+    name = "paseo-0.12.0.tar.gz";
+    hash = "sha256-hnEoqSOmlaCGTdRKanNDv6FQ9T5oHu+rVcirGm7uVoo=";
   };
 
   nodejs = nodejs_22;
@@ -25,7 +25,7 @@ buildNpmPackage {
   # Prefetched from the unchanged upstream root lockfile with the pinned
   # nixpkgs prefetch-npm-deps tool, NPM_FETCHER_VERSION=2 (workspace metadata).
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-TnaStY9hh82yFLADtMQtvRPVl+GUv14/M/crjFfVkTY=";
+  npmDepsHash = "sha256-fUFbCuBtOe67+n3eatRP50OOZBydjsGHxHV0q4pT5wA=";
   npmBuildScript = "build:server";
 
   # Keep the locked monorepo installation, but run only the necessary native
@@ -96,7 +96,7 @@ buildNpmPackage {
   meta = {
     description = "Paseo CLI and coding-agent daemon (without bundled web UI)";
     homepage = "https://paseo.sh";
-    changelog = "https://github.com/getpaseo/paseo/releases/tag/v0.11.1";
+    changelog = "https://github.com/getpaseo/paseo/releases/tag/v0.12.0";
     license = lib.licenses.asl20;
     mainProgram = "paseo";
     # The speech runtime has locked native packages for these platforms.

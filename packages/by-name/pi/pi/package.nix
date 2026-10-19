@@ -4,19 +4,19 @@
   fetchurl,
   fetchNpmDeps,
 }:
-# Remove this override once the pinned nixpkgs provides Pi >= 1.0.2.
+# Remove this override once the pinned nixpkgs provides Pi >= 1.3.0.
 pi-coding-agent.overrideAttrs (
   finalAttrs: previousAttrs: {
-    version = "1.0.2";
+    version = "1.3.0";
 
     src = fetchFromGitHub {
       owner = "earendil-works";
       repo = "pi";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-DjWJE7KcCdNF/M3RrO76rKCSd6oFLo2dX9wFT0nwEXk=";
+      hash = "sha256-AsutbwnjiwwLkB5tqLW+1GdGZyLmXsU0W+SNdNhJu7U=";
     };
 
-    npmDepsHash = "sha256-gW0JO84SrPl3PDUu7eBzOKaNGSif23J1xY1tpS/oVhQ=";
+    npmDepsHash = "sha256-+gFyvrhkCsF99oNvs0gBmLXnDW0hWnZI/wFId7UbI6Q=";
     npmDeps = fetchNpmDeps {
       name = "pi-coding-agent-${finalAttrs.version}-npm-deps";
       inherit (finalAttrs) src;
@@ -25,7 +25,7 @@ pi-coding-agent.overrideAttrs (
 
     modelData = fetchurl {
       url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-      hash = "sha256-isjl+r1l4PDsuFOLYhGCSFn1mXWUAF16A+H3CzhDihc=";
+      hash = "sha256-U0PhY5vzQ73DNE3zrWwxwFpQtoutB6xrzhCJDUtrimE=";
     };
 
     buildPhase = ''
@@ -34,16 +34,18 @@ pi-coding-agent.overrideAttrs (
       runHook postBuild
     '';
 
-    # Older nixpkgs removes these new workspace symlinks without installing them.
-    # Newer bases already copy them, so leave those real directories untouched.
-    postInstall = (previousAttrs.postInstall or "") + ''
-      for workspace in codemode mcp; do
-        target="$out/lib/node_modules/pi-monorepo/node_modules/@earendil-works/pi-$workspace"
-        if [ ! -d "$target" ]; then
-          rm -f "$target"
-          cp -r "packages/$workspace" "$target"
-        fi
+    # The base recipe's workspace list follows its own Pi release, so replace it
+    # with the runtime workspaces of this version instead of appending to it.
+    postInstall = ''
+      nm="$out/lib/node_modules/pi-monorepo/node_modules"
+      for ws in chord:chord pi-ai:ai pi-agent-core:agent pi-codemode:codemode \
+                pi-durable:durable pi-env:env pi-mcp:mcp pi-telemetry:telemetry pi-tui:tui; do
+        IFS=: read -r pkg src <<< "$ws"
+        rm "$nm/@earendil-works/$pkg"
+        cp -r "packages/$src" "$nm/@earendil-works/$pkg"
       done
+      find "$nm" -type l -lname '*/packages/*' -delete
+      find "$nm/.bin" -xtype l -delete
     '';
     postInstallCheck = (previousAttrs.postInstallCheck or "") + ''
       (
