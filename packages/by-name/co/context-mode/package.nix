@@ -49,6 +49,9 @@ pkgs.context-mode.overrideAttrs (
         previousAttrs.installPhase;
     postInstall = (previousAttrs.postInstall or "") + ''
       cp -rL ${htmlDependencies} $out/lib/context-mode/node_modules
+      # The rewrite above is silent if the base installPhase changes; fail instead.
+      test -d $out/lib/context-mode/build
+      grep -q cli.bundle.mjs $out/bin/context-mode
     '';
   }
 )

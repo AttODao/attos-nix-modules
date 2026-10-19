@@ -7,23 +7,7 @@ let
   atcoderCli = pkgs.callPackage ./.atcoder/nix/atcoder-cli.nix { };
   aclogin = pkgs.callPackage ./.atcoder/nix/aclogin.nix { };
   atcoderGo = pkgs.callPackage ./.atcoder/nix/atcoder-go.nix { };
-  onlineJudgeApiClient = pkgs.python3Packages.online-judge-api-client.overridePythonAttrs (old: {
-    postPatch = (old.postPatch or "") + ''
-      substituteInPlace onlinejudge/service/atcoder.py \
-        --replace-fail \
-          "^(メモリ制限|Memory Limit): ([0-9.]+) (KB|MB)" \
-          "^(メモリ制限|Memory Limit): ([0-9.]+) (KB|MB|MiB)" \
-        --replace-fail \
-          "elif memory_limit_unit == 'MB':" \
-          "elif memory_limit_unit in ('MB', 'MiB'):"
-    '';
-  });
-  onlineJudgeTools = pkgs.python3Packages.online-judge-tools.overridePythonAttrs (old: {
-    dependencies = map (
-      dependency:
-      if (dependency.pname or "") == "online-judge-api-client" then onlineJudgeApiClient else dependency
-    ) old.dependencies;
-  });
+  onlineJudgeTools = pkgs.callPackage ./.atcoder/nix/online-judge-tools.nix { };
   atcoderConfig = "$DEVENV_ROOT/.devenv/state/config";
   # acc keeps its config and session inside the project.
   atcoderGoCommand = command: ''

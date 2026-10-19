@@ -1,4 +1,13 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  attopkgs,
+  ...
+}:
+let
+  resources = import ../pi/resources.nix { inherit pkgs lib attopkgs; };
+in
 {
   options.modules.claude-code = {
     enable = lib.mkEnableOption "shared Claude Code configuration";
@@ -6,31 +15,21 @@
     # mermaid_diagram tool、ctx-upgradeはread-onlyなNix管理installの書換えに依存し、
     # find-skillsはnpxでNix管理外へskillを追加するため含めない。
     skills =
-      lib.genAttrs
-        [
-          "grilling"
-          "improve-codebase-architecture"
-          "ponytail"
-          "ponytail-audit"
-          "ponytail-debt"
-          "ponytail-gain"
-          "ponytail-help"
-          "ponytail-review"
-          "context-mode"
-          "ctx-doctor"
-          "ctx-index"
-          "ctx-insight"
-          "ctx-purge"
-          "ctx-search"
-          "ctx-stats"
-        ]
-        (name: {
+      lib.mapAttrs
+        (name: _: {
           enable = lib.mkOption {
             type = lib.types.bool;
             default = true;
             description = "Enable the shared Claude Code skill ${name}.";
           };
-        });
+        })
+        (
+          removeAttrs resources.skills [
+            "pi-mermaid-studio"
+            "ctx-upgrade"
+            "find-skills"
+          ]
+        );
     contextMode.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;

@@ -20,8 +20,8 @@
 - `atcoder-cli`: atcoder-cli 2.2.0。source hash / npmDepsHash固定。
 - `atcoder-oj`: ホストのonline-judge-tools/API clientへAtCoderのMiB表記対応patchを適用。
 - `atcoder-aclogin`: aclogin 0.2.1、revision/hash固定。cookieを配布・宣言的管理しない。
-  `atcoder-cli` と共に定義はproject scaffoldと共有する `modules/atcoder-go/assets/atcoder/nix/` にあり、by-name側はimportするだけ。
-- `atcoder-go`: `modules/atcoder-go/assets/atcoder/cli/` のGo source（標準libraryのみ）を共有builderで構築するAtCoder CLI。project scaffoldのdevenvも同じsourceを`buildGoModule`で構築する。toolchainとscaffold assetsはmoduleがbinary wrapperの`ATCODER_GO_BIN_DIR`・`ATCODER_PROJECT_ASSETS`で渡す。
+  `atcoder-cli`・`atcoder-oj`・`atcoder-go` の定義はproject scaffoldと共有する `modules/atcoder-go/assets/atcoder/nix/` にあり、by-name側はimportするだけ。
+- `atcoder-go`: `modules/atcoder-go/assets/atcoder/cli/` のGo source（標準libraryのみ）を`buildGoModule`で構築するAtCoder CLI。project scaffoldのdevenvと同じ定義を使う。toolchainとscaffold assetsはmoduleがbinary wrapperの`ATCODER_GO_BIN_DIR`・`ATCODER_PROJECT_ASSETS`で渡す。
 - `pipeasio-steam-prefixes`: `pipeasio-manage list`のSteam targetへ、各ゲームのrunner（umu）でPipeASIOを登録するGo helper。`pipeasio-register-steam-prefixes`と、`pipeasio-register`用WINE `pipeasio-proton-run`を提供する。pipeasio・umuのPATHとdriver DLL pathはwrapperで固定する。
 - `code-server`: consumerが固定したx86_64 standalone releaseを包装し、JetBrainsMono Nerd Fontのwoff2/CSSをworkbenchへ組み込む。upstream HTML layoutの変更はreplace-failで検出する。通常は公開 `code-server.packageSource` で選択し、moduleが標準 `services.code-server.package` へ既定値として渡す。
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
