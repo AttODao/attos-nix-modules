@@ -7,13 +7,18 @@ let
   ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "vaultwarden";
   root = ps.require "vaultwarden" "dataDir" s.cfg.dataDir;
+  dataFolder = "${root}/vw-data";
   environmentFile = ps.require "vaultwarden" "environmentFile" s.cfg.environmentFile;
+  listen =
+    if s.standalone then
+      {
+        address = "127.0.0.1";
+        port = "8000";
+      }
+    else
+      ps.backendEndpoint s;
 in
 {
-  imports = [
-    ../docker
-  ];
-
   options.modules = ps.moduleOptions "vaultwarden" (
     ps.common "Vaultwarden password manager"
     // {
@@ -27,7 +32,7 @@ in
       extraHosts = lib.mkOption {
         type = lib.types.attrsOf lib.types.nonEmptyStr;
         default = { };
-        description = "Additional container hostname-to-address mappings, for example an SMTP gateway on a private link.";
+        description = "Additional hostname-to-address mappings added to the host's /etc/hosts, for example an SMTP gateway on a private link.";
       };
     }
   );
@@ -35,44 +40,39 @@ in
   config = lib.mkMerge [
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
-      modules.docker.enable = true;
-
       systemd.tmpfiles.rules = [
         "d ${builtins.toJSON root} 0755 root root -"
-        "d ${builtins.toJSON "${root}/vw-data"} 0700 root root -"
+        "d ${builtins.toJSON dataFolder} 0700 vaultwarden vaultwarden -"
       ];
-      systemd.services.docker-vaultwarden = {
-        unitConfig.RequiresMountsFor = [
-          root
-          environmentFile
-        ];
-      };
+      networking.hosts = lib.mapAttrs' (
+        host: address: lib.nameValuePair address [ host ]
+      ) s.cfg.extraHosts;
 
-      virtualisation.oci-containers.containers.vaultwarden = {
-        # Update version and registry index digest together after release review.
-        image = lib.mkDefault "vaultwarden/server:1.37.4@sha256:efb3cde962015fcc036b2ea625242248611943b27212ebf4392841fb30fad055";
-        ports = lib.mkDefault (ps.publish s 8000 80);
-        pull = lib.mkDefault "always";
-        environmentFiles = lib.mkDefault [ environmentFile ];
-        environment = lib.mapAttrs (_: lib.mkDefault) (
+      services.vaultwarden = {
+        enable = true;
+        environmentFile = [ environmentFile ];
+        config = lib.mapAttrs (_: lib.mkDefault) (
           {
-            TZ = "Asia/Tokyo";
-            # Unreadable and unwritable: ignore any saved config.json and keep admin-page saves out of
-            # persistent state, so Nix and the environment file stay authoritative.
+            DATA_FOLDER = dataFolder;
+            ROCKET_ADDRESS = lib.removeSuffix "]" (lib.removePrefix "[" listen.address);
+            ROCKET_PORT = lib.toInt listen.port;
+            # Ignore any saved config.json so Nix and the environment file stay authoritative.
             CONFIG_FILE = "/dev/null/config.json";
             DOMAIN = ps.url s 8000;
-            SIGNUPS_ALLOWED = lib.boolToString s.cfg.signupsAllowed;
+            SIGNUPS_ALLOWED = s.cfg.signupsAllowed;
           }
           // lib.optionalAttrs (!s.cfg.signupsAllowed) {
             SIGNUPS_DOMAINS_WHITELIST = "";
           }
         );
-        autoRemoveOnStop = lib.mkDefault false;
-        extraOptions = lib.mkDefault (
-          [ "--restart=unless-stopped" ]
-          ++ lib.mapAttrsToList (host: address: "--add-host=${host}:${address}") s.cfg.extraHosts
-        );
-        volumes = lib.mkDefault [ "${root}/vw-data:/data" ];
+      };
+      networking.firewall = ps.backendFirewall config s [ ];
+      systemd.services.vaultwarden = {
+        unitConfig.RequiresMountsFor = [
+          root
+          environmentFile
+        ];
+        serviceConfig.ReadWritePaths = [ dataFolder ];
       };
     })
   ];

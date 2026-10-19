@@ -111,22 +111,23 @@ rec {
   # Standalone stays on loopback; a public owner publishes on its backendUrl for the gateway.
   # A native owner listens itself, so admit the gateway to the backendUrl port on that address only.
   backendFirewall =
-    config: selected:
+    config: selected: extraPorts:
     let
       endpoint = backendEndpoint selected;
+      ports = [ endpoint.port ] ++ map toString extraPorts;
     in
     lib.mkIf (!selected.standalone && !lib.hasPrefix "127." endpoint.address) (
       if config.networking.nftables.enable then
         {
-          extraInputRules = ''
-            ip daddr ${endpoint.address} tcp dport ${endpoint.port} accept
-          '';
+          extraInputRules = lib.concatMapStrings (port: ''
+            ip daddr ${endpoint.address} tcp dport ${port} accept
+          '') ports;
         }
       else
         {
-          extraCommands = ''
-            iptables -A nixos-fw -d ${endpoint.address} -p tcp --dport ${endpoint.port} -j nixos-fw-accept
-          '';
+          extraCommands = lib.concatMapStrings (port: ''
+            iptables -A nixos-fw -d ${endpoint.address} -p tcp --dport ${port} -j nixos-fw-accept
+          '') ports;
         }
     );
   # Fixed host port for Forgejo SSH on the backendUrl address; the gateway listens on 22.

@@ -79,10 +79,10 @@ in
     systemd.services.gitea-runner-forgejo = {
       wants = lib.optional (
         localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo
-      ) "docker-forgejo.service";
+      ) "forgejo.service";
       after = lib.optional (
         localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo
-      ) "docker-forgejo.service";
+      ) "forgejo.service";
       unitConfig = {
         ConditionPathExists = lib.mkDefault [ tokenFile ];
         RequiresMountsFor = lib.mkDefault ([ dataDir ] ++ cfg.requiresMountsFor);

@@ -60,7 +60,7 @@ in
           };
         };
       };
-      networking.firewall = ps.backendFirewall config s;
+      networking.firewall = ps.backendFirewall config s [ ];
       systemd.services.searx = {
         unitConfig.RequiresMountsFor = [ environmentFile ];
         # A public owner binds the backendUrl address, which must exist first.

@@ -136,9 +136,10 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
 | hermes | NixOS | —（native systemd、sandbox。devenv・nixを同梱） |
-| forgejo / immich / karakeep / vaultwarden / opencloud / attos-hoyo-dashboard | NixOS | Docker |
+| karakeep / attos-hoyo-dashboard | NixOS | Docker |
+| forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
-| jellyfin | NixOS | Docker、公開配置時のみytdl-sub |
+| jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
 | sunshine | NixOS | Hyprland・Steam |
@@ -244,10 +245,10 @@ modules.public-services."vault.example.org".vaultwarden = {
 `paseo`, `ssh`, `code-server`, `sunshine`, `hermes`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-DockerのHTTPサービスとSearXNGは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、所有OSはcontainerをこのaddress:portへpublishする。native SearXNGはこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
+HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
-Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはcontainerのSSHを `backendUrl` のaddressの2222へpublishし、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。
+Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはForgejo内蔵SSH server（user `git`）を `backendUrl` のaddressの2222でlistenさせ、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上書きするdomain whitelistも空にする。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。設定はNixと `environmentFile` だけが正で、`CONFIG_FILE` を読み書きできないpathに向けるため既存 `dataDir/vw-data/config.json` は読まれず、adminパネルの設定保存は永続化しない。
@@ -295,13 +296,13 @@ modules.vaultwarden = {
 };
 ```
 
-OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
+native serviceは127.0.0.1でlistenし、OCI frontendはloopbackだけへportをpublishして通常Docker bridgeを使う（Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flakeFile}`。
-WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
+WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、Vaultwardenの`extraHosts`（hostの`networking.hosts`へ追加）、Karakeepの非秘密environmentも公開service recordへ指定する。
 Incusの公開 `guests.<name>.{type,launchConfig,managedDeviceNames}`（`type` は `virtual-machine` / `container`）はhost activationでは適用せず、`guest <name> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足guestだけ `rebuild.flakeFile` の標準NixOS metadataとVMならqcow2、containerならsquashfsをbuild・importして作成し、作成用imageを削除する。同名の別type instanceは削除/変換せず拒否する。consumer guestは標準 `incus-virtual-machine-image.nix` / `incus-container-image.nix` とroot password lockを明示する。初期login password/private fileの再供給は `guest <name> passwd <user>` / `guest <name> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-guest-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
-Vaultwarden/OpenCloud/Karakeep/ChromeのOCI version/index digestとPaseo 0.12.0を固定し、runtime latest取得をしない。SearXNG・ytdl-subは利用ホストのnixpkgsのpackageを使う。
+Karakeep/ChromeのOCI version/index digestとPaseo 0.12.0を固定し、runtime latest取得をしない。Forgejo（LTSでなく`forgejo`）・Immich・Vaultwarden・OpenCloud（rolling）・Jellyfin・SearXNG・ytdl-subは利用ホストのnixpkgsのpackageを使う。既存dataを作ったversionより古いpackageへ戻さない（Karakeep・Open WebUIはnixpkgs版がimageより古いためDockerのまま）。
 localサービスの必須値、Docker依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの

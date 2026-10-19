@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -13,24 +14,14 @@ let
       default = null;
       inherit description;
     };
-  ownership =
-    description:
-    lib.mkOption {
-      type = lib.types.nullOr lib.types.ints.unsigned;
-      default = null;
-      inherit description;
-    };
 in
 {
   options.modules = ps.moduleOptions "forgejo" (
     ps.common "shared Forgejo service"
     // {
-      dataDir = ps.pathOption "Persistent service root containing forgejo/ and postgres/ directories.";
-      environmentFile = ps.pathOption "Runtime environment file for Forgejo and PostgreSQL, including database credentials.";
-      userUid = ownership "Caller-managed Forgejo UID, supplied to the image as USER_UID; no account is created.";
-      userGid = ownership "Caller-managed Forgejo GID, supplied to the image as USER_GID; no group is created.";
+      dataDir = ps.pathOption "Persistent service root keeping the official image layout: forgejo/gitea (app data), forgejo/git (repositories, LFS) and forgejo/ssh (host keys).";
       mailAddress = nullableString "Forgejo sender and envelope-from address.";
-      mailHost = nullableString "SMTP server hostname; port and protocol can be overridden through standard OCI environment settings.";
+      mailHost = nullableString "SMTP server hostname (port 587, STARTTLS); authentication goes through services.forgejo.settings.mailer.USER and services.forgejo.secrets.mailer.PASSWD.";
       sshAddresses = lib.mkOption {
         type = lib.types.listOf lib.types.nonEmptyStr;
         default = [ ];
@@ -44,122 +35,83 @@ in
     (lib.mkIf s.enabled (
       let
         cfg = s.cfg;
-        root = ps.require "forgejo" "dataDir" cfg.dataDir;
-        environmentFile = ps.require "forgejo" "environmentFile" cfg.environmentFile;
-        uid = toString (ps.require "forgejo" "userUid" cfg.userUid);
-        gid = toString (ps.require "forgejo" "userGid" cfg.userGid);
+        root = "${ps.require "forgejo" "dataDir" cfg.dataDir}/forgejo";
         mailEnabled = !s.standalone || cfg.mailHost != null || cfg.mailAddress != null;
-        mailAddress = if mailEnabled then ps.require "forgejo" "mailAddress" cfg.mailAddress else null;
-        mailHost = if mailEnabled then ps.require "forgejo" "mailHost" cfg.mailHost else null;
+        listen =
+          if s.standalone then
+            {
+              address = "127.0.0.1";
+              port = "3000";
+            }
+          else
+            ps.backendEndpoint s;
         sshPort = if s.standalone then 2222 else 22;
-        forgejoDataRoot = "${root}/forgejo";
-        forgejoDbRoot = "${root}/postgres";
-        mounts = {
-          unitConfig.RequiresMountsFor = [
-            root
-            environmentFile
-          ];
-        };
+        hostKeys = map (type: "${root}/ssh/ssh_host_${type}_key") [
+          "ed25519"
+          "rsa"
+          "ecdsa"
+        ];
       in
       {
-        modules.docker.enable = true;
-        modules.docker.networks.forgejo = { };
-        assertions = [
-          {
-            assertion = cfg.userUid != null && cfg.userGid != null;
-            message = "Forgejo requires consumer-owned userUid and userGid for local deployment.";
-          }
-        ];
-
-        systemd.tmpfiles.settings."10-forgejo" = {
-          ${root}.d = {
-            mode = lib.mkDefault "0755";
-            user = lib.mkDefault "root";
-            group = lib.mkDefault "root";
+        services.forgejo = {
+          enable = true;
+          # The image tracks the current release, not LTS; a downgrade would break the database.
+          package = lib.mkDefault pkgs.forgejo;
+          database = {
+            type = "postgres";
+            createDatabase = true;
           };
-          ${forgejoDataRoot}.d = {
-            mode = lib.mkDefault "0755";
-            user = lib.mkDefault "root";
-            group = lib.mkDefault "root";
+          # Keep the official image layout so repositories, LFS, avatars and attachments stay put.
+          stateDir = "${root}/gitea";
+          repositoryRoot = "${root}/git/repositories";
+          lfs = {
+            enable = true;
+            contentDir = "${root}/git/lfs";
           };
-          ${forgejoDbRoot}.d = {
-            mode = lib.mkDefault "0700";
-            user = lib.mkDefault "999";
-            group = lib.mkDefault "999";
-          };
-        };
-
-        systemd.services = {
-          docker-forgejo-db = mounts;
-          docker-forgejo = mounts;
-        };
-
-        virtualisation.oci-containers.containers = {
-          forgejo-db = {
-            image = lib.mkDefault "postgres:14.24@sha256:c2427de38f998489d36de7ca3553db2134872c400f2b08be4b824e5c50e4d619";
-            environment = lib.mapAttrs (_: lib.mkDefault) {
-              POSTGRES_USER = "forgejo";
-              POSTGRES_DB = "forgejo";
+          settings = lib.mapAttrsRecursive (_: lib.mkDefault) {
+            server = {
+              APP_DATA_PATH = "${root}/gitea";
+              DOMAIN = s.hostname;
+              ROOT_URL = "${ps.url s 3000}/";
+              HTTP_ADDR = listen.address;
+              HTTP_PORT = lib.toInt listen.port;
+              SSH_DOMAIN = s.hostname;
+              SSH_PORT = sshPort;
+              # The built-in server replaces the image's OpenSSH and keeps its host keys and git@ user.
+              START_SSH_SERVER = true;
+              BUILTIN_SSH_SERVER_USER = "git";
+              SSH_LISTEN_HOST = listen.address;
+              SSH_LISTEN_PORT = if s.standalone then 2222 else ps.forgejoSshBackendPort;
+              SSH_SERVER_HOST_KEYS = lib.concatStringsSep "," hostKeys;
+              OFFLINE_MODE = true;
             };
-            environmentFiles = lib.mkDefault [ environmentFile ];
-            autoRemoveOnStop = lib.mkDefault false;
-            extraOptions = lib.mkDefault [ "--restart=always" ];
-            volumes = lib.mkDefault [ "${forgejoDbRoot}:/var/lib/postgresql/data" ];
-            networks = lib.mkDefault [ "forgejo" ];
-          };
-          forgejo = {
-            image = lib.mkDefault "codeberg.org/forgejo/forgejo:16.0.6@sha256:e2c34a699543ca8a00217ee9ab2bea5feedc98bd6d0ea95ec287d3b7ae1355c6";
-            environment = lib.mapAttrs (_: lib.mkDefault) (
-              {
-                USER_UID = uid;
-                USER_GID = gid;
-                FORGEJO__database__DB_TYPE = "postgres";
-                FORGEJO__database__HOST = "forgejo-db:5432";
-                FORGEJO__database__NAME = "forgejo";
-                FORGEJO__database__USER = "forgejo";
-                FORGEJO__actions__ENABLED = "true";
-                FORGEJO__actions__DEFAULT_ACTIONS_URL = "https://data.forgejo.org";
-                FORGEJO__mailer__ENABLED = lib.boolToString mailEnabled;
-                FORGEJO__mailer__PROTOCOL = "smtp+starttls";
-                FORGEJO__mailer__SMTP_PORT = "587";
-                FORGEJO__server__DOMAIN = s.hostname;
-                FORGEJO__server__ROOT_URL = "${ps.url s 3000}/";
-                FORGEJO__server__SSH_DOMAIN = s.hostname;
-                FORGEJO__server__SSH_PORT = toString sshPort;
-              }
-              // lib.optionalAttrs (mailAddress != null) {
-                FORGEJO__mailer__FROM = mailAddress;
-                FORGEJO__mailer__ENVELOPE_FROM = mailAddress;
-              }
-              // lib.optionalAttrs (mailHost != null) {
-                FORGEJO__mailer__SMTP_ADDR = mailHost;
-              }
-            );
-            environmentFiles = lib.mkDefault [ environmentFile ];
-            autoRemoveOnStop = lib.mkDefault false;
-            extraOptions = lib.mkDefault [ "--restart=always" ];
-            # The gateway forwards public SSH to port 2222 on the backendUrl address.
-            ports = lib.mkDefault (
-              ps.publish s 3000 3000
-              ++ [
-                (
-                  if s.standalone then
-                    "127.0.0.1:${toString sshPort}:22"
-                  else
-                    "${(ps.backendEndpoint s).address}:${toString ps.forgejoSshBackendPort}:22"
-                )
-              ]
-            );
-            volumes = lib.mkDefault [
-              "${forgejoDataRoot}:/data"
-              "/etc/localtime:/etc/localtime:ro"
-            ];
-            dependsOn = lib.mkDefault [ "forgejo-db" ];
-            networks = lib.mkDefault [
-              "forgejo"
-            ];
+            security = {
+              REVERSE_PROXY_LIMIT = 1;
+              REVERSE_PROXY_TRUSTED_PROXIES = "*";
+            };
+            actions = {
+              ENABLED = true;
+              DEFAULT_ACTIONS_URL = "https://data.forgejo.org";
+            };
+            mailer = {
+              ENABLED = mailEnabled;
+            }
+            // lib.optionalAttrs mailEnabled {
+              PROTOCOL = "smtp+starttls";
+              SMTP_ADDR = ps.require "forgejo" "mailHost" cfg.mailHost;
+              SMTP_PORT = 587;
+              FROM = ps.require "forgejo" "mailAddress" cfg.mailAddress;
+              ENVELOPE_FROM = cfg.mailAddress;
+            };
           };
         };
+        systemd.services.forgejo = {
+          unitConfig.RequiresMountsFor = [ root ];
+          # A public owner binds the backendUrl address, which must exist first.
+          wants = [ "network-online.target" ];
+          after = [ "network-online.target" ];
+        };
+        networking.firewall = ps.backendFirewall config s [ ps.forgejoSshBackendPort ];
       }
     ))
   ];
