@@ -135,7 +135,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | foot | HM | Fonts |
 | ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
-| hermes / forgejo / immich / karakeep / vaultwarden / opencloud / searxng / attos-hoyo-dashboard | NixOS | Docker、公開配置時のみSwarm |
+| hermes | NixOS | —（native systemd、sandbox。devenv・nixを同梱） |
+| forgejo / immich / karakeep / vaultwarden / opencloud / searxng / attos-hoyo-dashboard | NixOS | Docker、公開配置時のみSwarm |
 | jellyfin | NixOS | Docker、公開配置時のみSwarm・ytdl-sub |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はSwarm・Open Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
@@ -250,8 +251,9 @@ Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上�
 
 MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
 
-Hermesは公式0.21.6 image（release receiptに対応するrc.4 tag/index digest固定）のdashboardとブラウザChat/TUIをOCIで隔離する。公式s6 entrypointはcontainer内rootで所有権を準備し、Agent全体を非rootへ落とす。bootstrap/supervision用capabilityだけを残し、`--user` / `--init`で公式entrypointを迂回しない。公開入力は `hermes.{dataDir,uid,gid}`（local配置時必須、UID/GIDは1–65534）、公開recordは `private = true` 必須。公開backendはencrypted `backend-hermes`、単独時だけ `127.0.0.1:9119` をpublishする。consumerが専用account・保存先を用意し、`dataDir` をcontainerの `/opt/data`（`HERMES_HOME`）へmountする。Docker socket・sudo・host homeは渡さない。
-`config.yaml` と `.env` がruntimeで存在するまでunitを起動しない。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。moduleは設定・秘密・認証・履歴を生成/置換しない。公式構成どおり`gateway run`をs6で監督し、`HERMES_DASHBOARD=1`で同じcontainerにdashboardを同居させる（gatewayはcronを実行する。messaging platformはruntime設定次第）。`volumes`は他moduleがmountを追加できる通常のlist。内蔵password認証はVPN/trusted network専用。proxyの実IPまたは専用overlayの限定CIDRをtrustし、HTTPS cookieとWebSocketを適用時に確認する。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/features/web-dashboard.md)。
+Hermesはupstream 0.21.6のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
+両unitは既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`だけをbindする（`bash -l`用の`/run/current-system`とnscdはread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
+upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/features/web-dashboard.md)。
 
 ### 複数マシンへの配置
 

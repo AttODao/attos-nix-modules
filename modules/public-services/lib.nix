@@ -10,7 +10,6 @@ let
     vaultwarden = "http://vaultwarden:80";
     opencloud = "http://opencloud:9200";
     jellyfin = "http://jellyfin:8096";
-    hermes = "http://hermes:9119";
     ollama = "http://open-webui:8080";
     searxng = "http://searxng:8080";
   };

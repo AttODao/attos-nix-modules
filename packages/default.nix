@@ -14,6 +14,7 @@ lib.makeScope pkgs.newScope (
   # root直下にpackage.nixを持つ外部source input（flake = false）。
   // {
     claude-code = self.callPackage "${inputs.claude-code-nix}/package.nix" { };
+    # flake inputのsource（outPath・rev・lastModified）。
     hermes-agent-src = inputs.hermes-agent;
   }
 )
