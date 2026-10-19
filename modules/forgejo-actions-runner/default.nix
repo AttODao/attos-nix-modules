@@ -1,6 +1,7 @@
 { config, lib, ... }:
 let
   ps = import ../public-services/lib.nix { inherit lib; };
+  cfg = config.modules.forgejo-actions-runner;
 in
 {
   imports = [
@@ -10,21 +11,20 @@ in
 
   options.modules.forgejo-actions-runner = {
     enable = lib.mkEnableOption "shared Forgejo Actions runner inside an Incus KVM VM guest";
-    tokenFile = ps.pathOption "Absolute runtime path to the native runner's registration environment file containing TOKEN; required when enabled.";
-    dataDir = ps.pathOption "Absolute runtime path to persistent runner registration state; required when enabled. Never migrate existing state implicitly.";
-    dynamicUser = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Keep the native DynamicUser and StateDirectory identity. Requires dataDir=/var/lib/gitea-runner/forgejo and disables static-user, tmpfiles and bind-mount plumbing.";
+    uuid = lib.mkOption {
+      type = lib.types.nullOr lib.types.nonEmptyStr;
+      default = null;
+      description = "Runner UUID shown by Forgejo's \"Create new runner\"; required when enabled. Not a secret.";
     };
-    requiresMountsFor = lib.mkOption {
-      type = lib.types.listOf ps.absolutePath;
-      default = [ ];
-      description = "Additional runtime mount paths required before registration and runner startup.";
+    tokenFile = ps.pathOption "Absolute runtime path to a file containing only the runner token paired with uuid; required when enabled.";
+    docker = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Run jobs in Docker containers (the default ubuntu-latest/docker labels). False leaves Docker off for host-only runners whose labels are set through the standard services.forgejo-runner option.";
     };
   };
 
-  config = lib.mkIf config.modules.forgejo-actions-runner.enable {
+  config = lib.mkIf (cfg.enable && cfg.docker) {
     modules.docker.enable = true;
   };
 }

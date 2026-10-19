@@ -1,99 +1,72 @@
 {
   config,
   lib,
-  pkgs,
+  options,
   ...
 }:
 let
   cfg = config.modules.forgejo-actions-runner;
   ps = import ../public-services/lib.nix { inherit lib; };
-  require = field: ps.require "modules.forgejo-actions-runner" field cfg.${field};
-  dataDir = require "dataDir";
-  tokenFile = require "tokenFile";
   forgejo = ps.entries config "forgejo";
   localForgejo = ps.select config "forgejo";
+  local = localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo;
+  # Guests pinned to an older nixpkgs import this module too; define the runner only where it exists.
+  supported = options.services ? forgejo-runner;
 in
 {
-  config = lib.mkIf cfg.enable {
-    assertions =
-      map
-        (field: {
-          assertion = cfg.${field} != null;
-          message = "modules.forgejo-actions-runner.${field} must be supplied when enabled.";
-        })
-        [
-          "tokenFile"
-          "dataDir"
-        ]
-      ++ [
-        {
-          assertion = !config.boot.isContainer && config.virtualisation.incus.agent.enable;
-          message = "Forgejo runner must run inside an Incus virtual-machine guest (boot.isContainer=false and virtualisation.incus.agent.enable=true), never on the physical host or in a container.";
-        }
-        {
-          assertion = !cfg.dynamicUser || dataDir == "/var/lib/gitea-runner/forgejo";
-          message = "Forgejo runner: dynamicUser requires the native /var/lib/gitea-runner/forgejo StateDirectory.";
-        }
-      ];
-
-    services.gitea-actions-runner = {
-      package = lib.mkDefault pkgs.forgejo-runner;
-      instances.forgejo = {
-        enable = true;
-        name = lib.mkDefault config.networking.hostName;
-        url = lib.mkDefault (
-          if localForgejo.standalone then
-            ps.url localForgejo 3000
-          else if builtins.length forgejo == 1 then
-            "https://${(builtins.head forgejo).hostname}"
-          else
-            throw "Forgejo runner: register exactly one Forgejo hostname or set the native runner instance URL."
-        );
-        tokenFile = lib.mkDefault tokenFile;
-        labels = lib.mkDefault [
-          "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-24.04@sha256:62d572b92f9f32d3427b6d220ad1f9dca9c7b6ffad37d295425037dbff78abaf"
-          "docker:docker://node:24.22.0-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0"
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+        assertions = [
+          {
+            assertion = supported;
+            message = "modules.forgejo-actions-runner needs a nixpkgs with services.forgejo-runner.";
+          }
+          {
+            assertion = cfg.uuid != null && cfg.tokenFile != null;
+            message = "modules.forgejo-actions-runner.uuid and tokenFile must be supplied when enabled.";
+          }
+          {
+            assertion = !config.boot.isContainer && config.virtualisation.incus.agent.enable;
+            message = "Forgejo runner must run inside an Incus virtual-machine guest (boot.isContainer=false and virtualisation.incus.agent.enable=true), never on the physical host or in a container.";
+          }
         ];
-        settings.container.docker_host = lib.mkDefault "automount";
-      };
-    };
+      }
+      (lib.optionalAttrs supported {
+        services.forgejo-runner.instances.default = {
+          enable = true;
+          settings = {
+            server.connections.default = {
+              url = lib.mkDefault (
+                if localForgejo.standalone then
+                  ps.url localForgejo 3000
+                else if builtins.length forgejo == 1 then
+                  "https://${(builtins.head forgejo).hostname}"
+                else
+                  throw "Forgejo runner: register exactly one Forgejo hostname or set the native runner connection URL."
+              );
+              inherit (cfg) uuid;
+            };
+            runner = {
+              name = lib.mkDefault config.networking.hostName;
+              labels = lib.mkIf cfg.docker (
+                lib.mkDefault [
+                  "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-24.04@sha256:62d572b92f9f32d3427b6d220ad1f9dca9c7b6ffad37d295425037dbff78abaf"
+                  "docker:docker://node:24.22.0-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0"
+                ]
+              );
+            };
+            container.docker_host = lib.mkIf cfg.docker (lib.mkDefault "automount");
+          };
+          secrets.server.connections.default.token_url = cfg.tokenFile;
+        };
 
-    # The native module has no dataDir and hardcodes both registration and
-    # daemon paths. Bind the selected directory there without moving its state.
-    # A static service identity avoids recycled DynamicUser ownership outside
-    # systemd's managed StateDirectory.
-    users.groups.gitea-runner = lib.mkIf (!cfg.dynamicUser) { };
-    users.users.gitea-runner = lib.mkIf (!cfg.dynamicUser) {
-      isSystemUser = true;
-      group = lib.mkDefault "gitea-runner";
-    };
-
-    systemd.tmpfiles.settings."10-forgejo-actions-runner" = lib.mkIf (!cfg.dynamicUser) {
-      ${dataDir}.d = {
-        mode = lib.mkDefault "0700";
-        user = lib.mkDefault "gitea-runner";
-        group = lib.mkDefault "gitea-runner";
-      };
-    };
-
-    systemd.services.gitea-runner-forgejo = {
-      wants = lib.optional (
-        localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo
-      ) "forgejo.service";
-      after = lib.optional (
-        localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo
-      ) "forgejo.service";
-      unitConfig = {
-        ConditionPathExists = lib.mkDefault [ tokenFile ];
-        RequiresMountsFor = lib.mkDefault ([ dataDir ] ++ cfg.requiresMountsFor);
-      };
-      serviceConfig = {
-        # The native ordinary assignment needs an override for the public choice.
-        DynamicUser = lib.mkForce cfg.dynamicUser;
-        BindPaths = lib.mkIf (!cfg.dynamicUser) (
-          lib.mkDefault [ "${dataDir}:/var/lib/gitea-runner/forgejo" ]
-        );
-      };
-    };
-  };
+        systemd.services.forgejo-runner-default = {
+          unitConfig.ConditionPathExists = lib.mkDefault [ cfg.tokenFile ];
+          wants = lib.optional local "forgejo.service";
+          after = lib.optional local "forgejo.service";
+        };
+      })
+    ]
+  );
 }
