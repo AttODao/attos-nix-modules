@@ -128,6 +128,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | steam | NixOS + HM | PCManFM |
 | wireguard-client | NixOS | NetworkManager |
 | limine | NixOS | — |
+| deploy | NixOS | —（CIが公開したclosureへ自ホストを切り替える `deploy` command） |
 | atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
 | zed | HM | 任意のcodex-acp npm policy、claude-code有効時はClaude AgentにNixのclaudeを使用 |
 | discord | HM | Fcitx5 |
@@ -169,6 +170,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
+- `deploy.source`: 有効時必須。CIが `deploy` branchへ記録するForgejo repoのweb URL（例 `https://git.attodao.cc/AttODao/server-dotfiles`）。詳細は[Deploy](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-deploy)。
 - `desktop-theme.{cursor,cursorName,cursorSize}`: archiveは既定null、nameは`Custom-Cursors`、sizeは48。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
 - `steam.firewall.{remotePlay,dedicatedServer,localNetworkGameTransfers}`: 各既定false。必要な開放をconsumerが選択する。Steam enableだけでこれらのportは開かない。
 - `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
@@ -323,6 +325,7 @@ Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（�
 
 flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
 mergeは手動。利用側はmerge後、各repoの更新PRでpinを上げて採用する。
+利用側のCIはmainへのpush時に `attos-ci build` の後 `attos-ci publish` でhostごとのclosureを `deploy` branchへ記録し、各ホストは `modules.deploy` の `deploy` で切り替える。
 
 ## 検証
 

@@ -14,6 +14,7 @@ usage: attos-ci COMMAND [ARGS]
   update-packages          nix-update every versioned custom package, update-nix-fetchgit the Pi catalog
   check-consumers REPO...  evaluate consumer hosts (owner/repo:host,host) against this checkout
   build HOST...            build host toplevels and push them to the cache
+  publish                  record the built closures on the deploy branch for the deploy command
   report BASE HOST...      write a closure diff of HOST vs git ref BASE to report.md
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
   comment PR FILE          post FILE as a comment on pull request PR
@@ -60,9 +61,10 @@ check_consumers() {
 
 build() {
   local host out paths=()
+  : >.attos-ci-paths
   for host in "$@"; do
     out=$(nix build --no-link --print-out-paths "$(toplevel "$host")")
-    echo "$host $out"
+    echo "$host $out" | tee -a .attos-ci-paths
     paths+=("$out")
   done
   attic login ci "$cache_url" "$ATTIC_TOKEN" >/dev/null
@@ -85,6 +87,21 @@ report() {
     done
   } > report.md
   git worktree remove --force "$dir"
+}
+
+# Record the pushed closures on the deploy branch: one file per host with the
+# store path and the source commit, read by the hosts' deploy command.
+publish() {
+  local dir host out
+  [ -s .attos-ci-paths ] || { echo "publish: run build first" >&2; exit 1; }
+  dir=$(mktemp -d)
+  git -C "$dir" init -q -b deploy
+  while read -r host out; do
+    printf '%s\n%s\n' "$out" "$(git rev-parse HEAD)" >"$dir/$host"
+  done <.attos-ci-paths
+  git -C "$dir" add -A
+  git -C "$dir" -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qm "deploy $(git rev-parse --short HEAD)"
+  git -C "$dir" push -qf "https://bot:$FORGEJO_TOKEN@${GITHUB_SERVER_URL#https://}/$GITHUB_REPOSITORY.git" HEAD:refs/heads/deploy
 }
 
 pr() {
@@ -114,6 +131,7 @@ case "$command" in
   update-packages) update_packages ;;
   check-consumers) check_consumers "$@" ;;
   build) build "$@" ;;
+  publish) publish ;;
   report) report "$@" ;;
   pr) pr "$@" ;;
   comment) comment "$@" ;;
