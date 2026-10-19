@@ -71,7 +71,7 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 
 ## Home Managerの管理
 
-- HMのsourceはこのflakeでrevision固定。現在は `acd21c5a3420a9d5fd0ed06299b10828267ef9ba`。
+- HMのsourceはこのflakeでrevision固定。現在は `640725978b99076e18e069f6e7d2959124584f8f`。
 - HMも利用ホストの `pkgs` を使用し、packageはNixOSユーザー環境へ導入する。
 - ユーザー名・ホームディレクトリはNixOSのユーザー定義から導出する。
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。
@@ -251,9 +251,9 @@ Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上�
 
 MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
 
-Hermesはupstream 0.21.6のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
+Hermesはupstream 0.22.2のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
 両unitは既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`だけをbindする（`bash -l`用の`/run/current-system`、glibcが`/var/run/nscd`で探すnscd、systemd-resolvedの`/run/systemd/resolve`はread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む（upstreamの実行時tool `nodejs`・`ripgrep`・`ffmpeg-headless`も入れる。terminalの`bash -l`がpackage wrapperのPATHを外すため）。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
-upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/v0.21.6/website/docs/user-guide/features/web-dashboard.md)。
+upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/v0.22.2/website/docs/user-guide/features/web-dashboard.md)。
 
 ### 複数マシンへの配置
 
@@ -302,7 +302,7 @@ WireGuardのsync identity/group/runtime modeとIPv4 forwarding、Mailserverのsy
 Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
 Incusの公開 `virtualMachines.<name>.{launchConfig,managedDeviceNames}` はhost activationでは適用せず、`vm <VM> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足VMだけ `rebuild.flakeFile` の標準NixOS metadata/qcow2をbuild・importして `--vm` で作成し、作成用imageを削除する。同名containerは削除/変換せず拒否する。consumer guestは標準 `virtualisation/incus-virtual-machine.nix` とroot password lockを明示する。初期login password/private fileの再供給は `vm <VM> passwd <user>` / `vm <VM> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.virtualMachines.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-vm-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
-Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.11.1を固定し、runtime latest取得をしない。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
+Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.12.0を固定し、runtime latest取得をしない。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
 localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの

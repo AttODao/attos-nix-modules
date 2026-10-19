@@ -5,7 +5,7 @@
     # packages出力専用。moduleのattopkgsは利用ホストのpkgsで構築する。
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager = {
-      url = "github:nix-community/home-manager/acd21c5a3420a9d5fd0ed06299b10828267ef9ba";
+      url = "github:nix-community/home-manager/640725978b99076e18e069f6e7d2959124584f8f";
       flake = false;
     };
     claude-code-nix = {
@@ -14,7 +14,7 @@
     };
     # hermes moduleが使うupstream NixOS moduleと、hermes-desktopのsource。
     # upstreamのPython環境はupstreamのlockで固定するため、nixpkgsはfollowsしない。
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.21.6";
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.22.2";
   };
 
   outputs =

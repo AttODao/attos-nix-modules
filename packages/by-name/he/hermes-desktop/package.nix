@@ -12,7 +12,7 @@
 }:
 let
   src = hermes-agent-src;
-  version = "0.21.6";
+  version = "0.22.2";
   hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix; };
   # icon生成はPillowとresvg-pyだけを使う。
   generatedIcons = callPackage "${src}/nix/icons.nix" {
