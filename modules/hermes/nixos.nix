@@ -69,10 +69,15 @@ in
         mode = lib.mkDefault "dashboard";
         host = lib.mkDefault (if selected.standalone then "127.0.0.1" else "0.0.0.0");
       };
-      # Hermes builds per-task environments itself, as an untrusted Nix user.
+      # Hermes builds per-task environments itself, as an untrusted Nix user. The
+      # terminal's bash -l drops the package wrapper's PATH, so upstream's own
+      # runtime tools are repeated here.
       extraPackages = [
         pkgs.nix
         pkgs.devenv
+        pkgs.nodejs
+        pkgs.ripgrep
+        pkgs.ffmpeg
       ];
     };
 
