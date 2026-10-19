@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   attopkgs,
   ...
 }:
@@ -11,8 +10,6 @@ in
 {
   config = lib.mkIf cfg.enable {
     boot = {
-      # Neither desktop Zen nor server XanMod is universal; select those on the host.
-      kernelPackages = lib.mkDefault pkgs.linuxPackages;
       plymouth = lib.mkIf cfg.quietBoot (
         {
           enable = lib.mkDefault true;

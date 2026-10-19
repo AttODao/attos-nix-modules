@@ -1,7 +1,6 @@
 {
   osConfig,
   config,
-  options,
   lib,
   pkgs,
   ...
@@ -9,14 +8,6 @@
 let
   cfg = osConfig.modules.hyprland;
   mod = "SUPER";
-  # Home Manager defaults pointerCursor to an empty submodule, not null.
-  cursor =
-    if options.home.pointerCursor.highestPrio == (lib.mkOptionDefault { }).priority then
-      null
-    else
-      config.home.pointerCursor;
-  cursorTheme = if cursor != null then cursor.name else "Custom-Cursors";
-  cursorSize = if cursor != null then toString cursor.size else "48";
   systemctl = "${pkgs.systemd}/bin/systemctl";
   noctalia = cmd: "noctalia msg ${cmd}";
   powerButtonCommand = "${noctalia "session lock"} && sleep 1 && ${noctalia "monitors off"}";
@@ -43,6 +34,16 @@ let
   lockedCommand =
     key: command:
     luaBind (builtins.toJSON key) "hl.dsp.exec_cmd(${builtins.toJSON command})" { locked = true; };
+  workspaceBinds = lib.concatMap (
+    n:
+    let
+      ws = toString n;
+    in
+    [
+      (modBind ws "hl.dsp.focus({ workspace = ${ws} })")
+      (modBind "SHIFT + ${ws}" "hl.dsp.window.move({ workspace = ${ws} })")
+    ]
+  ) (lib.range 1 9);
 
   startupCommands = [
     "${systemctl} --user start fcitx5-daemon.service xdg-desktop-portal.service xdg-desktop-portal-gtk.service xdg-desktop-portal-hyprland.service"
@@ -63,11 +64,6 @@ in
       pkgs.hyprshot
     ]
     ++ lib.optional cfg.neowall.enable pkgs.neowall;
-
-    # The screenshot bindings below target this child of the configured Pictures directory.
-    systemd.user.tmpfiles.rules = [
-      "d ${builtins.toJSON "${config.xdg.userDirs.pictures}/Screenshots"} 0755 - - -"
-    ];
 
     xdg.configFile = lib.mkIf cfg.neowall.enable {
       "neowall/config.vibe".text = ''
@@ -178,30 +174,6 @@ in
             _args = [
               "ELECTRON_OZONE_PLATFORM_HINT"
               "auto"
-            ];
-          }
-          {
-            _args = [
-              "XCURSOR_THEME"
-              cursorTheme
-            ];
-          }
-          {
-            _args = [
-              "XCURSOR_SIZE"
-              cursorSize
-            ];
-          }
-          {
-            _args = [
-              "HYPRCURSOR_THEME"
-              cursorTheme
-            ];
-          }
-          {
-            _args = [
-              "HYPRCURSOR_SIZE"
-              cursorSize
             ];
           }
         ];
@@ -345,24 +317,9 @@ in
 
           (modBind "mouse_down" ''hl.dsp.focus({ workspace = "r+1" })'')
           (modBind "mouse_up" ''hl.dsp.focus({ workspace = "r-1" })'')
-          (modBind "1" "hl.dsp.focus({ workspace = 1 })")
-          (modBind "2" "hl.dsp.focus({ workspace = 2 })")
-          (modBind "3" "hl.dsp.focus({ workspace = 3 })")
-          (modBind "4" "hl.dsp.focus({ workspace = 4 })")
-          (modBind "5" "hl.dsp.focus({ workspace = 5 })")
-          (modBind "6" "hl.dsp.focus({ workspace = 6 })")
-          (modBind "7" "hl.dsp.focus({ workspace = 7 })")
-          (modBind "8" "hl.dsp.focus({ workspace = 8 })")
-          (modBind "9" "hl.dsp.focus({ workspace = 9 })")
-          (modBind "SHIFT + 1" "hl.dsp.window.move({ workspace = 1 })")
-          (modBind "SHIFT + 2" "hl.dsp.window.move({ workspace = 2 })")
-          (modBind "SHIFT + 3" "hl.dsp.window.move({ workspace = 3 })")
-          (modBind "SHIFT + 4" "hl.dsp.window.move({ workspace = 4 })")
-          (modBind "SHIFT + 5" "hl.dsp.window.move({ workspace = 5 })")
-          (modBind "SHIFT + 6" "hl.dsp.window.move({ workspace = 6 })")
-          (modBind "SHIFT + 7" "hl.dsp.window.move({ workspace = 7 })")
-          (modBind "SHIFT + 8" "hl.dsp.window.move({ workspace = 8 })")
-          (modBind "SHIFT + 9" "hl.dsp.window.move({ workspace = 9 })")
+        ]
+        ++ workspaceBinds
+        ++ [
 
           # Keep the frozen preview; hyprshot/grim still omits the cursor.
           (modCommand "SHIFT + S" "uwsm app -t service -- hyprshot --freeze -m region -o ${screenshotDirectory}")

@@ -1,22 +1,12 @@
 {
   osConfig,
-  config,
   lib,
   ...
 }:
 {
+  # Plugins and Starship come from the system zshrc; HM zsh keeps session
+  # variables and other modules' shell integrations.
   config = lib.mkIf osConfig.modules.zsh.enable {
-    programs.zsh = {
-      enable = true;
-      autosuggestion.enable = true;
-      syntaxHighlighting.enable = true;
-    };
-
-    programs.starship = {
-      enable = true;
-      enableZshIntegration = true;
-
-      settings = import ./settings.nix;
-    };
+    programs.zsh.enable = true;
   };
 }

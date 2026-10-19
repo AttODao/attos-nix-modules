@@ -24,8 +24,8 @@ in
         session.default = lib.mkDefault "Hyprland (uwsm-managed)";
 
         cursor = {
-          theme = lib.mkDefault "Custom-Cursors";
-          size = lib.mkDefault 48;
+          theme = lib.mkDefault config.modules.desktop-theme.cursorName;
+          size = lib.mkDefault config.modules.desktop-theme.cursorSize;
           path = lib.mkDefault "${cursorPackage}/share/icons";
         };
       }

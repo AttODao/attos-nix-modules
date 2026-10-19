@@ -114,7 +114,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | 機能 | 設定するscope | 自動有効化する依存 |
 | --- | --- | --- |
 | thunderbird | NixOS + HM | EDS・GNOME Keyring |
-| fonts | NixOS + HM | — |
+| fonts | NixOS | — |
 | zsh | NixOS + HM | Starship同梱 |
 | hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・PCManFM・userDirs（FootからFonts） |
 | greeter | NixOS | Hyprland |
@@ -148,7 +148,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | ytdl-sub / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM | 任意のGPU screen recorder support |
-| open-deck-desktop | NixOS + HM | AppImage support |
+| open-deck-desktop | HM（`binfmt`時NixOS） | —（`binfmt`時のみAppImage binfmt） |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | — |
 | pi | HM + `systemWide`時NixOS | — |
 | claude-code | HM | Piと同じcatalogのskill・context-mode MCP |
@@ -162,7 +162,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
 - `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
-- `greeter.{cursor,output}`: cursor archiveは有効時必須。outputは既定null。
+- `greeter.{cursor,output}`: cursor archiveは既定`desktop-theme.cursor`で、有効時に非null必須。theme名/sizeは`desktop-theme.{cursorName,cursorSize}`に従う。outputは既定null。
 - `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
@@ -170,7 +170,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `desktop-theme.{cursor,cursorName,cursorSize}`: archiveは既定null、nameは`Custom-Cursors`、sizeは48。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
 - `steam.firewall.{remotePlay,dedicatedServer,localNetworkGameTransfers}`: 各既定false。必要な開放をconsumerが選択する。Steam enableだけでこれらのportは開かない。
 - `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
-- `open-deck-desktop.binfmt`: 既定false。Open-Deck有効時だけAppImage binfmtへ転送する。
+- `open-deck-desktop.binfmt`: 既定false。Open-Deck有効時だけ`programs.appimage`をbinfmt付きで有効化する（他のAppImage用。Open-Deck自体はappimageToolsで包装済み）。
 - `paseo.{hostname,environmentFile}`: 単独時のhostnameは既定`localhost`。公開時は登録FQDNを継承する。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: monitor / wallpaperのリスト。scalingの既定はfill。assetsやユーザーごとの調整は標準HM設定を使う。
@@ -178,9 +178,9 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
 archiveのURL/hash・licenseはconsumerに残す。
-カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursorへ反映する。
+カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursor・systemd user session環境へ反映する。Hyprland・user serviceはsession環境を継承する。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
-Hyprlandは全HMユーザーの設定済みPictures配下にScreenshotsをactivationで作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
+Hyprlandのスクリーンショット先（Pictures配下のScreenshots）はhyprshotが保存時に作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
 AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
 `hermes-desktop.url`はHermes Desktopの初期接続先で、有効時必須。connection.jsonが無い場合だけ書き、sign-inはapp内で行う（認証・接続registryは管理しない）。
 `immich-client.watchDirectories`は起動時に再帰uploadし、以後監視するディレクトリで、既定nullは各ユーザーのXDG Pictures（`xdg.userDirs.pictures`）を使う。user serviceは`~/.config/immich/auth.yml`（`immich login <url> <api-key>`で作成）がある場合だけ起動し、認証情報は管理しない。

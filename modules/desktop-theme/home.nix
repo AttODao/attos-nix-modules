@@ -71,25 +71,5 @@ in
         MOZ_ENABLE_WAYLAND = "1";
       }
     );
-
-    xdg.configFile."environment.d/10-cursor.conf".text = lib.mkDefault (
-      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: value: "${name}=${value}") cursorEnvironment)
-      + "\n"
-    );
-
-    # Retain the X login path without enabling a separate HM-managed X session.
-    home.file.".xprofile".text = lib.mkDefault ''
-      ${lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") (
-          inputEnvironment // cursorEnvironment
-        )
-      )}
-
-      if [ -r "$HOME/.Xresources" ]; then
-        ${pkgs.xrdb}/bin/xrdb -merge "$HOME/.Xresources"
-      fi
-
-      ${pkgs.xsetroot}/bin/xsetroot -xcf ${lib.escapeShellArg "${cursor.package}/share/icons/${cursor.name}/cursors/left_ptr"} ${lib.escapeShellArg cursorSize}
-    '';
   };
 }

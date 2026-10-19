@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 {
   config = lib.mkIf config.modules.zsh.enable {
     programs.zsh = {
@@ -10,7 +15,7 @@
     programs.starship = {
       enable = true;
 
-      settings = import ./settings.nix;
+      settings = import ./settings.nix { inherit lib pkgs; };
     };
   };
 }

@@ -1,20 +1,12 @@
 {
   osConfig,
   config,
-  options,
   lib,
   pkgs,
   ...
 }:
 let
   moduleCfg = osConfig.modules.linux-wallpaperengine;
-  cursor =
-    if options.home.pointerCursor.highestPrio == (lib.mkOptionDefault { }).priority then
-      null
-    else
-      config.home.pointerCursor;
-  cursorTheme = if cursor == null then "Custom-Cursors" else cursor.name;
-  cursorSize = if cursor == null then "48" else toString cursor.size;
 in
 {
   config = lib.mkIf moduleCfg.enable {
@@ -31,12 +23,5 @@ in
         map (wallpaper: wallpaper // { scaling = "fill"; }) moduleCfg.wallpapers
       );
     };
-
-    systemd.user.services.linux-wallpaperengine.Service.Environment = lib.mkDefault [
-      "XCURSOR_THEME=${cursorTheme}"
-      "XCURSOR_SIZE=${cursorSize}"
-      "HYPRCURSOR_THEME=${cursorTheme}"
-      "HYPRCURSOR_SIZE=${cursorSize}"
-    ];
   };
 }
