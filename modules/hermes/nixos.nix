@@ -27,10 +27,13 @@ let
         "/run:ro"
       ];
       BindPaths = [ dataDir ];
-      # bash -l rebuilds PATH from the system profile; nscd serves user lookups.
+      # bash -l rebuilds PATH from the system profile. glibc reaches nscd through
+      # /var/run (hidden with /var); static resolvers such as Go read /etc/resolv.conf,
+      # which links into /run/systemd/resolve with systemd-resolved.
       BindReadOnlyPaths = [
         "/run/current-system"
-        "-/run/nscd"
+        "-/run/nscd:/var/run/nscd"
+        "-/run/systemd/resolve"
       ];
       InaccessiblePaths = [ "-/boot" ];
       PrivateDevices = true;
