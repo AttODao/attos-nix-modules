@@ -13,8 +13,8 @@ in
   imports = [
     ./nixos.nix
     (builtins.fetchTarball {
-      url = "https://gitlab.com/simple-nixos-mailserver/nixos-mailserver/-/archive/2c3a8c4e36ab8190010f9f104e48d042cc65b05f/nixos-mailserver-2c3a8c4e36ab8190010f9f104e48d042cc65b05f.tar.gz";
-      sha256 = "sha256-jnU8wDRoMIUxuT0AgGYxqPucIf3cOAwWrmB23xarCXI=";
+      url = "https://gitlab.com/simple-nixos-mailserver/nixos-mailserver/-/archive/4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2/nixos-mailserver-4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2.tar.gz";
+      sha256 = "sha256-sj7RiYmHW+d7NjH2TWKozEaYp8nhdGas6/zMKjTCO5k=";
     })
   ];
 

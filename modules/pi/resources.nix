@@ -8,27 +8,27 @@ let
   mattSkills = pkgs.fetchFromGitHub {
     owner = "mattpocock";
     repo = "skills";
-    rev = "006a52be23e0178375e083e30535fa8224471f3e";
-    hash = "sha256-g32DrgTt1/6MXeuHnlGAcl7xb+kema5+9UVsiTbgYIs=";
+    rev = "49dd158d1076134a641b33efb035946536778336";
+    hash = "sha256-NljCSZNI3sZ+vbCw7pRdrwR7try4BxOFp4gdjuWYtzs=";
   };
   vercelSkills = pkgs.fetchFromGitHub {
     owner = "vercel-labs";
     repo = "skills";
-    rev = "18f96ea131dab3b0fcc9b27cf7c6f6cbb6174680";
-    hash = "sha256-FJLz/HfqBWtsJUuKs0w/OmErdyUi5/fKdNiTBpDtT1A=";
+    rev = "13e4063a1cf913f5606d57d42ab83a86f5001e04";
+    hash = "sha256-djzSciYX530uc1Xk4+Vdf2IHmNotC0bb6YU/peF0UK4=";
   };
   contextMode = attopkgs.context-mode;
   piSessions = pkgs.fetchFromGitHub {
     owner = "thurstonsand";
     repo = "pi-sessions";
-    rev = "80970d062242933272f2c8083dcc2888ab0c94fc";
-    hash = "sha256-xHr/N8PBd9igf3M2EVlHtMNbY22Qn+Lz36OerLd3oe0=";
+    rev = "0c47c01978f1f8aaa21a9499d724c886f1c34d42";
+    hash = "sha256-RWYLI11xW2IVtGpbFLo5EPwxUO6h9sy74tML34LXJb4=";
   };
   piReview = pkgs.fetchFromGitHub {
     owner = "bacnh85";
     repo = "pi-extensions";
-    rev = "5388a5f1987873fe1355064f72021452c4347c72";
-    hash = "sha256-8igRRDOEDIO0Nae7vzTSfnYg06i8KNiDM3XgkWT/CJY=";
+    rev = "85233b0ea14aa62104593140f9788bcb083e10e4";
+    hash = "sha256-ZWBavlbjWEounxhCs3YVuhWHvDFYwB2ZZ0wbvzN70RE=";
   };
   piUsage = pkgs.fetchFromGitHub {
     owner = "mtrojnar";
@@ -39,14 +39,14 @@ let
   piKeepGoing = pkgs.fetchFromGitHub {
     owner = "ohlulu";
     repo = "pi-keep-going";
-    rev = "0c646fb606ddbf7e7bebaa379a43e29e9920a47a";
-    hash = "sha256-8odkgve5sx3x52Vl+ICoeTcLJUD4Yrv802l60idu/mo=";
+    rev = "0ae1d40870af9ebfb9debc806196c84d8657fca0";
+    hash = "sha256-udpBIxaceQv78HoUp3VPI7wTBUgE0ASXiTAGNyb0Wrc=";
   };
   ponytail = pkgs.fetchFromGitHub {
     owner = "DietrichGebert";
     repo = "ponytail";
-    rev = "v4.10.3";
-    hash = "sha256-aypYnQf+zkKGj+dfs+qFKTFIvaick9p0XJNtPkSwIB0=";
+    rev = "v5.3.2";
+    hash = "sha256-IJlhfkdXI6pMZZCZO7XBRg88LBiNfzc5Gnm4ofGybL8=";
   };
 in
 {
@@ -55,7 +55,7 @@ in
       source = "${contextMode}/lib/context-mode";
       entry = "build/adapters/pi/extension.js";
     };
-    pi-mcp-adapter.package = "npm:pi-mcp-adapter@5.3.0";
+    pi-mcp-adapter.package = "npm:pi-mcp-adapter@5.3.2";
     pi-sessions = {
       source = piSessions;
       entry = "extensions/pi-sessions.ts";
