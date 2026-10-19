@@ -27,14 +27,71 @@ update_shared() {
   nix flake update
 }
 
+# Change summaries for the PR body. update-packages records its own table in
+# .attos-ci-summary.md (untracked); flake.lock changes are summarised in pr().
+summary_file=.attos-ci-summary.md
+
+lock_summary() {
+  git diff --quiet HEAD -- flake.lock 2>/dev/null && return 0
+  echo "### flake input"
+  echo
+  echo "| input | 変更前 | 変更後 |"
+  echo "| --- | --- | --- |"
+  jq -r --argjson old "$(git show HEAD:flake.lock)" '
+    def info: . as $n
+      | (($n.original.ref // "") | if . == "" then "" else . + " " end)
+      + (($n.locked.rev // $n.locked.narHash // "?") | .[0:7])
+      + (if $n.locked.lastModified then " (" + ($n.locked.lastModified | strftime("%Y-%m-%d")) + ")" else "" end);
+    .nodes | to_entries[]
+    | select(.key != "root" and .value.locked != null)
+    | select(($old.nodes[.key].locked // null) != .value.locked)
+    | "| \(.key)\(if .value.original.repo then " (" + .value.original.owner + "/" + .value.original.repo + ")" else "" end) | \(if $old.nodes[.key].locked then ($old.nodes[.key] | info) else "（新規）" end) | \(.value | info) |"
+  ' flake.lock
+  echo
+}
+
+package_versions() {
+  local pkg
+  for pkg in "$@"; do
+    printf '%s %s\n' "$pkg" "$(nix eval --raw ".#$pkg.version" 2>/dev/null || echo "?")"
+  done
+}
+
+# owner/repo of each fetchFromGitHub whose rev changed in the given files.
+fetch_summary() {
+  git diff -U3 -- "$@" | awk '
+    /owner = "/ { split($0, a, "\""); owner = a[2] }
+    /repo = "/ { split($0, a, "\""); repo = a[2] }
+    /^-.*rev = "/ { split($0, a, "\""); old = a[2] }
+    /^\+.*rev = "/ { split($0, a, "\""); printf "| %s/%s | %s | %s |\n", owner, repo, substr(old, 1, 12), substr(a[2], 1, 12) }
+  '
+}
+
 update_packages() {
-  local pkg failed=()
-  for pkg in pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio; do
+  local pkg failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio)
+  before=$(package_versions "${packages[@]}")
+  for pkg in "${packages[@]}"; do
     local args=(--flake "$pkg")
     [ "$pkg" = pi ] && args+=(--custom-dep modelData)
     nix-update "${args[@]}" || failed+=("$pkg")
   done
   update-nix-fetchgit modules/pi/resources.nix modules/skills/sources.nix || failed+=(pi-and-skill-sources)
+  after=$(package_versions "${packages[@]}")
+  {
+    echo "### package"
+    echo
+    echo "| package | 変更前 | 変更後 |"
+    echo "| --- | --- | --- |"
+    paste -d" " <(echo "$before") <(echo "$after") | awk '$2 != $4 { printf "| %s | %s | %s |\n", $1, $2, $4 }'
+    echo
+    echo "### source（fetchFromGitHub）"
+    echo
+    echo "| repository | 変更前 | 変更後 |"
+    echo "| --- | --- | --- |"
+    fetch_summary modules/pi/resources.nix modules/skills/sources.nix
+    echo
+    [ ${#failed[@]} -eq 0 ] || echo "更新できなかったもの: ${failed[*]}"
+  } >"$summary_file"
   [ ${#failed[@]} -eq 0 ] || echo "::warning::not updated: ${failed[*]}"
 }
 
@@ -54,17 +111,24 @@ check_consumers() {
 
 
 pr() {
-  local branch=$1 title=$2 existing
+  local branch=$1 title=$2 existing body
   if git diff --quiet && git diff --cached --quiet; then
     echo "no changes"; return 0
   fi
+  body=$(
+    echo "自動更新のPRです。ビルドはしていません。mergeの前に、必要ならホストで \`nixos-rebuild build\` を実行して確認してください。"
+    echo
+    lock_summary
+    if [ -s "$summary_file" ]; then cat "$summary_file"; fi
+  )
   git -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qam "$title"
   git push -qf "https://bot:$FORGEJO_TOKEN@${GITHUB_SERVER_URL#https://}/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
   existing=$(api "pulls?state=open&limit=50" | jq --arg b "$branch" '[.[] | select(.head.ref == $b)][0].number // empty')
   if [ -n "$existing" ]; then
+    api "pulls/$existing" -X PATCH -d "$(jq -n --arg t "$title" --arg b "$body" '{title: $t, body: $b}')" >/dev/null
     echo "updated #$existing"
   else
-    api pulls -X POST -d "$(jq -n --arg h "$branch" --arg t "$title" '{head: $h, base: "main", title: $t, body: "自動更新のPRです。ビルドはしていません。mergeの前に、必要ならホストで `nixos-rebuild build` を実行して確認してください。"}')" | jq -r '"opened #\(.number)"'
+    api pulls -X POST -d "$(jq -n --arg h "$branch" --arg t "$title" --arg b "$body" '{head: $h, base: "main", title: $t, body: $b}')" | jq -r '"opened #\(.number)"'
   fi
 }
 

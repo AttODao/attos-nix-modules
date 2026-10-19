@@ -2,6 +2,7 @@
   writeShellApplication,
   coreutils,
   findutils,
+  gawk,
   gnugrep,
   gnused,
   curl,
@@ -16,6 +17,7 @@ writeShellApplication {
   runtimeInputs = [
     coreutils
     findutils
+    gawk
     gnugrep
     gnused
     curl
