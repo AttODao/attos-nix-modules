@@ -313,6 +313,17 @@ localサービスの必須値、Docker依存、既存stateの扱いは[Wiki](htt
 login-pinはattodaoのgreetd / TTYに限定する。
 Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron sandboxは無効。
 
+## 自動更新
+
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。jobは信頼済みrunner（label `nix`）だけで実行し、secret `BOT_TOKEN`（bot accountのrepository書込み）と `ATTIC_TOKEN`（cache push）を使う。
+
+- `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
+- `update/packages`: version固定のcustom packageとPi resourceカタログ。
+- OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
+
+flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
+mergeは手動。利用側はmerge後、各repoの更新PRでpinを上げて採用する。
+
 ## 検証
 
 このrepoはテストを持たない。変更時は次の評価で確認する。

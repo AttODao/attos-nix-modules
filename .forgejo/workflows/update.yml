@@ -1,0 +1,45 @@
+# Weekly update PRs. Runs only on the trusted nix-builder runner (label "nix").
+# Secrets: BOT_TOKEN (bot account, repository write), ATTIC_TOKEN (cache push).
+name: update
+on:
+  schedule:
+    - cron: "0 18 * * 5" # Saturday 03:00 JST
+  workflow_dispatch: {}
+
+env:
+  FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
+  ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+  # Consumer hosts evaluated against each update.
+  CONSUMERS: >-
+    AttODao/server-dotfiles:attofort,attobox,development,desktop,forgejo-runner,nix-builder
+    AttODao/.dotfiles:attodesk,attolap
+
+jobs:
+  flake-inputs:
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@v4
+      - run: nix run .#attos-ci -- update-shared
+      - run: nix run .#attos-ci -- check-consumers $CONSUMERS
+      - run: nix run .#attos-ci -- pr update/flake-inputs "chore(flake): update Home Manager, nixpkgs and pinned inputs"
+
+  packages:
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@v4
+      - run: nix run .#attos-ci -- update-packages
+      - run: nix run .#attos-ci -- check-consumers $CONSUMERS
+      - run: nix run .#attos-ci -- pr update/packages "chore(packages): update custom packages and Pi resources"
+
+  images:
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@v4
+      - run: renovate
+        env:
+          RENOVATE_PLATFORM: forgejo
+          RENOVATE_ENDPOINT: ${{ github.server_url }}/api/v1
+          RENOVATE_TOKEN: ${{ secrets.BOT_TOKEN }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_GIT_AUTHOR: attos-bot <bot@attodao.cc>
+          LOG_LEVEL: info
