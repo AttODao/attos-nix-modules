@@ -7,14 +7,9 @@
 let
   ps = import ../public-services/lib.nix { inherit lib; };
   cfg = config.modules.traefik;
-  root = ps.require "modules.traefik" "dataDir" cfg.dataDir;
   environmentFile = ps.require "modules.traefik" "environmentFile" cfg.environmentFile;
   routes = ps.routes config;
   games = ps.entries config "mcsmanager";
-  networks = ps.backendNetworks config;
-  native = cfg.nativeBackendNetwork;
-  # The native bridge unit and its prune recheck come from modules.docker.networks.
-  networkUnits = map (network: "docker-network-${network}.service") networks;
   mails = ps.entries config "mailserver";
   game = if games == [ ] then null else builtins.head games;
   mail = if mails == [ ] then null else builtins.head mails;
@@ -35,20 +30,33 @@ let
         private = mail.cfg.private;
       }) mail.cfg.tcpPorts
     ))
-    # Fixed OCI DNS upstream on the backend overlay, like the HTTP route.
-    ++ map (entry: {
-      name = "forgejo-ssh";
-      port = 22;
-      address = "forgejo:22";
-      inherit (entry.cfg) private;
-      addresses = entry.cfg.sshAddresses;
-    }) (lib.filter (entry: entry.cfg.deploy) (ps.entries config "forgejo"));
-  # Address-bound listeners are published individually so other host listeners on the same port keep working.
-  bound = lib.filter (entry: entry.addresses or [ ] != [ ]) tcp;
-  unbound = lib.filter (entry: entry.addresses or [ ] == [ ]) tcp;
-  boundPorts = lib.concatMap (
-    entry: map (address: "${address}:${toString entry.port}:${toString entry.port}") entry.addresses
-  ) bound;
+    # Forgejo publishes SSH on its backendUrl address; listen only on the selected gateway addresses.
+    ++ lib.concatMap (
+      entry:
+      let
+        listener = suffix: listen: {
+          name = "forgejo-ssh${suffix}";
+          port = 22;
+          inherit listen;
+          address = "${
+            (ps.backendEndpoint {
+              service = "forgejo";
+              inherit (entry) cfg;
+            }).address
+          }:${toString ps.forgejoSshBackendPort}";
+          inherit (entry.cfg) private;
+        };
+      in
+      if entry.cfg.sshAddresses == [ ] then
+        [ (listener "" null) ]
+      else
+        lib.imap0 (index: address: listener "-${toString index}" address) entry.cfg.sshAddresses
+    ) (ps.entries config "forgejo");
+  listenKey =
+    entry:
+    if entry.listen or null == null then entry.port else "${entry.listen}:${toString entry.port}";
+  bound = lib.filter (entry: entry.listen or null != null) tcp;
+  unbound = lib.filter (entry: entry.listen or null == null) tcp;
   udp = lib.optionals (game != null) (
     map (port: {
       name = "minecraft-bedrock-${toString port}";
@@ -87,7 +95,7 @@ let
       websecure.address = ":443/tcp";
     }
     // byName tcp (entry: {
-      address = ":${toString entry.port}/tcp";
+      address = "${if entry.listen or null == null then "" else entry.listen}:${toString entry.port}/tcp";
     })
     // byName udp (entry: {
       address = ":${toString entry.port}/udp";
@@ -97,7 +105,7 @@ let
       watch = true;
     };
     certificatesResolvers.letsencrypt-wildcard.acme = {
-      storage = "/letsencrypt/acme-wildcard.json";
+      storage = "${config.services.traefik.dataDir}/acme-wildcard.json";
       dnsChallenge = {
         provider = "cloudflare";
         resolvers = [
@@ -189,29 +197,6 @@ let
       });
     };
   };
-  listenerPorts = [
-    "80/tcp"
-    "443/tcp"
-  ]
-  ++ map (entry: "${toString entry.port}/tcp") unbound
-  ++ map (entry: "${toString entry.port}/udp") udp;
-  publishedPorts =
-    if cfg.publishedPortRanges == null then
-      listenerPorts
-    else
-      lib.concatMap (
-        range: map (port: "${toString port}/${range.protocol}") (lib.range range.start range.end)
-      ) cfg.publishedPortRanges;
-  publishRange =
-    range:
-    let
-      ports =
-        if range.start == range.end then
-          toString range.start
-        else
-          "${toString range.start}-${toString range.end}";
-    in
-    "${ports}:${ports}" + lib.optionalString (range.protocol == "udp") "/udp";
   # JSON is a YAML subset: no extra renderer or evaluation-time build is needed.
   staticFile = pkgs.writeText "traefik.yml" (builtins.toJSON static);
   # Traefik rejects empty configuration maps (notably UDP routers without listeners).
@@ -223,25 +208,10 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
-    modules.docker.enable = true;
-    modules.swarm.enable = true;
     assertions = [
-      {
-        assertion = native == null || (!lib.elem native.name networks && native.address != native.gateway);
-        message = "traefik: nativeBackendNetwork must be distinct from backend overlays, and its container address must differ from gateway.";
-      }
       {
         assertion = !privateEnabled || cfg.privateNetworks != [ ];
         message = "modules.traefik.privateNetworks is required for private HTTP/TCP routes.";
-      }
-      {
-        assertion =
-          cfg.publishedPortRanges == null
-          || (
-            lib.all (range: range.start <= range.end) cfg.publishedPortRanges
-            && lib.sort builtins.lessThan publishedPorts == lib.sort builtins.lessThan listenerPorts
-          );
-        message = "modules.traefik.publishedPortRanges must cover exactly the generated listeners with ordered, non-overlapping ranges.";
       }
       {
         assertion = lib.all (
@@ -283,107 +253,60 @@ in
               80
               443
             ]
-            ++ map (entry: entry.port) tcp
+            ++ map listenKey tcp
           ) == builtins.length (
             lib.unique (
               [
                 80
                 443
               ]
-              ++ map (entry: entry.port) tcp
+              ++ map listenKey tcp
             )
           )
           && builtins.length udp == builtins.length (lib.unique (map (entry: entry.port) udp));
         message = "Traefik listener ports must be unique within each transport.";
       }
     ];
-    environment.etc = {
-      "traefik/traefik.yml".source = staticFile;
-      "traefik/dynamic.yml".source = dynamicFile;
-    };
+    environment.etc."traefik/dynamic.yml".source = dynamicFile;
     networking.firewall = {
-      # Docker DNATs address-bound listeners before INPUT; opening their ports would expose host listeners on other addresses.
       allowedTCPPorts = [
         80
         443
       ]
       ++ map (entry: entry.port) unbound;
       allowedUDPPorts = map (entry: entry.port) udp;
-    };
-    systemd.tmpfiles.rules = [
-      "d ${builtins.toJSON root} 0755 root root -"
-      "d ${builtins.toJSON "${root}/acme"} 0700 root root -"
-    ];
-    modules.docker.networks = lib.optionalAttrs (native != null) {
-      ${native.name} = {
-        inherit (native) subnet gateway;
-        options."com.docker.network.bridge.name" = native.interface;
-      };
-    };
-    systemd.services = {
-      docker-traefik = {
-        environment = lib.optionalAttrs (native != null) {
-          DOCKER_HOST = "unix:///run/docker.sock";
-          DOCKER_CONTEXT = "";
-        };
-        unitConfig.RequiresMountsFor = [
-          root
-          environmentFile
-        ];
-        requires = networkUnits;
-        after = networkUnits;
-        restartTriggers = [
-          staticFile
-          dynamicFile
-        ];
-        preStart = ''
-          : "''${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for Traefik DNS-01}"
-          umask 077
-          token_file=$(mktemp /run/traefik-acme/cloudflare.env.XXXXXX)
-          trap 'rm -f "$token_file"' EXIT
-          printf 'CF_DNS_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN" > "$token_file"
-          chmod 0600 "$token_file"
-          mv -f "$token_file" /run/traefik-acme/cloudflare.env
-        '';
-        serviceConfig = {
-          EnvironmentFile = environmentFile;
-          RuntimeDirectory = "traefik-acme";
-          RuntimeDirectoryMode = "0700";
-        };
-      };
-    };
-    virtualisation.oci-containers.containers.traefik = {
-      image = lib.mkDefault "traefik:v3.7.15@sha256:0f6150202bc1fed72a7bd2107460eaa510e5b8a905f3fdb5b84f2c8619c33368";
-      cmd = lib.mkDefault [ "--configFile=/etc/traefik/traefik.yml" ];
-      autoRemoveOnStop = lib.mkDefault false;
-      extraOptions = lib.mkDefault [
-        "--restart=unless-stopped"
-        "--user=0:0"
-      ];
-      ports = lib.mkDefault (
-        (
-          if cfg.publishedPortRanges != null then
-            map publishRange cfg.publishedPortRanges
-          else
-            [
-              "80:80"
-              "443:443"
-            ]
-            ++ map (entry: "${toString entry.port}:${toString entry.port}") unbound
-            ++ map (entry: "${toString entry.port}:${toString entry.port}/udp") udp
-        )
-        ++ boundPorts
+      # Address-bound listeners open only their own address, not other host listeners on the port.
+      extraInputRules = lib.mkIf config.networking.nftables.enable (
+        lib.concatMapStrings (entry: ''
+          ip daddr ${entry.listen} tcp dport ${toString entry.port} accept
+        '') bound
       );
-      # Docker resolves the primary network locally before attaching lazy Swarm overlays.
-      networks = lib.mkDefault (
-        lib.optional (native != null) "name=${native.name},ip=${native.address},gw-priority=1" ++ networks
+      extraCommands = lib.mkIf (!config.networking.nftables.enable) (
+        lib.concatMapStrings (entry: ''
+          iptables -A nixos-fw -d ${entry.listen} -p tcp --dport ${toString entry.port} -j nixos-fw-accept
+        '') bound
       );
-      environmentFiles = lib.mkDefault [ "/run/traefik-acme/cloudflare.env" ];
-      volumes = lib.mkDefault [
-        "/etc/traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
-        "/etc/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
-        "${root}/acme:/letsencrypt"
-      ];
+    };
+    services.traefik = {
+      enable = true;
+      staticConfigFile = staticFile;
+    };
+    systemd.services.traefik = {
+      unitConfig.RequiresMountsFor = [ environmentFile ];
+      # Bound listeners need their addresses configured before Traefik binds them.
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      serviceConfig = {
+        EnvironmentFile = environmentFile;
+        # The Cloudflare DNS-01 provider reads CF_DNS_API_TOKEN.
+        ExecStart = lib.mkForce (
+          pkgs.writeShellScript "traefik-start" ''
+            : "''${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for Traefik DNS-01}"
+            export CF_DNS_API_TOKEN="$CLOUDFLARE_API_TOKEN"
+            exec ${lib.getExe config.services.traefik.package} --configfile=${staticFile}
+          ''
+        );
+      };
     };
   };
 }

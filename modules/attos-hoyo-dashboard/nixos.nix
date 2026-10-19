@@ -38,10 +38,6 @@ in
 
       systemd.services = {
         docker-attos-hoyo-dashboard-db = mounts;
-        docker-attos-hoyo-dashboard = {
-          wants = [ (ps.networkUnit s) ];
-          after = [ (ps.networkUnit s) ];
-        };
       };
 
       virtualisation.oci-containers.containers = {
@@ -67,7 +63,7 @@ in
         attos-hoyo-dashboard = {
           # Update version and registry index digest together after release review.
           image = lib.mkDefault "git.attodao.cc/attodao/attoshoyodashboard:1.0.0@sha256:0db8584f41ec047be21203ebbcbdb3b84f8af2737f4dd336578c2cdf4bb3c5e0";
-          ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8082:8080");
+          ports = lib.mkDefault (ps.publish s 8082 8080);
           environmentFiles = lib.mkDefault [ environmentFile ];
           environment = lib.mapAttrs (_: lib.mkDefault) (
             database
@@ -91,7 +87,6 @@ in
           dependsOn = lib.mkDefault [ "attos-hoyo-dashboard-db" ];
           networks = lib.mkDefault [
             "attos-hoyo-dashboard"
-            (ps.network s)
           ];
         };
       };

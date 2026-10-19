@@ -136,15 +136,14 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
 | hermes | NixOS | —（native systemd、sandbox。devenv・nixを同梱） |
-| forgejo / immich / karakeep / vaultwarden / opencloud / searxng / attos-hoyo-dashboard | NixOS | Docker、公開配置時のみSwarm |
-| jellyfin | NixOS | Docker、公開配置時のみSwarm・ytdl-sub |
-| ollama | NixOS | `webui`時のみDocker、公開配置時はSwarm・Open Terminalも |
+| forgejo / immich / karakeep / vaultwarden / opencloud / searxng / attos-hoyo-dashboard | NixOS | Docker |
+| jellyfin | NixOS | Docker、公開配置時のみytdl-sub |
+| ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
 | sunshine | NixOS | Hyprland・Steam |
 | mcsmanager / mailserver / wireguard-server / code-server | NixOS | — |
 | public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
-| swarm | NixOS | Docker |
-| traefik | NixOS | Docker・Swarm |
+| traefik | NixOS | —（native `services.traefik`） |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | ytdl-sub / open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM | 任意のGPU screen recorder support |
@@ -232,6 +231,7 @@ NixOSの `programs.ssh.systemd-ssh-proxy.enable` は既定falseにする。
 modules.public-services."vault.example.org".vaultwarden = {
   enable = true;
   host = "service-host";
+  backendUrl = "http://10.0.0.2:8000";
   dataDir = "/srv/vaultwarden";
   environmentFile = "/run/secrets/vaultwarden.env";
 };
@@ -242,9 +242,10 @@ modules.public-services."vault.example.org".vaultwarden = {
 `paseo`, `ssh`, `code-server`, `sunshine`, `hermes`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
+DockerのHTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、所有OSはcontainerをこのaddress:portへpublishする。
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
-Forgejoは同じhostnameでWebとSSHを提供する。公開時のSSHはTraefikがTCP 22でbackend overlayの `forgejo:22` へ中継し（`private` はHTTPと共通）、Forgejo containerはhostへSSHをpublishしない。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressだけで22をpublishしてfirewallの全体許可を追加せず、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。
+Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはcontainerのSSHを `backendUrl` のaddressの2222へpublishし、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上書きするdomain whitelistも空にする。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。設定はNixと `environmentFile` だけが正で、`CONFIG_FILE` を読み書きできないpathに向けるため既存 `dataDir/vw-data/config.json` は読まれず、adminパネルの設定保存は永続化しない。
@@ -265,12 +266,9 @@ DNS・CNAME・gatewayは配備先によらず有効な全endpointを参照する
 `host` はSSH aliasや親ホスト名ではなく、サービスが動くOS自身のhostname。
 
 保存先・runtime secret等のlocal必須値は所有OSだけで要求する。
-backendの到達性、Swarm role/address、firewall、ユーザー・secretsの供給はconsumerが管理する。
-`traefik.nativeBackendNetwork`（既定null）は専用のlocal Docker bridgeを作成/検証し、Traefikに固定IPとgw-priority=1で追加接続する。入力は `name`（既定traefik-native）、`interface`（既定br-traefik）、必須IPv4 `subnet/gateway/address`。既存networkのdriver/scope/interface/IPAM不一致は拒否し、prune後も起動前に再検証する。backend overlayは維持し、IP/firewall/未使用subnetはconsumerが管理する。Dockerのextended network/gw-priority対応が必要。
-公開OCI backendは共有moduleがencrypted `backend-<service>` overlayを作成/待機し、Traefikだけ必要な全backendへ参加する。OpenWebUIは自身とTerminal/SearXNGへの必要な接続だけを持つ。宣言から外れたoverlayは自動削除しないため、接続containerを切り替えてから別途撤去する。
-同一host上のlocal deploymentはサービス種別ごとに1件まで。
-OCI upstreamは既存の内部DNS名・portで固定されるため、別hostの同種サービスを
-FQDNごとに分離する仕組みではない。Groupwareの暗黙Mailserver依存も同じhostを継承する。
+backendの到達性、firewall、ユーザー・secretsの供給はconsumerが管理する。
+Traefikはgateway host上のnative serviceで、各 `backendUrl` へ直接接続する。Open WebUIはTerminal/SearXNGと同じhostのlocal Docker bridge `backend-<service>` で接続し、SearXNG連携には同じhostへのSearXNG配置が必要。WebUIの `backend-ollama` bridgeはinterface名 `br-open-webui` 固定で、host Ollamaへの許可はconsumerのfirewallで行う。
+同一host上のlocal deploymentはサービス種別ごとに1件まで。Groupwareの暗黙Mailserver依存も同じhostを継承する。
 
 code-server / Sunshineも `enable = true; host = "<所有OS>";` でnative実体を有効にする。
 単独利用は同じtyped入力を`modules.code-server` / `modules.sunshine`へ指定する。
@@ -280,7 +278,7 @@ Nerd Font組み込みpackage（`attopkgs.code-server { src = <固定したstanda
 公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
 SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。headless待機とnative autoStartが有効なら、output再作成後にSunshineも起動する。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
-OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Swarm/Terminal・secret/path・HTTP proxy routeを作らない。WebUIは独立したrecordを持たず、container/unit名は`open-webui`を使う。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
+OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Terminal・secret/path・HTTP proxy routeを作らない。WebUIは独立したrecordを持たず、container/unit名は`open-webui`を使う。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
 
 ### localhost単独利用
 
@@ -295,15 +293,14 @@ modules.vaultwarden = {
 };
 ```
 
-OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Swarm不要。Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
+OCI frontendはloopbackだけへportをpublishし、通常Docker bridgeを使う（Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential/UID/GID等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
-サーバーの追加入力は`dns.listenAddresses`、`traefik.publishedPortRanges`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flakeFile}`。
+サーバーの追加入力は`dns.listenAddresses`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flakeFile}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、VaultwardenのextraHosts、Karakeepの非秘密environmentも公開service recordへ指定する。
-Swarmの`tokenTransport` / `tokenFetch`は既定無効の専用リンク用平文HTTP。source allowlistは暗号学的な認証ではない。tokenはcredential経由、fetchは0600でatomicに配置し、joinが依存する。
 Incusの公開 `guests.<name>.{type,launchConfig,managedDeviceNames}`（`type` は `virtual-machine` / `container`）はhost activationでは適用せず、`guest <name> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足guestだけ `rebuild.flakeFile` の標準NixOS metadataとVMならqcow2、containerならsquashfsをbuild・importして作成し、作成用imageを削除する。同名の別type instanceは削除/変換せず拒否する。consumer guestは標準 `incus-virtual-machine-image.nix` / `incus-container-image.nix` とroot password lockを明示する。初期login password/private fileの再供給は `guest <name> passwd <user>` / `guest <name> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。`dynamicUser=true`は既存native登録を保ち、static user・tmpfiles・bindを作らない。native dataDir以外は拒否する。VMへのtoken配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-guest-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
 Vaultwarden/OpenCloud/Karakeep/Chrome/ytdl-subのOCI version/index digestとPaseo 0.12.0を固定し、runtime latest取得をしない。ytdl-subはimage同梱yt-dlpを使い、startup pip updaterは無効。
-localサービスの必須値、Docker / Swarm依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
+localサービスの必須値、Docker依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの
 

@@ -37,15 +37,13 @@ let
     if s.standalone then
       "http://127.0.0.1:8081/search"
     else
-      ps.require "open-webui" "an enabled SearXNG registry entry" (
-        if searchRoutes == [ ] then null else "${(builtins.head searchRoutes).cfg.backendUrl}/search"
-      );
+      # Open WebUI joins the same-host SearXNG bridge and uses its container name.
+      "http://searxng:8080/search";
 in
 {
   imports = [
     ./nixos.nix
     ../docker
-    ../swarm
     ../open-terminal
     ../searxng
   ];
@@ -91,9 +89,18 @@ in
   config = lib.mkMerge [
     { assertions = s.assertions; }
     (lib.mkIf (s.enabled && s.cfg.webui) {
+      assertions = [
+        {
+          assertion = s.standalone || !searchEnabled || localSearch.enabled;
+          message = "Open WebUI web search needs SearXNG deployed on the same host.";
+        }
+      ];
       modules.docker.enable = true;
-      modules.swarm.enable = lib.mkIf (!s.standalone) true;
       modules.open-terminal.enable = lib.mkIf (!s.standalone) true;
+      # Fixed interface so the consumer firewall can admit Open WebUI to a host Ollama listener.
+      modules.docker.networks = lib.mkIf (!s.standalone) {
+        ${ps.network s}.options."com.docker.network.bridge.name" = "br-open-webui";
+      };
 
       systemd.tmpfiles.rules = [
         "d ${builtins.toJSON root} 0700 root root -"
@@ -179,6 +186,7 @@ in
         dependsOn =
           lib.optional terminalEnabled "open-terminal"
           ++ lib.optional (localSearch.enabled && (!s.standalone || searchEnabled)) "searxng";
+        ports = lib.mkIf (!s.standalone) (lib.mkDefault (ps.publish s 8080 8080));
         networks = lib.mkDefault (lib.optionals (!s.standalone) (map ps.network transports));
       };
     })

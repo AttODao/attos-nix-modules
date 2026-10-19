@@ -44,13 +44,7 @@ in
     systemd.services = {
       docker-karakeep-meilisearch = mounts;
       docker-karakeep-chrome = mounts;
-      docker-karakeep = lib.mkMerge [
-        mounts
-        {
-          wants = [ (ps.networkUnit s) ];
-          after = [ (ps.networkUnit s) ];
-        }
-      ];
+      docker-karakeep = mounts;
     };
 
     virtualisation.oci-containers.containers = {
@@ -98,7 +92,7 @@ in
 
       karakeep = {
         image = lib.mkDefault "ghcr.io/karakeep-app/karakeep:0.34.0@sha256:151cdd6b5f2e21635645983e126f411675bfa35becb02c028c1a727f45f899c6";
-        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:3001:3000");
+        ports = lib.mkDefault (ps.publish s 3001 3000);
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) (
           {
@@ -133,7 +127,6 @@ in
         ];
         networks = lib.mkDefault [
           "karakeep"
-          (ps.network s)
         ];
       };
     };

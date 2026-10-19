@@ -25,7 +25,6 @@
     ./opencloud
     ./openssh
     ./searxng
-    ./swarm
     ./traefik
     ./vaultwarden
     ./wireguard-server

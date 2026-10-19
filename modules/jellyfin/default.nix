@@ -8,7 +8,6 @@ in
 {
   imports = [
     ../docker
-    ../swarm
     ../ytdl-sub
   ];
 
@@ -24,7 +23,6 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = lib.mkIf (!s.standalone) true;
       modules.ytdl-sub.enable = lib.mkIf (!s.standalone) true;
 
       systemd.tmpfiles.rules = map (dir: "d ${builtins.toJSON dir} 0755 root root -") [
@@ -37,13 +35,11 @@ in
       ];
       systemd.services.docker-jellyfin = {
         unitConfig.RequiresMountsFor = [ root ] ++ lib.optional (mediaDir != null) mediaDir;
-        wants = [ (ps.networkUnit s) ];
-        after = [ (ps.networkUnit s) ];
       };
 
       virtualisation.oci-containers.containers.jellyfin = {
         image = lib.mkDefault "jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037";
-        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8096:8096");
+        ports = lib.mkDefault (ps.publish s 8096 8096);
         user = lib.mkDefault "0:0";
         environment = lib.mapAttrs (_: lib.mkDefault) {
           TZ = "Asia/Tokyo";
@@ -67,7 +63,6 @@ in
             "${root}/fonts:/usr/local/share/fonts/custom:ro"
           ]
         );
-        networks = lib.mkDefault [ (ps.network s) ];
       };
     })
   ];

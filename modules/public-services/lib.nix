@@ -1,26 +1,19 @@
 { lib }:
 let
   inherit (lib) mkOption types;
-  # OCI service names/ports are implementation constants, not consumer endpoints.
-  httpBackends = {
-    forgejo = "http://forgejo:3000";
-    immich = "http://immich-server:2283";
-    attos-hoyo-dashboard = "http://attos-hoyo-dashboard:8080";
-    karakeep = "http://karakeep:3000";
-    vaultwarden = "http://vaultwarden:80";
-    opencloud = "http://opencloud:9200";
-    jellyfin = "http://jellyfin:8096";
-    ollama = "http://open-webui:8080";
-    searxng = "http://searxng:8080";
-  };
-  upstream =
-    service: cfg:
-    if (cfg.backendUrl or null) != null then
-      cfg.backendUrl
-    else if cfg.deploy or true then
-      httpBackends.${service} or null
-    else
-      null;
+  # Services whose HTTP upstream the consumer supplies as backendUrl; the owner publishes it there.
+  httpServices = [
+    "forgejo"
+    "immich"
+    "attos-hoyo-dashboard"
+    "karakeep"
+    "vaultwarden"
+    "opencloud"
+    "jellyfin"
+    "ollama"
+    "searxng"
+  ];
+  upstream = _: cfg: cfg.backendUrl or null;
 in
 rec {
   absolutePath = types.addCheck types.str (
@@ -50,11 +43,11 @@ rec {
         types.submodule {
           options.${service} =
             options
-            // lib.optionalAttrs (builtins.hasAttr service httpBackends) {
+            // lib.optionalAttrs (lib.elem service httpServices) {
               backendUrl = mkOption {
                 type = types.nullOr types.nonEmptyStr;
                 default = null;
-                description = "Explicit HTTP(S) upstream; required for deploy=false endpoints. Null uses the managed OCI DNS backend.";
+                description = "HTTP upstream reachable by the gateway, with an explicit port (for example http://10.250.0.2:3000); required when enabled. The owner publishes the service on this address and port.";
               };
             };
         }
@@ -90,23 +83,8 @@ rec {
     };
   };
 
+  # Local Docker bridge shared by the containers of one service (and its same-host clients).
   network = selected: if selected.standalone then "local-services" else "backend-${selected.service}";
-  # Fixed OCI DNS upstreams need an overlay even when their owner is another OS.
-  backendNetworks =
-    config:
-    lib.unique (
-      map
-        (
-          route:
-          network {
-            standalone = false;
-            inherit (route) service;
-          }
-        )
-        (
-          lib.filter (route: builtins.hasAttr route.service httpBackends && route.cfg.deploy) (routes config)
-        )
-    );
   networkUnit = selected: "docker-network-${network selected}.service";
   url =
     selected: port:
@@ -114,6 +92,34 @@ rec {
       "http://${selected.hostname}:${toString port}"
     else
       "https://${selected.hostname}";
+
+  # Host address and port of an http://address:port upstream.
+  backendEndpoint =
+    selected:
+    let
+      parts = builtins.match "https?://([^/:]+|[[][^]]+[]]):([0-9]+)/?" (
+        require selected.service "backendUrl" selected.cfg.backendUrl
+      );
+    in
+    if parts == null then
+      throw "${selected.service}: backendUrl must be http://<address>:<port> so the owner can publish it."
+    else
+      {
+        address = builtins.head parts;
+        port = builtins.elemAt parts 1;
+      };
+  # Standalone stays on loopback; a public owner publishes on its backendUrl for the gateway.
+  # Fixed host port for Forgejo SSH on the backendUrl address; the gateway listens on 22.
+  forgejoSshBackendPort = 2222;
+  publish =
+    selected: standalonePort: containerPort:
+    let
+      endpoint = backendEndpoint selected;
+    in
+    if selected.standalone then
+      [ "127.0.0.1:${toString standalonePort}:${toString containerPort}" ]
+    else
+      [ "${endpoint.address}:${endpoint.port}:${toString containerPort}" ];
 
   common = description: {
     enable = lib.mkEnableOption description;

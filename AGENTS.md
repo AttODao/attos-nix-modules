@@ -61,7 +61,7 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 ```
 
 - NixOSの`imports`は静的に宣言し、enableから組み立てない。依存moduleのimportも同様。
-- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーと単独利用は`public-services/lib.nix`の`select`・`moduleOptions`・`common`・`pathOption`・`require`を再利用し、`select.enabled`で同じ実装を囲む。`select.standalone`の場合だけlocalhost bind/HTTP・通常Docker bridgeを使い、公開record・Swarm・gateway依存を作らない。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
+- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーと単独利用は`public-services/lib.nix`の`select`・`moduleOptions`・`common`・`pathOption`・`require`を再利用し、`select.enabled`で同じ実装を囲む。`select.standalone`の場合だけlocalhost bind/HTTP・通常Docker bridgeを使い、公開record・gateway依存を作らない。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
 - 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は[Wikiの公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各サービスページを参照。
 - `home.nix`の実設定は`lib.mkIf osConfig.modules.<name>.enable`で囲む。
 - HM設定は`home-manager.sharedModules`で接続する。特定ユーザーへの直書きや、ユーザー一覧を機能ごとに走査する実装はしない。

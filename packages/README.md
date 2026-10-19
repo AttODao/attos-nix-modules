@@ -9,7 +9,7 @@
 
 実装済み:
 - `build-go-program`: repo内script用のGo builder。`{ build-go-program }: build-go-program { pname = "<name>"; src = ./.; }` で、`src`直下の`.go`（単一 `package main`、標準libraryのみ、go.modなし）を1つの実行ファイル `bin/<pname>` にする。Goは利用ホストの `pkgs.go` をビルド時だけ使い、runtime closureへ入らない。buildで `go vet`、`*_test.go` があればcheckPhaseで `go test` を実行する。srcは`.go`だけをfilesetで取り込むため、package.nixや文書の変更では再ビルドしない。host設定はderivationへ含めず、JSON pathや引数を実行時に渡す。外部moduleが必要になったpackageはgo.mod + `buildGoModule` へ切り替える。
-- `attos-docker`: 共有Docker bridge networkの作成・検査（`network ensure`）とSwarm操作（`swarm manager/worker/network/fetch/wait/serve`）を行う標準libraryのみのGo program。既存networkは再作成せず、不一致は失敗する。tokenやjoin出力をjournalへ出さない。
+- `attos-docker`: 共有Docker bridge networkの作成・検査（`network ensure`）を行う標準libraryのみのGo program。既存networkは再作成せず、不一致は失敗する。
 - `wireguard-runtime`: wireguard-server moduleのruntime client設定生成（`configs`）とQR表示（`qr`、`wg-qr` wrapper経由）を行うGo program。key fileはruntimeで検査し、file単位でatomic交換する。
 - `cloudflare-cnames`: cloudflare-public-cnames moduleのCNAME同期Go program。ownership commentを持つ記録だけをpruneし、認証情報・response内容を出力しない。
 - `login-pin`: login-pin moduleの`set-login-pin`（`login-pin set`）。mkpasswd（yescrypt）・db_loadでpam_userdb用DBを0600で原子的に置換する。testは実DBを`db_dump`で検査する。

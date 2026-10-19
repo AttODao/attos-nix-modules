@@ -70,11 +70,10 @@ in
                 {
                   assertion =
                     !cfg.enable
-                    || cfg.deploy
                     || !(cfg ? backendUrl)
                     || (service == "ollama" && !cfg.webui)
                     || cfg.backendUrl != null;
-                  message = "modules.public-services.${hostname}.${service}: deploy=false HTTP endpoints require an explicit backendUrl.";
+                  message = "modules.public-services.${hostname}.${service}: HTTP services require backendUrl (the gateway upstream and owner publish address).";
                 }
               ]) services
             )

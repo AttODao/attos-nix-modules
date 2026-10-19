@@ -7,9 +7,14 @@
 }:
 let
   cfg = config.modules.docker;
-  overlayContainers = lib.filterAttrs (
-    _: container: lib.any (lib.hasPrefix "backend-") container.networks
-  ) config.virtualisation.oci-containers.containers;
+  # Per-service bridges (backend-<service>) shared by a service's containers and same-host clients.
+  serviceBridges = lib.unique (
+    lib.filter (lib.hasPrefix "backend-") (
+      lib.concatMap (container: map networkName container.networks) (
+        lib.attrValues config.virtualisation.oci-containers.containers
+      )
+    )
+  );
   latest = lib.filterAttrs (
     _: container: lib.hasSuffix ":latest" container.image
   ) config.virtualisation.oci-containers.containers;
@@ -69,20 +74,8 @@ in
       };
     };
     virtualisation.oci-containers.backend = lib.mkDefault "docker";
+    modules.docker.networks = lib.genAttrs serviceBridges (_: { });
     systemd.services = lib.mkMerge [
-      # Network failure must block startup, not merely order it after a failed wants unit.
-      (lib.mapAttrs' (
-        name: container:
-        let
-          units = map (network: "docker-network-${network}.service") (
-            lib.filter (lib.hasPrefix "backend-") container.networks
-          );
-        in
-        lib.nameValuePair container.serviceName {
-          requires = units;
-          after = units;
-        }
-      ) overlayContainers)
       (lib.mapAttrs' (
         name: network:
         lib.nameValuePair "docker-network-${name}" {

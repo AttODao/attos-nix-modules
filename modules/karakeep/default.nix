@@ -32,7 +32,6 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = lib.mkIf (!s.standalone) true;
     })
   ];
 }

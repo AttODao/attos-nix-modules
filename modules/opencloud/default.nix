@@ -16,7 +16,6 @@ in
 {
   imports = [
     ../docker
-    ../swarm
   ];
 
   options.modules = ps.moduleOptions "opencloud" (
@@ -41,7 +40,6 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = lib.mkIf (!s.standalone) true;
 
       systemd.tmpfiles.rules = [
         "d ${builtins.toJSON root} 0700 root root -"
@@ -62,11 +60,9 @@ in
           environmentFile
         ];
         wants = [
-          (ps.networkUnit s)
           "opencloud-prepare.service"
         ];
         after = [
-          (ps.networkUnit s)
           "opencloud-prepare.service"
         ];
       };
@@ -74,7 +70,7 @@ in
       virtualisation.oci-containers.containers.opencloud = {
         # Update version and registry index digest together after release review.
         image = lib.mkDefault "opencloudeu/opencloud-rolling:8.1.0@sha256:8fc64ca861739cc62095cd558814f2eba6a90acf5998d884e439b33a47875da8";
-        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:9200:9200");
+        ports = lib.mkDefault (ps.publish s 9200 9200);
         pull = lib.mkDefault "always";
         user = lib.mkDefault "${uid}:${gid}";
         entrypoint = lib.mkDefault "/bin/sh";
@@ -100,7 +96,6 @@ in
           "${dataDir}:/var/lib/opencloud"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        networks = lib.mkDefault [ (ps.network s) ];
       };
     })
   ];

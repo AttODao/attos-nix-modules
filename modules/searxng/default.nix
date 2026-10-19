@@ -39,7 +39,6 @@ in
 {
   imports = [
     ../docker
-    ../swarm
   ];
 
   options.modules = ps.moduleOptions "searxng" (
@@ -53,7 +52,6 @@ in
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
       modules.docker.enable = true;
-      modules.swarm.enable = lib.mkIf (!s.standalone) true;
 
       systemd.services.docker-searxng = {
         unitConfig.RequiresMountsFor = [ environmentFile ];
@@ -63,7 +61,7 @@ in
       };
       virtualisation.oci-containers.containers.searxng = {
         image = lib.mkDefault "searxng/searxng:2026.10.19-62366b05c@sha256:b9383ac59bc9c7f6d68f29db201e90329d734a77bbc917f238144c74cd66f6a8";
-        ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:8081:8080");
+        ports = lib.mkDefault (ps.publish s 8081 8080);
         environmentFiles = lib.mkDefault [ environmentFile ];
         environment = lib.mapAttrs (_: lib.mkDefault) {
           FORCE_OWNERSHIP = "false";

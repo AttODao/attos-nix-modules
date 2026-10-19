@@ -43,13 +43,7 @@ in
         docker-immich-database = mounts;
         docker-immich-machine-learning = mounts;
         docker-immich-redis = mounts;
-        docker-immich-server = lib.mkMerge [
-          mounts
-          {
-            wants = [ (ps.networkUnit s) ];
-            after = [ (ps.networkUnit s) ];
-          }
-        ];
+        docker-immich-server = mounts;
       };
 
       virtualisation.oci-containers.containers = {
@@ -88,7 +82,7 @@ in
 
         immich-server = {
           image = lib.mkDefault "ghcr.io/immich-app/immich-server:v3.3.3@sha256:bae7664ff3aa4c2c1fcbdcdd86b40b105643c5f861f3e6a770fc760089f25862";
-          ports = lib.mkDefault (lib.optional s.standalone "127.0.0.1:2283:2283");
+          ports = lib.mkDefault (ps.publish s 2283 2283);
           environmentFiles = lib.mkDefault [ environmentFile ];
           autoRemoveOnStop = lib.mkDefault false;
           extraOptions = lib.mkDefault [ "--restart=unless-stopped" ];
@@ -102,7 +96,6 @@ in
           ];
           networks = lib.mkDefault [
             "immich"
-            (ps.network s)
           ];
         };
       };

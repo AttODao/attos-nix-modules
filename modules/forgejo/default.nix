@@ -64,7 +64,6 @@ in
       {
         modules.docker.enable = true;
         modules.docker.networks.forgejo = { };
-        modules.swarm.enable = lib.mkIf (!s.standalone) true;
         assertions = [
           {
             assertion = cfg.userUid != null && cfg.userGid != null;
@@ -92,13 +91,7 @@ in
 
         systemd.services = {
           docker-forgejo-db = mounts;
-          docker-forgejo = lib.mkMerge [
-            mounts
-            {
-              wants = [ (ps.networkUnit s) ];
-              after = [ (ps.networkUnit s) ];
-            }
-          ];
+          docker-forgejo = mounts;
         };
 
         virtualisation.oci-containers.containers = {
@@ -145,11 +138,16 @@ in
             environmentFiles = lib.mkDefault [ environmentFile ];
             autoRemoveOnStop = lib.mkDefault false;
             extraOptions = lib.mkDefault [ "--restart=always" ];
-            # Published SSH is forwarded by the Traefik gateway over the backend overlay.
+            # The gateway forwards public SSH to port 2222 on the backendUrl address.
             ports = lib.mkDefault (
-              lib.optionals s.standalone [
-                "127.0.0.1:${toString sshPort}:22"
-                "127.0.0.1:3000:3000"
+              ps.publish s 3000 3000
+              ++ [
+                (
+                  if s.standalone then
+                    "127.0.0.1:${toString sshPort}:22"
+                  else
+                    "${(ps.backendEndpoint s).address}:${toString ps.forgejoSshBackendPort}:22"
+                )
               ]
             );
             volumes = lib.mkDefault [
@@ -159,7 +157,6 @@ in
             dependsOn = lib.mkDefault [ "forgejo-db" ];
             networks = lib.mkDefault [
               "forgejo"
-              (ps.network s)
             ];
           };
         };
