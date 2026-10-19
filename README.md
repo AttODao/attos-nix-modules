@@ -128,7 +128,6 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | steam | NixOS + HM | PCManFM |
 | wireguard-client | NixOS | NetworkManager |
 | limine | NixOS | — |
-| deploy | NixOS | —（CIが公開したclosureへ自ホストを切り替える `deploy` command） |
 | atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
 | zed | HM | 任意のcodex-acp npm policy、claude-code有効時はClaude AgentにNixのclaudeを使用 |
 | discord | HM | Fcitx5 |
@@ -170,7 +169,6 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
-- `deploy.source`: 有効時必須。CIが `deploy` branchへ記録するForgejo repoのweb URL（例 `https://git.attodao.cc/AttODao/server-dotfiles`）。詳細は[Deploy](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-deploy)。
 - `desktop-theme.{cursor,cursorName,cursorSize}`: archiveは既定null、nameは`Custom-Cursors`、sizeは48。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
 - `steam.firewall.{remotePlay,dedicatedServer,localNetworkGameTransfers}`: 各既定false。必要な開放をconsumerが選択する。Steam enableだけでこれらのportは開かない。
 - `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
@@ -317,15 +315,15 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 自動更新
 
-Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。jobは信頼済みrunner（label `nix`）だけで実行し、secret `BOT_TOKEN`（bot accountのrepository書込み）と `ATTIC_TOKEN`（cache push）を使う。
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけ。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
 - `update/packages`: version固定のcustom packageとPi resourceカタログ。
 - OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
 
-flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
-mergeは手動。利用側はmerge後、各repoの更新PRでpinを上げて採用する。
-利用側のCIはmainへのpush時に `attos-ci build` の後 `attos-ci publish` でhostごとのclosureを `deploy` branchへ記録し、各ホストは `modules.deploy` の `deploy` で切り替える。
+flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
+mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` する。利用側は各repoの週次更新PR（土曜05:00 JST）でpinを上げて採用し、各ホストが自身でbuild・適用する。
+共有runnerは外部のjobも実行するため、このrepoと利用側repoのmainはbranch protectionでbotにPR作成だけを許す運用を推奨する。
 
 ## 検証
 

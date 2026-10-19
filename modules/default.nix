@@ -8,7 +8,6 @@
     ./sunshine
     ./cloudflare-ddns
     ./cloudflare-public-cnames
-    ./deploy
     ./dns
     ./docker
     ./forgejo

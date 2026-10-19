@@ -1,5 +1,5 @@
-# Weekly update PRs. Runs only on the trusted nix-builder runner (label "nix").
-# Secrets: BOT_TOKEN (bot account, repository write), ATTIC_TOKEN (cache push).
+# Weekly update PRs; nothing is built here. Jobs run in a pinned Nix container on the
+# shared Docker runner. Secret: BOT_TOKEN (bot account that can open PRs, not push main).
 name: update
 on:
   schedule:
@@ -8,36 +8,42 @@ on:
 
 env:
   FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
-  ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+  NIX_CONFIG: "experimental-features = nix-command flakes"
   # Consumer hosts evaluated against each update.
   CONSUMERS: >-
-    AttODao/server-dotfiles:attofort,attobox,development,desktop,forgejo-runner,nix-builder
+    AttODao/server-dotfiles:attofort,attobox,development,desktop,forgejo-runner
     AttODao/.dotfiles:attodesk,attolap
 
 jobs:
   flake-inputs:
-    runs-on: nix
+    runs-on: docker
+    container:
+      image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
-      - uses: actions/checkout@v4
+      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-shared
       - run: nix run .#attos-ci -- check-consumers $CONSUMERS
       - run: |
           nix run .#attos-ci -- pr update/flake-inputs "chore(flake): update Home Manager, nixpkgs and pinned inputs"
 
   packages:
-    runs-on: nix
+    runs-on: docker
+    container:
+      image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
-      - uses: actions/checkout@v4
+      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-packages
       - run: nix run .#attos-ci -- check-consumers $CONSUMERS
       - run: |
           nix run .#attos-ci -- pr update/packages "chore(packages): update custom packages and Pi resources"
 
   images:
-    runs-on: nix
+    runs-on: docker
+    container:
+      image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
-      - uses: actions/checkout@v4
-      - run: renovate
+      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
+      - run: nix run nixpkgs#renovate
         env:
           RENOVATE_PLATFORM: forgejo
           RENOVATE_ENDPOINT: ${{ github.server_url }}/api/v1

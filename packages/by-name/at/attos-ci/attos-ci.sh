@@ -1,11 +1,8 @@
 # attos-ci: shared steps for the Forgejo Actions workflows of attos-nix-modules and its consumers.
-# Environment: GITHUB_SERVER_URL, GITHUB_REPOSITORY (Actions), FORGEJO_TOKEN (bot), ATTIC_TOKEN.
+# Environment: GITHUB_SERVER_URL, GITHUB_REPOSITORY (Actions), FORGEJO_TOKEN (bot).
 set -euo pipefail
 
-cache_url=${ATTIC_URL:-http://192.168.0.100:8090}
-cache=${ATTIC_CACHE:-attodao}
 api() { curl -fsS -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/$1" "${@:2}"; }
-toplevel() { echo ".#nixosConfigurations.$1.config.system.build.toplevel"; }
 
 usage() {
   cat >&2 <<'USAGE'
@@ -13,11 +10,7 @@ usage: attos-ci COMMAND [ARGS]
   update-shared            bump attos-nix-modules inputs: HM/hermes pins in flake.nix, flake.lock
   update-packages          nix-update every versioned custom package, update-nix-fetchgit the Pi catalog
   check-consumers REPO...  evaluate consumer hosts (owner/repo:host,host) against this checkout
-  build HOST...            build host toplevels and push them to the cache
-  publish                  record the built closures on the deploy branch for the deploy command
-  report BASE HOST...      write a closure diff of HOST vs git ref BASE to report.md
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
-  comment PR FILE          post FILE as a comment on pull request PR
 USAGE
   exit 2
 }
@@ -59,50 +52,6 @@ check_consumers() {
   done
 }
 
-build() {
-  local host out paths=()
-  : >.attos-ci-paths
-  for host in "$@"; do
-    out=$(nix build --no-link --print-out-paths "$(toplevel "$host")")
-    echo "$host $out" | tee -a .attos-ci-paths
-    paths+=("$out")
-  done
-  attic login ci "$cache_url" "$ATTIC_TOKEN" >/dev/null
-  attic push "ci:$cache" "${paths[@]}"
-}
-
-report() {
-  local base=$1 host new old dir
-  shift
-  dir=$(mktemp -d)
-  git worktree add -q --detach "$dir" "$base"
-  {
-    echo "### Closure changes against \`$base\`"
-    for host in "$@"; do
-      new=$(nix build --no-link --print-out-paths "$(toplevel "$host")")
-      old=$(cd "$dir" && nix build --no-link --print-out-paths "$(toplevel "$host")")
-      echo; echo "<details><summary>$host</summary>"; echo; echo '```'
-      nix store diff-closures "$old" "$new" | sed 's/\x1b\[[0-9;]*m//g' || true
-      echo '```'; echo "</details>"
-    done
-  } > report.md
-  git worktree remove --force "$dir"
-}
-
-# Record the pushed closures on the deploy branch: one file per host with the
-# store path and the source commit, read by the hosts' deploy command.
-publish() {
-  local dir host out
-  [ -s .attos-ci-paths ] || { echo "publish: run build first" >&2; exit 1; }
-  dir=$(mktemp -d)
-  git -C "$dir" init -q -b deploy
-  while read -r host out; do
-    printf '%s\n%s\n' "$out" "$(git rev-parse HEAD)" >"$dir/$host"
-  done <.attos-ci-paths
-  git -C "$dir" add -A
-  git -C "$dir" -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qm "deploy $(git rev-parse --short HEAD)"
-  git -C "$dir" push -qf "https://bot:$FORGEJO_TOKEN@${GITHUB_SERVER_URL#https://}/$GITHUB_REPOSITORY.git" HEAD:refs/heads/deploy
-}
 
 pr() {
   local branch=$1 title=$2 existing
@@ -115,13 +64,10 @@ pr() {
   if [ -n "$existing" ]; then
     echo "updated #$existing"
   else
-    api pulls -X POST -d "$(jq -n --arg h "$branch" --arg t "$title" '{head: $h, base: "main", title: $t, body: "Automated update. Merge after the CI build passes."}')" | jq -r '"opened #\(.number)"'
+    api pulls -X POST -d "$(jq -n --arg h "$branch" --arg t "$title" '{head: $h, base: "main", title: $t, body: "Automated update; consumer hosts evaluated. Build on a host (nixos-rebuild build) before merging if unsure."}')" | jq -r '"opened #\(.number)"'
   fi
 }
 
-comment() {
-  api "issues/$1/comments" -X POST -d "$(jq -n --rawfile b "$2" '{body: $b}')" >/dev/null
-}
 
 [ $# -gt 0 ] || usage
 command=$1
@@ -130,10 +76,6 @@ case "$command" in
   update-shared) update_shared ;;
   update-packages) update_packages ;;
   check-consumers) check_consumers "$@" ;;
-  build) build "$@" ;;
-  publish) publish ;;
-  report) report "$@" ;;
   pr) pr "$@" ;;
-  comment) comment "$@" ;;
   *) usage ;;
 esac

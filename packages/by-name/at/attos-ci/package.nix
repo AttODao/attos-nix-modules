@@ -1,6 +1,5 @@
 {
   writeShellApplication,
-  attic-client,
   curl,
   gitMinimal,
   jq,
@@ -9,9 +8,8 @@
 }:
 writeShellApplication {
   name = "attos-ci";
-  # nix comes from the runner host so builds use its daemon and substituters.
+  # nix comes from the job environment (the nixos/nix container).
   runtimeInputs = [
-    attic-client
     curl
     gitMinimal
     jq
