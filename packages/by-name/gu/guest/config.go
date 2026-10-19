@@ -10,9 +10,15 @@ import (
 	"slices"
 )
 
-var vmName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$`)
+var guestName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$`)
 
-type vmDefinition struct {
+const (
+	virtualMachine = "virtual-machine"
+	container      = "container"
+)
+
+type guestDefinition struct {
+	Type                   string            `json:"type"`
 	LaunchConfig           json.RawMessage   `json:"launchConfig"`
 	ManagedDeviceNames     []string          `json:"managedDeviceNames"`
 	CredentialUnit         *string           `json:"credentialUnit"`
@@ -21,12 +27,12 @@ type vmDefinition struct {
 }
 
 type config struct {
-	FlakeFile       string                  `json:"flakeFile"`
-	VirtualMachines map[string]vmDefinition `json:"virtualMachines"`
+	FlakeFile string                     `json:"flakeFile"`
+	Guests    map[string]guestDefinition `json:"guests"`
 }
 
 func (c *config) names() []string {
-	return slices.Sorted(maps.Keys(c.VirtualMachines))
+	return slices.Sorted(maps.Keys(c.Guests))
 }
 
 func loadConfig(path string) (*config, error) {
@@ -42,19 +48,19 @@ func parseConfig(data []byte) (*config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	if cfg.VirtualMachines == nil {
-		return nil, errors.New("invalid declared virtual-machine map")
+	if cfg.Guests == nil {
+		return nil, errors.New("invalid declared guest map")
 	}
-	for name := range cfg.VirtualMachines {
-		if !vmName.MatchString(name) {
-			return nil, errors.New("invalid declared virtual-machine map")
+	for name, definition := range cfg.Guests {
+		if !guestName.MatchString(name) || (definition.Type != virtualMachine && definition.Type != container) {
+			return nil, errors.New("invalid declared guest map")
 		}
 	}
 	return &cfg, nil
 }
 
 // devices returns launchConfig.devices; managed device names must be present.
-func (d vmDefinition) devices() (map[string]map[string]json.RawMessage, error) {
+func (d guestDefinition) devices() (map[string]map[string]json.RawMessage, error) {
 	var launch struct {
 		Devices map[string]map[string]json.RawMessage `json:"devices"`
 	}

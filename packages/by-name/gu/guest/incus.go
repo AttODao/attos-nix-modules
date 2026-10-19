@@ -74,7 +74,7 @@ func guest(name string, command []string, as *identity, interactive bool) []stri
 	return append(argv, command...)
 }
 
-func requireRunning(name string) error {
+func requireRunning(name, kind string) error {
 	out, err := run(append(append([]string{}, incusBase...), "query", "/1.0/instances/"+name+"?project=default"), true, nil)
 	if err != nil {
 		return err
@@ -83,30 +83,30 @@ func requireRunning(name string) error {
 	if err := json.Unmarshal([]byte(out), &instance); err != nil {
 		return fmt.Errorf("unexpected Incus instance: %w", err)
 	}
-	if instance["type"] != "virtual-machine" || instance["status"] != "Running" {
-		return errors.New("Target must be an existing Running virtual-machine; start it with: vm " + name + " boot")
+	if instance["type"] != kind || instance["status"] != "Running" {
+		return errors.New("Target must be an existing Running " + kind + "; start it with: guest " + name + " boot")
 	}
 	return nil
 }
 
-// instance returns the named instance, or nil; a container is never treated as the VM.
-func instance(name string) (map[string]any, error) {
+// instance returns the named instance, or nil; another instance type is never treated as the guest.
+func instance(name, kind string) (map[string]any, error) {
 	out, err := incus(true, nil, "list", "--format=json")
 	if err != nil {
 		return nil, err
 	}
-	return findInstance([]byte(out), name)
+	return findInstance([]byte(out), name, kind)
 }
 
-func findInstance(list []byte, name string) (map[string]any, error) {
+func findInstance(list []byte, name, kind string) (map[string]any, error) {
 	current, ok := objectList(list)
 	if !ok {
 		return nil, errors.New("Unexpected Incus instance list")
 	}
 	for _, item := range current {
 		if item["name"] == name {
-			if item["type"] != "virtual-machine" {
-				return nil, errors.New("Incus instance " + name + " is not a virtual-machine; it is never converted or deleted")
+			if item["type"] != kind {
+				return nil, errors.New("Incus instance " + name + " is not a " + kind + "; it is never converted or deleted")
 			}
 			return item, nil
 		}

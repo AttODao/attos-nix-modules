@@ -15,10 +15,10 @@ mkdir -p -m 0700 -- "$1"
 `
 
 // deliverCredentials places each declared credential as root:root 0600 via a
-// temporary file and rename. Host activation never starts VMs; vm boot
+// temporary file and rename. Host activation never starts guests; guest boot
 // restarts the delivery unit after starting one.
-func deliverCredentials(name string, definition vmDefinition) error {
-	current, err := instance(name)
+func deliverCredentials(name string, definition guestDefinition) error {
+	current, err := instance(name, definition.Type)
 	if err != nil {
 		return err
 	}

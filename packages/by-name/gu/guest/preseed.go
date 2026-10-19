@@ -11,7 +11,7 @@ import (
 // reported by the caller as 255, never as a skip code.
 func preseedCondition(args []string) (int, error) {
 	if len(args) != 1 {
-		return 0, errors.New("usage: vm preseed-condition <pool>")
+		return 0, errors.New("usage: guest preseed-condition <pool>")
 	}
 	c := exec.Command("incus", "--force-local", "storage", "list", "--format=json")
 	var out, discarded bytes.Buffer

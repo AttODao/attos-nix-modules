@@ -26,8 +26,8 @@ var storePath = regexp.MustCompile(`^/nix/store/[a-z0-9]{32}-[^/\s]+$`)
 
 const agentTimeout = 300 * time.Second
 
-// flake validates the selected guest configuration and returns its attribute
-// path plus the nix build argv prefix.
+// flake validates the selected guest configuration against the declared
+// instance type and returns its attribute path plus the nix build argv prefix.
 func flake(cfg *config, name string, build buildOptions) (string, []string, error) {
 	file, err := filepath.EvalSymlinks(cfg.FlakeFile)
 	if err == nil {
@@ -49,7 +49,11 @@ func flake(cfg *config, name string, build buildOptions) (string, []string, erro
 	if err != nil {
 		return "", nil, err
 	}
-	if !vmGuestShape([]byte(shape)) {
+	kind := cfg.Guests[name].Type
+	if !guestShape([]byte(shape), kind) {
+		if kind == container {
+			return "", nil, errors.New("Selected flake configuration must be an Incus NixOS container guest (boot.isContainer)")
+		}
 		return "", nil, errors.New("Selected flake configuration must be an Incus NixOS VM guest (not a container, with the Incus agent enabled)")
 	}
 	command := append(append([]string{"nix", "build"}, nixArgs...), "--print-out-paths")
@@ -62,19 +66,25 @@ func flake(cfg *config, name string, build buildOptions) (string, []string, erro
 	return configuration, command, nil
 }
 
-func vmGuestShape(data []byte) bool {
+func guestShape(data []byte, kind string) bool {
 	var shape map[string]any
 	if json.Unmarshal(data, &shape) != nil || len(shape) != 2 {
 		return false
+	}
+	if _, ok := shape["incusAgent"].(bool); !ok {
+		return false
+	}
+	if kind == container {
+		return shape["isContainer"] == true
 	}
 	return shape["isContainer"] == false && shape["incusAgent"] == true
 }
 
 // imageFile finds exactly one metadata tarball (any depth, under a tarball
-// directory) or one top-level qcow2 disk image.
-func imageFile(root string, metadata bool) (string, error) {
+// directory), or one top-level root image with the given extension.
+func imageFile(root, extension string) (string, error) {
 	var matches []string
-	if metadata {
+	if extension == "" {
 		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -88,7 +98,7 @@ func imageFile(root string, metadata bool) (string, error) {
 			return "", err
 		}
 	} else {
-		found, err := filepath.Glob(filepath.Join(root, "*.qcow2"))
+		found, err := filepath.Glob(filepath.Join(root, "*"+extension))
 		if err != nil {
 			return "", err
 		}
@@ -100,7 +110,7 @@ func imageFile(root string, metadata bool) (string, error) {
 	return matches[0], nil
 }
 
-// fingerprint is the Incus split-image fingerprint: SHA-256(metadata archive || qcow2 bytes).
+// fingerprint is the Incus split-image fingerprint: SHA-256(metadata archive || root image bytes).
 func fingerprint(paths ...string) (string, error) {
 	digest := sha256.New()
 	for _, path := range paths {
@@ -117,17 +127,21 @@ func fingerprint(paths ...string) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-func create(name string, definition vmDefinition, cfg *config, build buildOptions) error {
+func create(name string, definition guestDefinition, cfg *config, build buildOptions) error {
 	configuration, command, err := flake(cfg, name, build)
 	if err != nil {
 		return err
 	}
-	image, err := importImage(configuration, command)
+	image, err := importImage(configuration, command, definition.Type)
 	if err != nil {
 		return err
 	}
-	_, launchErr := incus(false, strings.NewReader(string(definition.LaunchConfig)), "launch", image, name, "--vm", "--quiet")
-	// Existing VMs are updated by rebuild, never from the creation image.
+	launch := []string{"launch", image, name, "--quiet"}
+	if definition.Type == virtualMachine {
+		launch = append(launch, "--vm")
+	}
+	_, launchErr := incus(false, strings.NewReader(string(definition.LaunchConfig)), launch...)
+	// Existing guests are updated by rebuild, never from the creation image.
 	_, deleteErr := incus(false, nil, "image", "delete", image)
 	if launchErr != nil {
 		return launchErr
@@ -135,30 +149,39 @@ func create(name string, definition vmDefinition, cfg *config, build buildOption
 	return deleteErr
 }
 
-func importImage(configuration string, command []string) (string, error) {
-	directory, err := os.MkdirTemp("", "vm-image-")
+// rootImage is the system.build output and file extension of the guest root image.
+func rootImage(kind string) (string, string) {
+	if kind == container {
+		return "squashfs", ".squashfs"
+	}
+	return "qemuImage", ".qcow2"
+}
+
+func importImage(configuration string, command []string, kind string) (string, error) {
+	directory, err := os.MkdirTemp("", "guest-image-")
 	if err != nil {
 		return "", err
 	}
 	// Out-links keep the image outputs alive only until the import finishes.
 	defer os.RemoveAll(directory)
+	output, extension := rootImage(kind)
 	var outputs [2]string
-	for i, part := range [2][2]string{{"metadata", "metadata"}, {"disk", "qemuImage"}} {
+	for i, part := range [2][2]string{{"metadata", "metadata"}, {"root", output}} {
 		out, err := run(append(append([]string{}, command...), "--out-link", filepath.Join(directory, part[0]), configuration+".system.build."+part[1]), true, nil)
 		if err != nil {
 			return "", err
 		}
 		outputs[i] = out
 	}
-	metadata, err := imageFile(outputs[0], true)
+	metadata, err := imageFile(outputs[0], "")
 	if err != nil {
 		return "", err
 	}
-	disk, err := imageFile(outputs[1], false)
+	rootfs, err := imageFile(outputs[1], extension)
 	if err != nil {
 		return "", err
 	}
-	id, err := fingerprint(metadata, disk)
+	id, err := fingerprint(metadata, rootfs)
 	if err != nil {
 		return "", err
 	}
@@ -172,13 +195,13 @@ func importImage(configuration string, command []string) (string, error) {
 	}
 	for _, item := range images {
 		if item["fingerprint"] == id {
-			if item["type"] != "virtual-machine" {
-				return "", errors.New("Matching Incus image must have virtual-machine type")
+			if item["type"] != kind {
+				return "", errors.New("Matching Incus image must have " + kind + " type")
 			}
 			return id, nil
 		}
 	}
-	if _, err := incus(false, nil, "image", "import", metadata, disk); err != nil {
+	if _, err := incus(false, nil, "image", "import", metadata, rootfs); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -200,7 +223,7 @@ func deviceValues(fields map[string]json.RawMessage) []string {
 	return values
 }
 
-func syncDevices(name string, definition vmDefinition) error {
+func syncDevices(name string, definition guestDefinition) error {
 	if len(definition.ManagedDeviceNames) == 0 {
 		return nil
 	}
@@ -238,16 +261,16 @@ func syncDevices(name string, definition vmDefinition) error {
 	return nil
 }
 
-// start creates a missing VM, upserts managed devices, starts it and waits for the Incus agent.
+// start creates a missing guest, upserts managed devices, starts it and waits until incus exec works.
 func start(name string, cfg *config, build buildOptions, createMissing bool) error {
-	definition := cfg.VirtualMachines[name]
-	current, err := instance(name)
+	definition := cfg.Guests[name]
+	current, err := instance(name, definition.Type)
 	if err != nil {
 		return err
 	}
 	if current == nil {
 		if !createMissing {
-			return errors.New("Virtual machine " + name + " does not exist; create it with: vm " + name + " boot")
+			return errors.New("Guest " + name + " does not exist; create it with: guest " + name + " boot")
 		}
 		if err := create(name, definition, cfg, build); err != nil {
 			return err
@@ -271,7 +294,7 @@ func start(name string, cfg *config, build buildOptions, createMissing bool) err
 			break
 		}
 		if time.Now().After(deadline) {
-			return errors.New("Incus agent in " + name + " did not become ready")
+			return errors.New("Guest " + name + " did not accept incus exec")
 		}
 		time.Sleep(2 * time.Second)
 	}
@@ -283,13 +306,13 @@ func start(name string, cfg *config, build buildOptions, createMissing bool) err
 	return nil
 }
 
-func stop(name string) error {
-	current, err := instance(name)
+func stop(name, kind string) error {
+	current, err := instance(name, kind)
 	if err != nil {
 		return err
 	}
 	if current == nil {
-		return errors.New("Virtual machine " + name + " does not exist")
+		return errors.New("Guest " + name + " does not exist")
 	}
 	if current["status"] == "Stopped" {
 		fmt.Println(name + " is already stopped")
@@ -299,8 +322,8 @@ func stop(name string) error {
 	return err
 }
 
-func deleteVM(name string) error {
-	current, err := instance(name)
+func deleteGuest(name, kind string) error {
+	current, err := instance(name, kind)
 	if err != nil {
 		return err
 	}
@@ -309,12 +332,12 @@ func deleteVM(name string) error {
 		return nil
 	}
 	if current["status"] != "Stopped" {
-		return errors.New("Stop the virtual machine first: vm " + name + " stop")
+		return errors.New("Stop the guest first: guest " + name + " stop")
 	}
 	if !isTerminal(os.Stdin) {
 		return errors.New("Deletion requires a terminal confirmation")
 	}
-	fmt.Print("Type " + name + " to permanently delete the VM and its disks: ")
+	fmt.Print("Type " + name + " to permanently delete the guest and its volumes: ")
 	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	if strings.TrimSuffix(answer, "\n") != name {
 		return errors.New("Confirmation did not match; nothing was deleted")
@@ -374,14 +397,14 @@ func transfer(name, system string) error {
 }
 
 func rebuild(cmd command, cfg *config) error {
-	name := cmd.vm
+	name, kind := cmd.guest, cfg.Guests[cmd.guest].Type
 	applying := slices.Contains(apply, cmd.action)
 	if cmd.rollback && !applying {
 		return errors.New("--rollback requires dry-activate, test, switch or boot")
 	}
 	native := []string{"/run/current-system/sw/bin/nixos-rebuild", cmd.action, "--no-reexec"}
 	if cmd.action == "list-generations" {
-		if err := requireRunning(name); err != nil {
+		if err := requireRunning(name, kind); err != nil {
 			return err
 		}
 		_, err := run(guest(name, native, nil, false), false, nil)

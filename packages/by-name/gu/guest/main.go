@@ -1,6 +1,7 @@
-// vm manages declared local Incus KVM virtual machines: create, start, stop,
-// delete and rebuild them, deliver root credentials, and install initial
-// guest authentication without replacing existing authentication.
+// guest manages declared local Incus guests (KVM virtual machines and system
+// containers): create, start, stop, delete and rebuild them, deliver root
+// credentials, and install initial guest authentication without replacing
+// existing authentication.
 package main
 
 import (
@@ -12,12 +13,12 @@ import (
 	"strings"
 )
 
-const usage = `usage: vm --config FILE VM COMMAND [ARGS]
+const usage = `usage: guest --config FILE GUEST COMMAND [ARGS]
 
 commands:
-  boot [BUILD]                  create the VM from the flake if missing, then start it
-  stop                          shut the VM down
-  delete                        delete a stopped VM and its disks after confirmation
+  boot [BUILD]                  create the guest from the flake if missing, then start it
+  stop                          shut the guest down
+  delete                        delete a stopped guest and its volumes after confirmation
   rebuild [ACTION] [BUILD] [--rollback]
                                 build and apply the guest system like nixos-rebuild
                                 (ACTION: ` + "build, dry-build, dry-run, dry-activate, test, switch (default), boot, list-generations" + `)
@@ -26,7 +27,7 @@ commands:
                                 install a private file under the user's home, without overwriting
   deliver-credentials           deliver declared root credentials (used by the host unit)
 
-  vm preseed-condition POOL     ExecCondition guard for create-only Incus preseed
+  guest preseed-condition POOL  ExecCondition guard for create-only Incus preseed
 
 BUILD options: --max-jobs N, --cores N, --override-input NAME REFERENCE
 `
@@ -42,8 +43,8 @@ type buildOptions struct {
 }
 
 type command struct {
-	vm, name string
-	build    buildOptions
+	guest, name string
+	build       buildOptions
 	// rebuild
 	action   string
 	rollback bool
@@ -84,26 +85,26 @@ func realMain(args []string) int {
 		return 0
 	}
 	if configPath == "" {
-		fmt.Fprintln(os.Stderr, "vm: --config is required")
+		fmt.Fprintln(os.Stderr, "guest: --config is required")
 		return 2
 	}
 	cfg, err := loadConfig(configPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vm: "+err.Error())
+		fmt.Fprintln(os.Stderr, "guest: "+err.Error())
 		return 1
 	}
 	cmd, err := parseCommand(args, cfg)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "vm: "+err.Error())
+		fmt.Fprintln(os.Stderr, "guest: "+err.Error())
 		fmt.Fprint(os.Stderr, usage)
 		return 2
 	}
 	if err := execute(cmd, cfg); err != nil {
 		var cmdErr *commandError
 		if (cmd.name == "passwd" || cmd.name == "push-file") && errors.As(err, &cmdErr) {
-			fmt.Fprintln(os.Stderr, "vm: Guest operation failed; existing authentication was not replaced")
+			fmt.Fprintln(os.Stderr, "guest: Guest operation failed; existing authentication was not replaced")
 		} else {
-			fmt.Fprintln(os.Stderr, "vm: "+err.Error())
+			fmt.Fprintln(os.Stderr, "guest: "+err.Error())
 		}
 		return 1
 	}
@@ -112,12 +113,12 @@ func realMain(args []string) int {
 
 func parseCommand(args []string, cfg *config) (command, error) {
 	if len(args) < 2 {
-		return command{}, usageError{"expected VM and COMMAND"}
+		return command{}, usageError{"expected GUEST and COMMAND"}
 	}
-	cmd := command{vm: args[0], name: args[1]}
-	if _, ok := cfg.VirtualMachines[cmd.vm]; !ok {
+	cmd := command{guest: args[0], name: args[1]}
+	if _, ok := cfg.Guests[cmd.guest]; !ok {
 		names := cfg.names()
-		return command{}, usageError{fmt.Sprintf("unknown virtual machine %q (choose from %s)", cmd.vm, strings.Join(names, ", "))}
+		return command{}, usageError{fmt.Sprintf("unknown guest %q (choose from %s)", cmd.guest, strings.Join(names, ", "))}
 	}
 	rest := args[2:]
 	var positional []string
@@ -209,21 +210,22 @@ func parseCommand(args []string, cfg *config) (command, error) {
 }
 
 func execute(cmd command, cfg *config) error {
+	definition := cfg.Guests[cmd.guest]
 	switch cmd.name {
 	case "boot":
-		return start(cmd.vm, cfg, cmd.build, true)
+		return start(cmd.guest, cfg, cmd.build, true)
 	case "stop":
-		return stop(cmd.vm)
+		return stop(cmd.guest, definition.Type)
 	case "delete":
-		return deleteVM(cmd.vm)
+		return deleteGuest(cmd.guest, definition.Type)
 	case "rebuild":
 		return rebuild(cmd, cfg)
 	case "passwd":
-		return passwd(cmd.vm, cmd.user)
+		return passwd(cmd.guest, definition.Type, cmd.user)
 	case "push-file":
-		return pushFile(cmd)
+		return pushFile(cmd, definition.Type)
 	case "deliver-credentials":
-		return deliverCredentials(cmd.vm, cfg.VirtualMachines[cmd.vm])
+		return deliverCredentials(cmd.guest, definition)
 	}
 	return fmt.Errorf("unknown command %s", cmd.name)
 }

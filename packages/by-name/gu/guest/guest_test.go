@@ -10,14 +10,16 @@ import (
 
 const sampleConfig = `{
   "flakeFile": "/srv/flake.nix",
-  "virtualMachines": {
+  "guests": {
     "worker": {
+      "type": "virtual-machine",
       "launchConfig": {"devices": {"gpu": {"type": "gpu", "pci": "0000:01:00.0", "productid": 1, "required": true}}},
       "managedDeviceNames": ["gpu"],
-      "credentialUnit": "incus-vm-credentials-worker.service",
+      "credentialUnit": "incus-guest-credentials-worker.service",
       "credentialFiles": {"/var/lib/worker/token.env": "/run/secrets/worker.env"},
       "credentialRestartUnits": ["worker.service"]
-    }
+    },
+    "box": {"type": "container", "launchConfig": {}}
   }
 }`
 
@@ -31,13 +33,13 @@ func testConfig(t *testing.T) *config {
 }
 
 func TestParseConfigRejectsInvalidNames(t *testing.T) {
-	for _, data := range []string{`{"virtualMachines": {"-bad": {}}}`, `{"virtualMachines": null}`, `{}`, `[]`} {
+	for _, data := range []string{`{"guests": {"-bad": {"type": "container"}}}`, `{"guests": {"ok": {}}}`, `{"guests": {"ok": {"type": "lxc"}}}`, `{"guests": null}`, `{}`, `[]`} {
 		if _, err := parseConfig([]byte(data)); err == nil {
 			t.Errorf("accepted %s", data)
 		}
 	}
 	cfg := testConfig(t)
-	if unit := cfg.VirtualMachines["worker"].CredentialUnit; unit == nil || *unit != "incus-vm-credentials-worker.service" {
+	if unit := cfg.Guests["worker"].CredentialUnit; unit == nil || *unit != "incus-guest-credentials-worker.service" {
 		t.Errorf("credential unit %v", unit)
 	}
 }
@@ -105,23 +107,29 @@ func TestPreseedDecision(t *testing.T) {
 }
 
 func TestFindInstance(t *testing.T) {
-	list := []byte(`[{"name":"worker","type":"virtual-machine","status":"Running"},{"name":"box","type":"container"}]`)
-	if found, err := findInstance(list, "worker"); err != nil || found["status"] != "Running" {
+	list := []byte(`[{"name":"worker","type":"virtual-machine","status":"Running"},{"name":"box","type":"container","status":"Stopped"}]`)
+	if found, err := findInstance(list, "worker", virtualMachine); err != nil || found["status"] != "Running" {
 		t.Errorf("worker: %v %v", found, err)
 	}
-	if found, err := findInstance(list, "missing"); err != nil || found != nil {
+	if found, err := findInstance(list, "box", container); err != nil || found["status"] != "Stopped" {
+		t.Errorf("box: %v %v", found, err)
+	}
+	if found, err := findInstance(list, "missing", container); err != nil || found != nil {
 		t.Errorf("missing: %v %v", found, err)
 	}
-	if _, err := findInstance(list, "box"); err == nil {
+	if _, err := findInstance(list, "box", virtualMachine); err == nil {
 		t.Error("container accepted as VM")
 	}
-	if _, err := findInstance([]byte(`null`), "worker"); err == nil {
+	if _, err := findInstance(list, "worker", container); err == nil {
+		t.Error("VM accepted as container")
+	}
+	if _, err := findInstance([]byte(`null`), "worker", virtualMachine); err == nil {
 		t.Error("null list accepted")
 	}
 }
 
 func TestDeviceValues(t *testing.T) {
-	devices, err := testConfig(t).VirtualMachines["worker"].devices()
+	devices, err := testConfig(t).Guests["worker"].devices()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,20 +140,30 @@ func TestDeviceValues(t *testing.T) {
 	}
 }
 
-func TestVMGuestShape(t *testing.T) {
-	if !vmGuestShape([]byte(`{"isContainer":false,"incusAgent":true}`)) {
-		t.Error("valid shape rejected")
+func TestGuestShape(t *testing.T) {
+	if !guestShape([]byte(`{"isContainer":false,"incusAgent":true}`), virtualMachine) {
+		t.Error("valid VM shape rejected")
 	}
-	for _, bad := range []string{`{"isContainer":true,"incusAgent":true}`, `{"isContainer":false}`, `{"isContainer":false,"incusAgent":true,"x":1}`, `null`} {
-		if vmGuestShape([]byte(bad)) {
-			t.Errorf("accepted %s", bad)
+	for _, good := range []string{`{"isContainer":true,"incusAgent":false}`, `{"isContainer":true,"incusAgent":true}`} {
+		if !guestShape([]byte(good), container) {
+			t.Errorf("valid container shape rejected: %s", good)
+		}
+	}
+	for _, bad := range []string{`{"isContainer":true,"incusAgent":true}`, `{"isContainer":false,"incusAgent":false}`, `{"isContainer":false}`, `{"isContainer":false,"incusAgent":true,"x":1}`, `null`} {
+		if guestShape([]byte(bad), virtualMachine) {
+			t.Errorf("accepted VM %s", bad)
+		}
+	}
+	for _, bad := range []string{`{"isContainer":false,"incusAgent":true}`, `{"isContainer":true}`, `null`} {
+		if guestShape([]byte(bad), container) {
+			t.Errorf("accepted container %s", bad)
 		}
 	}
 }
 
 func TestImageFile(t *testing.T) {
 	root := t.TempDir()
-	for _, file := range []string{"tarball/meta.tar.xz", "disk.qcow2", "other/file.tar.xz"} {
+	for _, file := range []string{"tarball/meta.tar.xz", "disk.qcow2", "rootfs.squashfs", "other/file.tar.xz"} {
 		path := filepath.Join(root, file)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -154,13 +172,18 @@ func TestImageFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got, err := imageFile(root, true); err != nil || got != filepath.Join(root, "tarball/meta.tar.xz") {
+	if got, err := imageFile(root, ""); err != nil || got != filepath.Join(root, "tarball/meta.tar.xz") {
 		t.Errorf("metadata: %s %v", got, err)
 	}
-	if got, err := imageFile(root, false); err != nil || got != filepath.Join(root, "disk.qcow2") {
-		t.Errorf("disk: %s %v", got, err)
+	for _, kind := range []string{virtualMachine, container} {
+		output, extension := rootImage(kind)
+		got, err := imageFile(root, extension)
+		want := map[string]string{"qemuImage": "disk.qcow2", "squashfs": "rootfs.squashfs"}[output]
+		if err != nil || got != filepath.Join(root, want) {
+			t.Errorf("%s root image: %s %v", kind, got, err)
+		}
 	}
-	if _, err := imageFile(t.TempDir(), false); err == nil {
+	if _, err := imageFile(t.TempDir(), ".qcow2"); err == nil {
 		t.Error("empty directory accepted")
 	}
 	sum, err := fingerprint(filepath.Join(root, "tarball/meta.tar.xz"), filepath.Join(root, "disk.qcow2"))

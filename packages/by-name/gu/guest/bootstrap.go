@@ -28,7 +28,7 @@ case "$(realpath -m -- "$destination")" in "$home"/*) ;; *) exit 1 ;; esac
 if [ -e "$destination" ] || [ -L "$destination" ]; then exit 3; fi
 parent=$(dirname -- "$destination")
 mkdir -p -m 0700 -- "$parent"
-temporary=$(mktemp "$parent/.vm-bootstrap.XXXXXXXX")
+temporary=$(mktemp "$parent/.guest-bootstrap.XXXXXXXX")
 trap 'rm -f -- "$temporary"' EXIT HUP INT TERM
 cat > "$temporary"
 # A hard link publishes atomically without replacing an existing file, even on a race.
@@ -59,25 +59,25 @@ func parseAccount(line, user string) (account, error) {
 	return account{uid, gid, home}, nil
 }
 
-func guestAccount(vm, user string) (account, error) {
+func guestAccount(name, kind, user string) (account, error) {
 	if !guestUser.MatchString(user) {
 		return account{}, errors.New("Invalid guest username")
 	}
-	if err := requireRunning(vm); err != nil {
+	if err := requireRunning(name, kind); err != nil {
 		return account{}, err
 	}
-	line, err := run(guest(vm, []string{"getent", "passwd", user}, nil, false), true, nil)
+	line, err := run(guest(name, []string{"getent", "passwd", user}, nil, false), true, nil)
 	if err != nil {
 		return account{}, err
 	}
 	return parseAccount(line, user)
 }
 
-func passwd(vm, user string) error {
-	if _, err := guestAccount(vm, user); err != nil {
+func passwd(name, kind, user string) error {
+	if _, err := guestAccount(name, kind, user); err != nil {
 		return err
 	}
-	out, err := run(guest(vm, []string{"passwd", "--status", "--", user}, nil, false), true, nil)
+	out, err := run(guest(name, []string{"passwd", "--status", "--", user}, nil, false), true, nil)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func passwd(vm, user string) error {
 		return nil
 	}
 	// L can also mean a locked *existing* hash; never replace that authentication.
-	if _, err := run(guest(vm, []string{"awk", "-F:", "-v", "login=" + user,
+	if _, err := run(guest(name, []string{"awk", "-F:", "-v", "login=" + user,
 		`$1 == login && ($2 == "" || $2 == "!" || $2 == "!!" || $2 == "*") { unset = 1 } END { exit !unset }`,
 		"/etc/shadow"}, nil, false), false, nil); err != nil {
 		return err
@@ -98,7 +98,7 @@ func passwd(vm, user string) error {
 	if !isTerminal(os.Stdin) {
 		return errors.New("Password setup requires a terminal; do not pipe passwords")
 	}
-	_, err = run(guest(vm, []string{"passwd", "--", user}, nil, true), false, nil)
+	_, err = run(guest(name, []string{"passwd", "--", user}, nil, true), false, nil)
 	return err
 }
 
@@ -115,8 +115,8 @@ func validDestination(destination string) bool {
 	return true
 }
 
-func pushFile(cmd command) error {
-	user, err := guestAccount(cmd.vm, cmd.user)
+func pushFile(cmd command, kind string) error {
+	user, err := guestAccount(cmd.guest, kind, cmd.user)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func pushFile(cmd command) error {
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return errors.New("Source must be a private regular file (0600 or stricter)")
 	}
-	argv := guest(cmd.vm, []string{"/bin/sh", "-c", installScript, "vm-bootstrap", user.home, path.Join(user.home, cmd.destination)},
+	argv := guest(cmd.guest, []string{"/bin/sh", "-c", installScript, "guest-bootstrap", user.home, path.Join(user.home, cmd.destination)},
 		&identity{user.uid, user.gid}, false)
 	install := exec.Command(argv[0], argv[1:]...)
 	install.Stdin, install.Stdout, install.Stderr = source, os.Stdout, os.Stderr
@@ -153,9 +153,9 @@ func pushFile(cmd command) error {
 	}
 	switch {
 	case cmd.systemUnit != "":
-		_, err = run(guest(cmd.vm, []string{"systemctl", "start", "--", unit}, nil, false), false, nil)
+		_, err = run(guest(cmd.guest, []string{"systemctl", "start", "--", unit}, nil, false), false, nil)
 	case cmd.userUnit != "":
-		_, err = run(guest(cmd.vm, []string{"env", "XDG_RUNTIME_DIR=/run/user/" + strconv.Itoa(user.uid),
+		_, err = run(guest(cmd.guest, []string{"env", "XDG_RUNTIME_DIR=/run/user/" + strconv.Itoa(user.uid),
 			"systemctl", "--user", "start", "--", unit}, &identity{user.uid, user.gid}, false), false, nil)
 	}
 	if err != nil {

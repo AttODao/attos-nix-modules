@@ -9,37 +9,39 @@
 let
   cfg = config.modules.incus;
   native = config.virtualisation.incus;
-  vm = lib.getExe attopkgs.vm;
-  definition = name: vm: {
-    inherit (vm)
+  guest = lib.getExe attopkgs.guest;
+  definition = name: guest: {
+    inherit (guest)
+      type
       launchConfig
       managedDeviceNames
       credentialFiles
       credentialRestartUnits
       ;
-    credentialUnit = if vm.credentialFiles == { } then null else "incus-vm-credentials-${name}.service";
+    credentialUnit =
+      if guest.credentialFiles == { } then null else "incus-guest-credentials-${name}.service";
   };
-  vmConfig = pkgs.writeText "vm.json" (
+  guestConfig = pkgs.writeText "guest.json" (
     builtins.toJSON {
       inherit (cfg.rebuild) flakeFile;
-      virtualMachines = lib.mapAttrs definition cfg.virtualMachines;
+      guests = lib.mapAttrs definition cfg.guests;
     }
   );
-  # Per-VM, so a delivery unit only restarts when its own credentials change.
+  # Per-guest, so a delivery unit only restarts when its own credentials change.
   credentialConfig =
-    name: vm:
-    pkgs.writeText "vm-credentials-${name}.json" (
-      builtins.toJSON { virtualMachines.${name} = definition name vm; }
+    name: guest:
+    pkgs.writeText "guest-credentials-${name}.json" (
+      builtins.toJSON { guests.${name} = definition name guest; }
     );
-  vmCli =
-    pkgs.runCommand "vm"
+  guestCli =
+    pkgs.runCommand "guest"
       {
         nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
-        meta.mainProgram = "vm";
+        meta.mainProgram = "guest";
       }
       ''
-        makeWrapper ${vm} $out/bin/vm \
-          --add-flags ${lib.escapeShellArg "--config ${vmConfig}"} \
+        makeWrapper ${guest} $out/bin/guest \
+          --add-flags ${lib.escapeShellArg "--config ${guestConfig}"} \
           --prefix PATH : ${
             lib.makeBinPath [
               native.clientPackage
@@ -47,7 +49,7 @@ let
             ]
           }
       '';
-  credentialVMs = lib.filterAttrs (_: vm: vm.credentialFiles != { }) cfg.virtualMachines;
+  credentialGuests = lib.filterAttrs (_: guest: guest.credentialFiles != { }) cfg.guests;
   preseed = native.preseed != null;
   pools = if !preseed then [ ] else native.preseed.storage_pools or [ ];
   singlePool =
@@ -75,21 +77,21 @@ in
         # QEMU/KVM and OVMF are supplied by the native Incus module, not libvirtd.
         boot.kernelModules = [ "kvm" ];
         networking.nftables.enable = lib.mkDefault true;
-        environment.systemPackages = lib.optional (cfg.virtualMachines != { }) vmCli;
+        environment.systemPackages = lib.optional (cfg.guests != { }) guestCli;
         assertions = [
           {
-            assertion = lib.all (vm: vm.credentialRestartUnits == [ ] || vm.credentialFiles != { }) (
-              builtins.attrValues cfg.virtualMachines
+            assertion = lib.all (guest: guest.credentialRestartUnits == [ ] || guest.credentialFiles != { }) (
+              builtins.attrValues cfg.guests
             );
-            message = "modules.incus: credentialRestartUnits require credentialFiles on the same VM.";
+            message = "modules.incus: credentialRestartUnits require credentialFiles on the same guest.";
           }
           {
             assertion =
               if cfg.rebuild.flakeFile == null then
-                cfg.virtualMachines == { }
+                cfg.guests == { }
               else
-                lib.hasSuffix "/flake.nix" cfg.rebuild.flakeFile && cfg.virtualMachines != { };
-            message = "modules.incus.rebuild.flakeFile must name flake.nix and is required exactly when virtualMachines are declared.";
+                lib.hasSuffix "/flake.nix" cfg.rebuild.flakeFile && cfg.guests != { };
+            message = "modules.incus.rebuild.flakeFile must name flake.nix and is required exactly when guests are declared.";
           }
           {
             assertion = !preseed || singlePool;
@@ -104,7 +106,7 @@ in
           serviceConfig = {
             ExecCondition = [
               (utils.escapeSystemdExecArgs [
-                vm
+                guest
                 "preseed-condition"
                 initializePool
               ])
@@ -117,9 +119,9 @@ in
       })
       {
         systemd.services = lib.mapAttrs' (
-          name: vm':
-          lib.nameValuePair "incus-vm-credentials-${name}" {
-            description = "Deliver runtime credentials to Incus VM ${name}";
+          name: guest':
+          lib.nameValuePair "incus-guest-credentials-${name}" {
+            description = "Deliver runtime credentials to Incus guest ${name}";
             wantedBy = [ "multi-user.target" ];
             requires = [ "incus.service" ];
             after = [
@@ -127,24 +129,24 @@ in
               "incus-startup.service"
             ];
             path = [ native.clientPackage ];
-            unitConfig.RequiresMountsFor = builtins.attrValues vm'.credentialFiles;
+            unitConfig.RequiresMountsFor = builtins.attrValues guest'.credentialFiles;
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
               Restart = "on-failure";
               RestartSec = "5s";
               UMask = "0077";
-              # Absent/Stopped VMs are skipped; Running ones retry until the agent answers.
+              # Absent/Stopped guests are skipped; Running ones retry until incus exec answers.
               ExecStart = utils.escapeSystemdExecArgs [
-                vm
+                guest
                 "--config"
-                (credentialConfig name vm')
+                (credentialConfig name guest')
                 name
                 "deliver-credentials"
               ];
             };
           }
-        ) credentialVMs;
+        ) credentialGuests;
       }
     ]
   );
