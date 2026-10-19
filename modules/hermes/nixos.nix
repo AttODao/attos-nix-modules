@@ -77,7 +77,7 @@ in
         pkgs.devenv
         pkgs.nodejs
         pkgs.ripgrep
-        pkgs.ffmpeg
+        pkgs.ffmpeg-headless
       ];
     };
 
