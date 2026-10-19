@@ -35,5 +35,11 @@
       ],
       "enabled": false
     }
-  ]
+  ],
+  "commitMessageAction": "",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "を {{newValue}} に更新",
+  "prHeader": "Docker imageの更新です（Renovateが自動作成）。",
+  "prFooter": "mergeの前に、必要ならホストで `nixos-rebuild build` を実行して確認してください。メジャー更新はデータの移行を伴うことがあります。",
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{footer}}}"
 }

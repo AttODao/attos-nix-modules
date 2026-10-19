@@ -8,7 +8,7 @@ usage() {
   cat >&2 <<'USAGE'
 usage: attos-ci COMMAND [ARGS]
   update-shared            bump attos-nix-modules inputs: HM/hermes pins in flake.nix, flake.lock
-  update-packages          nix-update every versioned custom package, update-nix-fetchgit the Pi catalog
+  update-packages          nix-update every versioned custom package, update-nix-fetchgit the Pi and skill sources
   check-consumers REPO...  evaluate consumer hosts (owner/repo:host,host) against this checkout
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
 USAGE
@@ -34,7 +34,7 @@ update_packages() {
     [ "$pkg" = pi ] && args+=(--custom-dep modelData)
     nix-update "${args[@]}" || failed+=("$pkg")
   done
-  update-nix-fetchgit modules/pi/resources.nix || failed+=(pi-resources)
+  update-nix-fetchgit modules/pi/resources.nix modules/skills/sources.nix || failed+=(pi-and-skill-sources)
   [ ${#failed[@]} -eq 0 ] || echo "::warning::not updated: ${failed[*]}"
 }
 
@@ -64,7 +64,7 @@ pr() {
   if [ -n "$existing" ]; then
     echo "updated #$existing"
   else
-    api pulls -X POST -d "$(jq -n --arg h "$branch" --arg t "$title" '{head: $h, base: "main", title: $t, body: "Automated update; consumer hosts evaluated. Build on a host (nixos-rebuild build) before merging if unsure."}')" | jq -r '"opened #\(.number)"'
+    api pulls -X POST -d "$(jq -n --arg h "$branch" --arg t "$title" '{head: $h, base: "main", title: $t, body: "自動更新のPRです。ビルドはしていません。mergeの前に、必要ならホストで `nixos-rebuild build` を実行して確認してください。"}')" | jq -r '"opened #\(.number)"'
   fi
 }
 

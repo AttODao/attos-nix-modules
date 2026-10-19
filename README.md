@@ -152,8 +152,9 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | noctalia | HM | 任意のGPU screen recorder support |
 | open-deck-desktop | HM（`binfmt`時NixOS） | —（`binfmt`時のみAppImage binfmt） |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | — |
-| pi | HM + `systemWide`時NixOS | — |
-| claude-code | HM | Piと同じcatalogのskill・context-mode MCP |
+| pi | HM + `systemWide`時NixOS | skills |
+| claude-code | HM | skills、context-mode MCP同梱 |
+| skills | HM | —（Pi・Claude Code共通のagent skill。有効なagentへだけ導入） |
 
 依存先を通常代入でfalseにすると競合する。
 
@@ -187,8 +188,9 @@ AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・C
 `hermes-desktop.url`はHermes Desktopの初期接続先で、有効時必須。connection.jsonが無い場合だけ書き、sign-inはapp内で行う（認証・接続registryは管理しない）。
 `immich-client.watchDirectories`は起動時に再帰uploadし、以後監視するディレクトリで、既定nullは各ユーザーのXDG Pictures（`xdg.userDirs.pictures`）を使う。user serviceは`~/.config/immich/auth.yml`（`immich login <url> <api-key>`で作成）がある場合だけ起動し、認証情報は管理しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{installEditor,userSettings,codexAcp.npmPolicy}`、`vscode.userSettings`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
-`pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable` / `pi.skills.<name>.enable`（各既定true）で同梱resourceを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterは`npm:pi-mcp-adapter@5.3.0`に固定し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
-`claude-code.skills.<name>.enable` / `claude-code.contextMode.enable`（各既定true）で、Pi catalogのうちClaude Codeで動くskillとcontext-mode MCP serverを選ぶ。pi-mermaid-studio（Pi tool依存）・ctx-upgrade（Nix管理installの書換え）・find-skills（npxでNix管理外へ追加）は含めない。`claude-code.lsp.{nixd,rust-analyzer,gopls}.enable`（各既定false）でホストpkgsのlanguage serverをClaude CodeのLSPへ登録する。packageは`attopkgs.claude-code`（sadjow/claude-code-nixをrevision/hash固定）。claude-code/context-modeのunfree許可は利用側、settings.json・認証・履歴は管理しない。
+`pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable`（各既定true）で同梱extensionを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterは`npm:pi-mcp-adapter@5.3.0`に固定し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
+`claude-code.contextMode.enable`（既定true）でcontext-mode MCP serverを選ぶ。`claude-code.lsp.{nixd,rust-analyzer,gopls}.enable`（各既定false）でホストpkgsのlanguage serverをClaude CodeのLSPへ登録する。packageは`attopkgs.claude-code`（sadjow/claude-code-nixをrevision/hash固定）。claude-code/context-modeのunfree許可は利用側、settings.json・認証・履歴は管理しない。
+`skills.<name>.enable`（各既定true）でPi・Claude Code共通のskillを個別選択する。skillごとの取得元と対応agentは`modules/skills/catalog.nix`、取得repoの固定は`modules/skills/sources.nix`に置く。pi-mermaid-studio（Pi tool依存）・find-skills（npxでNix管理外へ追加）・ctx-upgrade（Nix管理installの書換え）はPiだけへ導入する。
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
 
 Noctaliaのsystemd launcher、Hyprlandのheadless bootstrap/input/seatd、PipeWire virtual sink、Sunshineのheadless依存は共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
@@ -315,10 +317,10 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 自動更新
 
-Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけ。
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけ。PRのタイトル・本文は日本語。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
-- `update/packages`: version固定のcustom packageとPi resourceカタログ。
+- `update/packages`: version固定のcustom package、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。
 - OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
 
 flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。

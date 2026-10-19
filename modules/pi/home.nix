@@ -26,8 +26,7 @@ in
       ]
       ++ lib.optional cfg.plugins.context-mode.enable attopkgs.context-mode;
       settings = {
-        packages =
-          lib.optional cfg.plugins.pi-mcp-adapter.enable resources.plugins.pi-mcp-adapter.package;
+        packages = lib.optional cfg.plugins.pi-mcp-adapter.enable resources.plugins.pi-mcp-adapter.package;
         defaultTools = [
           "read"
           "grep"
@@ -94,13 +93,6 @@ in
           )
         );
       }
-    ) (lib.filterAttrs (_: plugin: plugin ? source) resources.plugins)
-    // lib.mapAttrs' (
-      name: source:
-      lib.nameValuePair ".agents/skills/${name}" {
-        source = lib.mkDefault source;
-        enable = cfg.skills.${name}.enable;
-      }
-    ) resources.skills;
+    ) (lib.filterAttrs (_: plugin: plugin ? source) resources.plugins);
   };
 }

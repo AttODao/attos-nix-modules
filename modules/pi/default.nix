@@ -18,12 +18,14 @@ let
     }) resources.${kind};
 in
 {
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ../skills
+  ];
 
   options.modules.pi = {
     enable = lib.mkEnableOption "shared Pi configuration";
     plugins = switches "plugins";
-    skills = switches "skills";
     settingsMode = lib.mkOption {
       type = lib.types.enum [
         "declarative"
@@ -40,6 +42,7 @@ in
   };
 
   config = lib.mkIf config.modules.pi.enable {
+    modules.skills.enable = true;
     home-manager.sharedModules = [ ./home.nix ];
   };
 }

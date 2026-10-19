@@ -24,7 +24,7 @@ jobs:
       - run: nix run .#attos-ci -- update-shared
       - run: nix run .#attos-ci -- check-consumers $CONSUMERS
       - run: |
-          nix run .#attos-ci -- pr update/flake-inputs "chore(flake): update Home Manager, nixpkgs and pinned inputs"
+          nix run .#attos-ci -- pr update/flake-inputs "chore(flake): Home Manager・nixpkgs・固定inputを更新"
 
   packages:
     runs-on: docker
@@ -35,7 +35,7 @@ jobs:
       - run: nix run .#attos-ci -- update-packages
       - run: nix run .#attos-ci -- check-consumers $CONSUMERS
       - run: |
-          nix run .#attos-ci -- pr update/packages "chore(packages): update custom packages and Pi resources"
+          nix run .#attos-ci -- pr update/packages "chore(packages): 自前パッケージとPiリソースを更新"
 
   images:
     runs-on: docker
