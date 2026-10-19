@@ -2,40 +2,29 @@
 let
   inherit (lib) mkOption types;
   ps = import ../public-services/lib.nix { inherit lib; };
-  pathOption = ps.pathOption;
-  configFile =
-    description:
-    mkOption {
-      type = types.nullOr types.path;
-      default = null;
-      inherit description;
-    };
 in
 {
   imports = [ ./nixos.nix ];
 
   options.modules.ytdl-sub = {
-    enable = lib.mkEnableOption "the shared Docker ytdl-sub service";
-    dataDir = pathOption "Consumer-owned mutable root; retains config, YouTube, Twitch and working-directory layout. Absolute string, without a Docker bind-mount colon.";
-    cookieFile = pathOption "Consumer-owned runtime cookie file; never read into the Nix store. Rotation restarts belong to the caller.";
-    startConditionFile = pathOption "Optional runtime configuration file that must exist before the container starts; null disables the condition.";
-    subscriptionFiles = {
-      youtube = configFile "Consumer-supplied YouTube subscription YAML file, bind-mounted read-only at runtime from this path (not copied into the Nix store); do not pass secret contents through Nix.";
-      twitch = configFile "Consumer-supplied Twitch subscription YAML file, bind-mounted read-only at runtime from this path (not copied into the Nix store); do not pass secret contents through Nix.";
+    enable = lib.mkEnableOption "the shared ytdl-sub downloads";
+    dataDir = ps.pathOption "Consumer-owned mutable root containing YouTube, Twitch and the working directory.";
+    cookieFile = ps.pathOption "Consumer-owned runtime cookie file, writable by the service user because yt-dlp updates it; never read into the Nix store.";
+    startConditionFile = ps.pathOption "Optional runtime file that must exist before downloads start; null disables the condition.";
+    subscriptions = mkOption {
+      type = types.attrsOf (types.attrsOf types.anything);
+      default = { };
+      description = "ytdl-sub subscription documents by instance name (for example youtube, twitch); each runs every three hours. Use real paths below dataDir and cookieFile.";
     };
-    uid = mkOption {
-      type = types.nullOr types.ints.unsigned;
-      default = null;
-      description = "Consumer-supplied numeric owner and container PUID.";
+    user = mkOption {
+      type = types.nonEmptyStr;
+      default = "ytdl-sub";
+      description = "Existing account owning the downloads and the cookie file.";
     };
-    gid = mkOption {
-      type = types.nullOr types.ints.unsigned;
-      default = null;
-      description = "Consumer-supplied numeric group and container PGID.";
+    group = mkOption {
+      type = types.nonEmptyStr;
+      default = "ytdl-sub";
+      description = "Group of the downloads.";
     };
-  };
-
-  config = lib.mkIf config.modules.ytdl-sub.enable {
-    modules.docker.enable = true;
   };
 }

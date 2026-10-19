@@ -26,19 +26,14 @@ let
   ++ lib.optional terminalEnabled {
     standalone = s.standalone;
     service = "open-terminal";
-  }
-  ++
-    lib.optional (searchEnabled && (s.standalone || lib.any (route: route.cfg.deploy) searchRoutes))
-      {
-        standalone = s.standalone;
-        service = "searxng";
-      };
+  };
   searxngUrl =
     if s.standalone then
       "http://127.0.0.1:8081/search"
     else
-      # Open WebUI joins the same-host SearXNG bridge and uses its container name.
-      "http://searxng:8080/search";
+      ps.require "open-webui" "an enabled SearXNG registry entry" (
+        if searchRoutes == [ ] then null else "${(builtins.head searchRoutes).cfg.backendUrl}/search"
+      );
 in
 {
   imports = [
@@ -89,12 +84,6 @@ in
   config = lib.mkMerge [
     { assertions = s.assertions; }
     (lib.mkIf (s.enabled && s.cfg.webui) {
-      assertions = [
-        {
-          assertion = s.standalone || !searchEnabled || localSearch.enabled;
-          message = "Open WebUI web search needs SearXNG deployed on the same host.";
-        }
-      ];
       modules.docker.enable = true;
       modules.open-terminal.enable = lib.mkIf (!s.standalone) true;
       # Fixed interface so the consumer firewall can admit Open WebUI to a host Ollama listener.
@@ -108,14 +97,20 @@ in
       ];
       systemd.services.docker-open-webui = {
         unitConfig.RequiresMountsFor = [ root ] ++ lib.optional terminalEnabled environmentFile;
-        wants = lib.optionals (!s.standalone) (map ps.networkUnit transports) ++ [
-          "ollama.service"
-          "ollama-model-loader.service"
-        ];
-        after = lib.optionals (!s.standalone) (map ps.networkUnit transports) ++ [
-          "ollama.service"
-          "ollama-model-loader.service"
-        ];
+        wants =
+          lib.optionals (!s.standalone) (map ps.networkUnit transports)
+          ++ [
+            "ollama.service"
+            "ollama-model-loader.service"
+          ]
+          ++ lib.optional localSearch.enabled "searx.service";
+        after =
+          lib.optionals (!s.standalone) (map ps.networkUnit transports)
+          ++ [
+            "ollama.service"
+            "ollama-model-loader.service"
+          ]
+          ++ lib.optional localSearch.enabled "searx.service";
       };
       virtualisation.oci-containers.containers.open-webui = {
         image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.12.3@sha256:a537bbe1e6b428820f52ed4a029d7fff97062e24d5cf32c365fba36fd0542def";
@@ -183,9 +178,7 @@ in
           "${root}/data:/app/backend/data"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        dependsOn =
-          lib.optional terminalEnabled "open-terminal"
-          ++ lib.optional (localSearch.enabled && (!s.standalone || searchEnabled)) "searxng";
+        dependsOn = lib.optional terminalEnabled "open-terminal";
         ports = lib.mkIf (!s.standalone) (lib.mkDefault (ps.publish s 8080 8080));
         networks = lib.mkDefault (lib.optionals (!s.standalone) (map ps.network transports));
       };
