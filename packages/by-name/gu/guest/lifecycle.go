@@ -299,8 +299,13 @@ func start(name string, cfg *config, build buildOptions, createMissing bool) err
 		time.Sleep(2 * time.Second)
 	}
 	if started && definition.CredentialUnit != nil {
-		if _, err := run([]string{"systemctl", "restart", "--", *definition.CredentialUnit}, false, nil); err != nil {
-			return errors.New("Credential delivery failed; run: systemctl restart " + *definition.CredentialUnit)
+		restart := []string{"systemctl", "restart", "--", *definition.CredentialUnit}
+		// incus-admin users can manage guests but not host units; ask sudo instead of failing.
+		if os.Geteuid() != 0 {
+			restart = append([]string{"sudo"}, restart...)
+		}
+		if _, err := run(restart, false, nil); err != nil {
+			return errors.New("Credential delivery failed; run: sudo systemctl restart " + *definition.CredentialUnit)
 		}
 	}
 	return nil
