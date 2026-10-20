@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -40,5 +42,17 @@ func TestOptionsFlag(t *testing.T) {
 	}
 	if err := o.Set("novalue"); err == nil || !strings.Contains(err.Error(), "KEY=VALUE") {
 		t.Fatal("expected KEY=VALUE error")
+	}
+}
+
+func TestCommandError(t *testing.T) {
+	exit := &exec.ExitError{Stderr: []byte("Error response from daemon: network x not found\n")}
+	got := commandError([]string{"network", "inspect", "x"}, exit).Error()
+	if got != "docker network inspect failed: Error response from daemon: network x not found" {
+		t.Fatalf("got %q", got)
+	}
+	plain := errors.New("executable file not found")
+	if got := commandError([]string{"network", "inspect", "x"}, plain).Error(); !strings.HasSuffix(got, ": executable file not found") {
+		t.Fatalf("got %q", got)
 	}
 }

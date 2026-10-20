@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -35,11 +36,21 @@ func run(args []string) error {
 
 type dockerCLI string
 
-// output returns trimmed stdout and discards stderr (for expected probe failures).
+// output returns trimmed stdout; stderr is kept out of the console (probe failures are
+// expected) but attached to the error so a real failure names its cause.
 func (d dockerCLI) output(args ...string) (string, error) {
 	out, err := exec.Command(string(d), args...).Output()
 	if err != nil {
-		return "", fmt.Errorf("docker %s failed", strings.Join(args[:min(2, len(args))], " "))
+		return "", commandError(args, err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func commandError(args []string, err error) error {
+	message := fmt.Sprintf("docker %s failed", strings.Join(args[:min(2, len(args))], " "))
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && len(bytes.TrimSpace(exit.Stderr)) > 0 {
+		return fmt.Errorf("%s: %s", message, strings.TrimSpace(string(exit.Stderr)))
+	}
+	return fmt.Errorf("%s: %w", message, err)
 }
