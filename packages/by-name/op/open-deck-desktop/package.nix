@@ -1,4 +1,9 @@
-{ lib, fetchurl, appimageTools, makeWrapper }:
+{
+  lib,
+  fetchurl,
+  appimageTools,
+  makeWrapper,
+}:
 let
   pname = "open-deck-desktop";
   version = "1.0.6";

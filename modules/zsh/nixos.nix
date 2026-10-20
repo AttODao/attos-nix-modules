@@ -15,7 +15,7 @@
     programs.starship = {
       enable = true;
 
-      settings = import ./settings.nix { inherit lib pkgs; };
+      settings = import ./settings.nix { inherit lib; };
     };
   };
 }

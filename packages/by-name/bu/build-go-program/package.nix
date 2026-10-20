@@ -28,7 +28,7 @@ stdenvNoCC.mkDerivation {
   '';
   buildPhase = ''
     runHook preBuild
-    sources=$(find . -maxdepth 1 -name '*.go' ! -name '*_test.go' | sort)
+    sources=$(find . -maxdepth 1 -type f -name '*.go' ! -name '*_test.go' | sort)
     go vet $sources
     go build -ldflags='-s -w' -o ${pname} $sources
     runHook postBuild
@@ -36,8 +36,8 @@ stdenvNoCC.mkDerivation {
   doCheck = true;
   checkPhase = ''
     runHook preCheck
-    if [ -n "$(find . -maxdepth 1 -name '*_test.go')" ]; then
-      go test $(find . -maxdepth 1 -name '*.go' | sort)
+    if [ -n "$(find . -maxdepth 1 -type f -name '*_test.go')" ]; then
+      go test $(find . -maxdepth 1 -type f -name '*.go' | sort)
     fi
     runHook postCheck
   '';

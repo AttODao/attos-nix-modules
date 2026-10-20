@@ -19,7 +19,6 @@ in
         Description = "Immich upload watcher";
         # Stay inactive until `immich login` has written the user's credentials.
         ConditionPathExists = "%h/.config/immich/auth.yml";
-        After = [ "network-online.target" ];
       };
 
       Service = {

@@ -6,6 +6,7 @@
   ...
 }:
 let
+  cfg = osConfig.modules.solaar;
   yamlList = items: builtins.concatStringsSep "\n  - " (map builtins.toJSON items);
   noctalia = "${config.programs.noctalia.package}/bin/noctalia";
   kando = "${pkgs.kando}/bin/kando";
@@ -34,9 +35,17 @@ let
         ])
       ]
       (builtins.readFile ./rules.yaml);
+  # Solaar saves device settings and rules in place; store symlinks would be read-only.
+  seeded = config.lib.attos.mutableXdgConfigFiles {
+    name = "solaar";
+    files = {
+      "solaar/rules.yaml" = null;
+    }
+    // lib.optionalAttrs (cfg.deviceConfig != null) { "solaar/config.yaml" = null; };
+  };
 in
 {
-  config = lib.mkIf osConfig.modules.solaar.enable {
+  config = lib.mkIf cfg.enable {
     assertions = [
       {
         assertion = config.programs.noctalia.enable;
@@ -46,40 +55,21 @@ in
 
     home.packages = [ pkgs.kando ];
 
-    systemd.user.services = {
-      kando = {
-        Unit = {
-          Description = "Kando pie menu";
-          After = [ "graphical-session.target" ];
-        };
-        Service = {
-          ExecStart = kando;
-          Restart = "on-failure";
-        };
-        Install.WantedBy = [ "graphical-session.target" ];
-      };
+    systemd.user.services.kando = config.lib.attos.graphicalAppService {
+      description = "Kando pie menu";
+      exec = kando;
     };
 
-    # Solaar saves device settings and rules in place; store symlinks would be read-only.
-    xdg.configFile = {
-      "solaar/rules.yaml" = {
-        text = lib.mkDefault solaarRules;
-        enable = false;
-      };
-      "solaar/config.yaml" = {
-        source = lib.mkDefault ./config.yaml;
-        enable = false;
-      };
-    };
-    home.activation.installSolaarConfig = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-      run ${pkgs.coreutils}/bin/install -d -m 700 "${config.xdg.configHome}/solaar"
-      run ${pkgs.coreutils}/bin/install -m 600 ${
-        config.xdg.configFile."solaar/rules.yaml".source
-      } "${config.xdg.configHome}/solaar/rules.yaml"
-      run ${pkgs.coreutils}/bin/install -m 600 ${
-        config.xdg.configFile."solaar/config.yaml".source
-      } "${config.xdg.configHome}/solaar/config.yaml"
-    '';
+    xdg.configFile = lib.mkMerge [
+      seeded.xdg.configFile
+      {
+        "solaar/rules.yaml".text = lib.mkDefault solaarRules;
+        "solaar/config.yaml" = lib.mkIf (cfg.deviceConfig != null) {
+          source = lib.mkDefault cfg.deviceConfig;
+        };
+      }
+    ];
+    home.activation = seeded.home.activation;
 
     wayland.windowManager.hyprland.settings.window_rule = lib.mkDefault [
       {

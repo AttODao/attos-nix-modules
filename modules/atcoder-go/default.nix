@@ -15,6 +15,11 @@
       defaultText = lib.literalExpression "pkgs.go";
       description = "Global Go package for all HM users; independent of the optional project wrapper toolchain.";
     };
+    devenv.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install devenv for every HM user; the project scaffold needs it, other hosts may supply their own.";
+    };
     nixDirenv.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;

@@ -45,8 +45,7 @@ in
     };
 
     home.sessionVariables.GOTOOLCHAIN = lib.mkDefault "local";
-    home.packages = [
-      pkgs.devenv
+    home.packages = lib.optional cfg.devenv.enable pkgs.devenv ++ [
       pkgs.gopls
       attopkgs.atcoder-cli
       attopkgs.atcoder-oj

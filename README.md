@@ -77,6 +77,7 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。
 - `attopkgs` は共有側で利用ホストの `pkgs` から構築し、NixOS / HMへ渡す。
 - 機能選択はNixOS側の `modules.*` に一本化し、`home.*` exportとstandalone HM経路は提供しない。
+- `modules/home-manager/home.nix` が全HMユーザーへ共通helperを `config.lib.attos.*` で供給する。`mutableXdgConfigFiles`はappが書き換える設定（Fcitx5の`config`/`profile`、Solaarの`rules.yaml`/`config.yaml`）をstore symlinkでなく未存在時だけ0600でcopyし、`graphicalAppService`はGUI常駐app（Discord・OpenCloud・Kando）の`graphical-session.target`配下user serviceを生成する。
 
 ユーザー一覧に複数名を指定すると、固定メールアカウント・デバイス設定なども含め、
 有効な機能の共通設定が全HMユーザーへ配布される。credential、secretの配置・権限は共有しない。
@@ -89,6 +90,7 @@ flake.lock
 modules/
   default.nix               各機能を静的import
   home-manager/default.nix  HMユーザー一覧・共通HM設定・package引数
+  home-manager/home.nix     全HMユーザー共通のhelper（`config.lib.attos.*`）
   thunderbird/
     default.nix             公開option・依存・両scopeの接続
     home.nix                HM設定
@@ -115,11 +117,11 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | --- | --- | --- |
 | thunderbird | NixOS + HM | EDS・GNOME Keyring |
 | fonts | NixOS | — |
-| zsh | NixOS + HM | Starship同梱 |
+| zsh | NixOS + HM | Starship同梱（gruvbox-rainbow presetはrepoへコピー済み。評価はpackageを読まない） |
 | hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・Yazi・userDirs（FootからFonts） |
 | greeter | NixOS | Hyprland |
 | solaar | NixOS + HM | Noctalia、HM側にKando同梱 |
-| pipeasio | NixOS + HM | PipeWire |
+| pipeasio | NixOS + HM | PipeWire・Steam（`programs.steam.package`へWINEDLLPATH付きSteamを既定値として渡す） |
 | pipewire | NixOS | rtkit・ALSA・Pulse |
 | opencloud-client | NixOS + HM | — |
 | immich-client | HM | —（`immich upload --watch`のuser service。認証は`immich login`で行う） |
@@ -151,9 +153,9 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | ytdl-sub | NixOS | —（native `services.ytdl-sub.instances`）。HMユーザーなしでも利用可能 |
 | open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
-| noctalia | HM | 任意のGPU screen recorder support |
+| noctalia | HM | `screenRecorder.enable`かつ`source != "portal"`のとき`programs.gpu-screen-recorder`（既定値） |
 | open-deck-desktop | HM（`binfmt`時NixOS） | —（`binfmt`時のみAppImage binfmt） |
-| fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | — |
+| fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | —（pcmanfmの`inode/directory`既定はyazi無効時のみ。両方有効ならYaziが既定） |
 | pi | HM + `systemWide`時NixOS | skills |
 | claude-code | HM | skills、context-mode MCP同梱 |
 | skills | HM | —（Pi・Claude Code共通のagent skill。有効なagentへだけ導入） |
@@ -172,7 +174,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `thunderbird.{profile,accounts}`: `profile`（既定`default`）は全HMユーザーに作る既定profile名。`accounts`（既定`{}`）はHMの`accounts.email.accounts`と同じ形のattrsで、全HMユーザーへ`thunderbird.enable = true`既定で適用する。1件以上宣言するときは1件だけ`primary = true`にする。address・server・表示名などの個人識別情報は利用側に置き、認証情報は各ユーザーのprofileに残る。
 - `floorp.{vaultwardenUrl,extensions}`: `vaultwardenUrl`（既定null）はBitwarden拡張のself-hosted server presetで、nullなら拡張の環境設定を出さない。`extensions`（拡張ID→install URL、既定は同梱の一覧）はpolicyで`normal_installed`として導入し、ユーザーは無効化できる。利用側の定義は既定一覧全体を置き換える。
 - `opencloud-client.serverUrl`: 有効時必須。clientのaccount wizardに事前入力するserver URL。
-- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力と共有の`programs.noctalia.settings`は各leafが`mkDefault`で、`home-manager.users.<name>`から`mkForce`なしに一部だけ上書きできる（listは置換）。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `solaar.deviceConfig`: 既定nullのpath。Solaarの`config.yaml`（デバイスserial・unit ID・設定値）を全HMユーザーの`~/.config/solaar/`へ未存在時だけ配置する。nullならSolaarが初回起動時に作る。rules.yamlも同じく未存在時だけ配置し、既存ファイルはSolaarの変更を保持する（共有既定を受け直すにはファイルを削除する）。デバイス識別子は利用側が持つ。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
@@ -191,7 +194,7 @@ archiveのURL/hash・licenseはconsumerに残す。
 カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursor・systemd user session環境へ反映する。Hyprland・user serviceはsession環境を継承する。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
 Hyprlandのスクリーンショット先（Pictures配下のScreenshots）はhyprshotが保存時に作成する（`.keep`不要）。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
-AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.{goPackage,nixDirenv.enable,projectGoPackage}`でtoolchain・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
+AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.{goPackage,devenv.enable,nixDirenv.enable,projectGoPackage}`でtoolchain・devenv導入（既定true）・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
 `hermes-desktop.url`はHermes Desktopの初期接続先で、有効時必須。connection.jsonが無い場合だけ書き、sign-inはapp内で行う（認証・接続registryは管理しない）。
 `immich-client.watchDirectories`は起動時に再帰uploadし、以後監視するディレクトリで、既定nullは各ユーザーのXDG Pictures（`xdg.userDirs.pictures`）を使う。user serviceは`~/.config/immich/auth.yml`（`immich login <url> <api-key>`で作成）がある場合だけ起動し、認証情報は管理しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{installEditor,userSettings,codexAcp.npmPolicy}`、`vscode.userSettings`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
