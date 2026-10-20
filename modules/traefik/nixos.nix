@@ -78,6 +78,8 @@ let
     certResolver = "letsencrypt-wildcard";
   }
   // lib.optionalAttrs (cfg.certificateDomains != [ ]) { domains = cfg.certificateDomains; };
+  # Every HTTPS router carries the shared security headers; private routes add the allowlist.
+  httpMiddlewares = extra: [ "security-headers" ] ++ extra;
   static = {
     global = {
       checkNewVersion = false;
@@ -125,7 +127,9 @@ let
               entryPoints = [ "websecure" ];
               rule = "Host(`${route.hostname}`)";
               service = route.hostname;
-              middlewares = lib.optionals (route.cfg.private || route.service == "mcsmanager") [ "private" ];
+              middlewares = httpMiddlewares (
+                lib.optionals (route.cfg.private || route.service == "mcsmanager") [ "private" ]
+              );
               inherit tls;
             };
           }) routes
@@ -137,7 +141,7 @@ let
               entryPoints = [ "websecure" ];
               rule = "Host(`${entry.hostname}`) && PathPrefix(`/daemon/`)";
               service = "${entry.hostname}-daemon";
-              middlewares = [ "private" ];
+              middlewares = httpMiddlewares [ "private" ];
               inherit tls;
               # Preserve the native Socket.IO/upload/download prefix (no strip middleware).
             };
@@ -163,7 +167,15 @@ let
             ];
           }) games
         );
-      middlewares = lib.optionalAttrs privateEnabled {
+      middlewares = {
+        # HSTS and nosniff for every HTTPS route; frame/CSP policies stay with the applications.
+        security-headers.headers = {
+          stsSeconds = 31536000;
+          stsIncludeSubdomains = false;
+          contentTypeNosniff = true;
+        };
+      }
+      // lib.optionalAttrs privateEnabled {
         private.ipAllowList.sourceRange = cfg.privateNetworks;
       };
       serversTransports = builtins.listToAttrs (
@@ -196,6 +208,8 @@ let
         loadBalancer.servers = [ { inherit (entry) address; } ];
       });
     };
+    # Applies to every TLS router (HTTP and TCP) that does not name its own options.
+    tls.options.default.minVersion = "VersionTLS12";
   };
   # JSON is a YAML subset: no extra renderer or evaluation-time build is needed.
   staticFile = pkgs.writeText "traefik.yml" (builtins.toJSON static);
@@ -294,8 +308,8 @@ in
     systemd.services.traefik = {
       unitConfig.RequiresMountsFor = [ environmentFile ];
       # Bound listeners need their addresses configured before Traefik binds them.
-      wants = [ "network-online.target" ];
-      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ] ++ cfg.listenServices;
+      after = [ "network-online.target" ] ++ cfg.listenServices;
       serviceConfig = {
         EnvironmentFile = environmentFile;
         # The Cloudflare DNS-01 provider reads CF_DNS_API_TOKEN.
