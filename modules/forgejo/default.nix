@@ -27,6 +27,14 @@ in
         default = [ ];
         description = "Gateway IP addresses on which Traefik publishes Forgejo SSH port 22; empty publishes on all addresses. Local DNS then returns only the ingress addresses in this list for the hostname.";
       };
+      trustedProxies = lib.mkOption {
+        type = lib.types.listOf lib.types.nonEmptyStr;
+        default = [
+          "127.0.0.0/8"
+          "::1/128"
+        ];
+        description = "IP addresses or CIDR ranges whose X-Forwarded-* headers Forgejo trusts (REVERSE_PROXY_TRUSTED_PROXIES). A public owner lists the gateway address that connects to backendUrl; the loopback default trusts nothing else.";
+      };
     }
   );
 
@@ -87,7 +95,7 @@ in
             };
             security = {
               REVERSE_PROXY_LIMIT = 1;
-              REVERSE_PROXY_TRUSTED_PROXIES = "*";
+              REVERSE_PROXY_TRUSTED_PROXIES = lib.concatStringsSep "," cfg.trustedProxies;
             };
             actions = {
               ENABLED = true;
