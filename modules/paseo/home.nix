@@ -23,7 +23,7 @@ let
           enabled = false;
           injectIntoAgents = false;
         };
-        relay.enabled = true;
+        relay.enabled = cfg.relay.enable;
       };
       agents.providers = {
         claude.enabled = osConfig.modules.claude-code.enable;
