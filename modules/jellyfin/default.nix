@@ -29,7 +29,7 @@ in
     (lib.mkIf s.enabled {
       modules.ytdl-sub.enable = lib.mkIf (!s.standalone) true;
 
-      systemd.tmpfiles.rules = map (dir: "d ${builtins.toJSON dir} 0755 jellyfin jellyfin -") [
+      systemd.tmpfiles.rules = map (dir: "d ${builtins.toJSON dir} 0750 jellyfin jellyfin -") [
         root
         "${root}/cache"
         "${root}/config"
