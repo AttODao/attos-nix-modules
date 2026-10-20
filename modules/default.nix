@@ -32,6 +32,7 @@
     ./ytdl-sub
     ./zed
     ./atcoder-go
+    ./ccpocket
     ./claude-code
     ./desktop-theme
     ./discord
