@@ -282,7 +282,7 @@ in
 
         bind = [
           (modCommand "Return" "uwsm app -t service -- footclient")
-          (modCommand "E" "uwsm app -t service -- pcmanfm")
+          (modCommand "E" "uwsm app -t service -- footclient --app-id=yazi yazi")
 
           (modCommand "Space" (noctalia "panel-toggle launcher"))
           (modCommand "S" (noctalia "panel-toggle control-center"))

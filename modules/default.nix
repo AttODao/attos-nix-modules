@@ -63,6 +63,7 @@
     ./userDirs
     ./vscode
     ./wireguard-client
+    ./yazi
     ./zsh
   ];
 }

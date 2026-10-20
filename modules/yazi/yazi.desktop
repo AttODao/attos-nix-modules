@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Yazi
+Name[ja]=Yazi ファイルマネージャ
+GenericName=File Manager
+GenericName[ja]=ファイルマネージャ
+Comment=Terminal file manager in Foot
+Exec=@FOOTCLIENT@ --app-id=yazi @YAZI@ %f
+Icon=yazi
+Terminal=false
+StartupNotify=true
+StartupWMClass=yazi
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;x-directory/normal;
+Keywords=File;Manager;Explorer;Browser;

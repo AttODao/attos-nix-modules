@@ -116,7 +116,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | thunderbird | NixOS + HM | EDS・GNOME Keyring |
 | fonts | NixOS | — |
 | zsh | NixOS + HM | Starship同梱 |
-| hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・PCManFM・userDirs（FootからFonts） |
+| hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・Yazi・userDirs（FootからFonts） |
 | greeter | NixOS | Hyprland |
 | solaar | NixOS + HM | Noctalia、HM側にKando同梱 |
 | pipeasio | NixOS + HM | PipeWire |
@@ -125,7 +125,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | immich-client | HM | —（`immich upload --watch`のuser service。認証は`immich login`で行う） |
 | login-pin | NixOS | — |
 | desktop-theme | HM | Fcitx5・標準HM Qt/qt6ct設定 |
-| steam | NixOS + HM | PCManFM |
+| steam | NixOS + HM | Yazi（FootからFonts） |
 | wireguard-client | NixOS | NetworkManager |
 | limine | NixOS | — |
 | atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
@@ -133,6 +133,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | discord | HM | Fcitx5 |
 | hermes-desktop | HM | —（remote専用。接続先はHermes dashboard） |
 | foot | HM | Fonts |
+| yazi | HM | Foot（FootからFonts） |
 | ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
 | ccpocket | HM | —（CC Pocket Bridgeのuser service。agentはユーザーprofileのclaude/codexとSDK同梱のClaude Code） |
