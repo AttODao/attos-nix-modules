@@ -22,6 +22,22 @@ func TestValidPIN(t *testing.T) {
 	}
 }
 
+func TestAllowedUser(t *testing.T) {
+	for _, arguments := range [][]string{nil, {""}, {"alice"}} {
+		if user, err := allowedUser("alice", arguments); err != nil || user != "alice" {
+			t.Errorf("%q: got %q %v", arguments, user, err)
+		}
+	}
+	for _, arguments := range [][]string{{"bob"}, {"alice", "bob"}} {
+		if _, err := allowedUser("alice", arguments); err == nil {
+			t.Errorf("%q accepted", arguments)
+		}
+	}
+	if _, err := allowedUser("", nil); err == nil {
+		t.Error("unset user accepted")
+	}
+}
+
 func TestReadLine(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader(" 123456 \n\\12\nlast"))
 	for _, want := range []string{"123456", "\\12", "last"} {
@@ -35,7 +51,7 @@ func TestReadLine(t *testing.T) {
 }
 
 func TestDatabaseFormat(t *testing.T) {
-	if dbLoadInput("attodao", "$y$hash") != "attodao\n$y$hash\n" {
+	if dbLoadInput("alice", "$y$hash") != "alice\n$y$hash\n" {
 		t.Fatal("unexpected db_load input")
 	}
 	for _, tool := range []string{"mkpasswd", "db_load", "db_dump"} {
@@ -48,7 +64,7 @@ func TestDatabaseFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(t.TempDir(), "login-pin")
-	if err := store(dir, "attodao", hash); err != nil {
+	if err := store(dir, "alice", hash); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(dir, "pins.db"))
@@ -59,7 +75,7 @@ func TestDatabaseFormat(t *testing.T) {
 		t.Fatalf("temporary files left: %v", entries)
 	}
 	dump, err := exec.Command("db_dump", "-p", filepath.Join(dir, "pins.db")).Output()
-	if err != nil || !strings.Contains(string(dump), " attodao\n "+hash+"\n") {
+	if err != nil || !strings.Contains(string(dump), " alice\n "+hash+"\n") {
 		t.Fatalf("unexpected database contents:\n%s", dump)
 	}
 }
