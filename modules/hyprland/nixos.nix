@@ -38,7 +38,9 @@ in
       group = lib.mkDefault cfg.headless.seatGroup;
     };
     systemd.services = {
-      systemd-logind.restartTriggers = [ config.environment.etc."systemd/logind.conf".source ];
+      # NixOS only marks logind reloadIfChanged; nothing reloads it when logind.conf changes,
+      # so the new HandlePowerKey would stay unread until reboot. A reload trigger is enough.
+      systemd-logind.reloadTriggers = [ config.environment.etc."systemd/logind.conf".source ];
     }
     // lib.optionalAttrs cfg.headless.enable {
       seatd.environment.SEATD_VTBOUND = "0";

@@ -1,9 +1,22 @@
-{
-  config,
-  options,
-  lib,
-  ...
-}:
+{ config, lib, ... }:
+let
+  # Same shape as Home Manager's wayland.windowManager.hyprland.settings value type:
+  # attrsets merge recursively and lists concatenate, without evaluating the HM option tree here.
+  settingValueType =
+    with lib.types;
+    nullOr (oneOf [
+      bool
+      int
+      float
+      str
+      path
+      (attrsOf settingValueType)
+      (listOf settingValueType)
+    ])
+    // {
+      description = "Hyprland configuration value";
+    };
+in
 {
   imports = [
     ./nixos.nix
@@ -17,9 +30,7 @@
   options.modules.hyprland = {
     enable = lib.mkEnableOption "shared Hyprland configuration";
     settings = lib.mkOption {
-      type =
-        lib.types.attrsOf
-          (options.home-manager.users.type.getSubOptions [ ]).wayland.windowManager.hyprland.settings.type;
+      type = lib.types.attrsOf settingValueType;
       default = { };
       example = {
         monitor = [
