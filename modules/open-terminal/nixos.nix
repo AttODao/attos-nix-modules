@@ -25,8 +25,9 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = environmentFile != null && allowedOrigins != "";
-        message = "Open Terminal requires a runtime environmentFile and a nonempty CORS origin when enabled.";
+        # environmentFile is already enforced by ps.require above.
+        assertion = allowedOrigins != "";
+        message = "Open Terminal requires a nonempty CORS origin when enabled.";
       }
     ];
 

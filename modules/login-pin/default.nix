@@ -1,9 +1,4 @@
-{
-  config,
-  lib,
-  ps,
-  ...
-}:
+{ lib, ps, ... }:
 {
   imports = [ ./nixos.nix ];
 
