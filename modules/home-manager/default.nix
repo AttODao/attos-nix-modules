@@ -43,6 +43,7 @@ in
       extraSpecialArgs = { inherit attopkgs; };
       users = lib.genAttrs users (_: { });
       sharedModules = [
+        ./home.nix
         {
           # Keep this compatibility baseline fixed when Home Manager is updated.
           home.stateVersion = lib.mkDefault "26.05";

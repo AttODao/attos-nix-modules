@@ -18,24 +18,12 @@
       );
     };
 
-    systemd.user.services.discord = {
-      Unit = {
-        Description = "Discord desktop client";
-        Wants = [ "fcitx5-daemon.service" ];
-        After = [
-          "graphical-session.target"
-          "fcitx5-daemon.service"
-        ];
-      };
-
-      Service = {
-        ExecStart = "${config.programs.discord.package}/bin/discord --start-minimized";
-        KillMode = lib.mkDefault osConfig.modules.discord.service.killMode;
-        Restart = "on-failure";
-        RestartSec = 3;
-      };
-
-      Install.WantedBy = [ "graphical-session.target" ];
+    systemd.user.services.discord = config.lib.attos.graphicalAppService {
+      description = "Discord desktop client";
+      exec = "${config.programs.discord.package}/bin/discord --start-minimized";
+      wantsFcitx = true;
+      restartSec = 3;
+      killMode = osConfig.modules.discord.service.killMode;
     };
   };
 }

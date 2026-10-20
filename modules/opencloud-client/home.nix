@@ -36,18 +36,9 @@
       '';
     };
 
-    systemd.user.services.opencloud = {
-      Unit = {
-        Description = "OpenCloud desktop client";
-        After = [ "graphical-session.target" ];
-      };
-
-      Service = {
-        ExecStart = "${pkgs.opencloud-desktop}/bin/opencloud";
-        Restart = "on-failure";
-      };
-
-      Install.WantedBy = [ "graphical-session.target" ];
+    systemd.user.services.opencloud = config.lib.attos.graphicalAppService {
+      description = "OpenCloud desktop client";
+      exec = "${pkgs.opencloud-desktop}/bin/opencloud";
     };
   };
 }
