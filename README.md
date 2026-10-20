@@ -146,7 +146,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | groupware | NixOS | 同じhostのMailserver |
 | sunshine | NixOS | Hyprland・Steam |
 | mcsmanager / mailserver / wireguard-server / code-server | NixOS | — |
-| public-services（公開サーバー） | NixOS、PaseoのみHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
+| public-services（公開サーバー） | NixOS、Paseo・CC PocketはHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | traefik | NixOS | —（native `services.traefik`） |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | ytdl-sub | NixOS | —（native `services.ytdl-sub.instances`）。HMユーザーなしでも利用可能 |
@@ -177,7 +177,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
 - `open-deck-desktop.binfmt`: 既定false。Open-Deck有効時だけ`programs.appimage`をbinfmt付きで有効化する（他のAppImage用。Open-Deck自体はappimageToolsで包装済み）。
 - `paseo.{hostname,environmentFile}`: 単独時のhostnameは既定`localhost`。公開時は登録FQDNを継承する。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
-- `ccpocket.{port,allowClaudeOAuth,environmentFile}`: portは既定8765で全addressにbindする（firewallはconsumerが開ける）。`allowClaudeOAuth`（既定false）はAPI keyの代わりにClaude Codeのログインを使う`BRIDGE_ALLOW_CLAUDE_OAUTH=1`を設定する（upstreamが規約上の不確実性を明記した明示opt-in）。environmentFile未指定は各ユーザーの `~/.ccpocket/bridge.env`。fileが無ければ起動せず、`BRIDGE_API_KEY`が空なら起動を拒否する。`ANTHROPIC_API_KEY`や`BRIDGE_PUBLIC_WS_URL`もこのfileへ書く。API keyをjournalへ出さないためQR・deep linkにtokenを含めない（appでAPI keyを入力する）。固定portのため複数HMユーザーは拒否する。
+- `ccpocket.{port,allowClaudeOAuth,environmentFile}`（公開 `public-services.<FQDN>.ccpocket` と共通）: 単独利用は127.0.0.1、公開時は同じhostnameの`ssh.address`でlistenし、起動時のURL・QRに`ws://<FQDN>:<port>`を出す。公開recordは同じhostnameのssh登録が必須（local DNSはssh.addressを返す）で、`private`は既定true。portは既定8765（firewallはconsumerが開ける）。`allowClaudeOAuth`（既定false）はAPI keyの代わりにClaude Codeのログインを使う`BRIDGE_ALLOW_CLAUDE_OAUTH=1`を設定する（upstreamが規約上の不確実性を明記した明示opt-in）。environmentFile未指定は各ユーザーの `~/.ccpocket/bridge.env`。fileが無ければ起動せず、`BRIDGE_API_KEY`が空なら起動を拒否する。`ANTHROPIC_API_KEY`もこのfileへ書く。API keyをjournalへ出さないためQR・deep linkにtokenを含めない（appでAPI keyを入力する）。固定portのため複数HMユーザーは拒否する。
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: monitor / wallpaperのリスト。scalingの既定はfill。assetsやユーザーごとの調整は標準HM設定を使う。
 - `wireguard-client.tunnels`: interface名からtunnel定義（`privateKeyFile`・`addresses`・`dns`・`peers`）へのattrset、既定 `{}`。標準`networking.networkmanager.ensureProfiles`でautoconnect無効のruntime profileを作り、秘密鍵は`NetworkManager-ensure-profiles.service`がruntime fileから読んでroot専用profileへ書く（NetworkManagerは利用者uidのsecret agentにしか問い合わせないため、root agent方式では手動接続できない）。秘密の取得・復号・権限・rotationはconsumerが管理し、rotation後は同serviceを再起動する。
@@ -247,7 +247,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`,
-`paseo`, `ssh`, `code-server`, `sunshine`, `hermes`。
+`paseo`, `ccpocket`, `ssh`, `code-server`, `sunshine`, `hermes`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
 HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
