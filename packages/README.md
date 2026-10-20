@@ -28,6 +28,7 @@
 - `code-server`: consumerが固定したx86_64 standalone releaseを包装し、JetBrainsMono Nerd Fontのwoff2/CSSをworkbenchへ組み込む。upstream HTML layoutの変更はreplace-failで検出する。通常は公開 `code-server.packageSource` で選択し、moduleが標準 `services.code-server.package` へ既定値として渡す。
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
+- `file-manager-icon`: Papirusの`system-file-manager` SVGを256x256 PNGへ変換した単一file。pcmanfm・yaziのdesktop entryが共用する。
 - `open-deck-desktop`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
 - `pi`: Pi 1.3.0のversion override。base nixpkgsのworkspace一覧はそのPi releaseに従うため、このversionのruntime workspaceをcopyするinstall処理で置き換える。install checkでcodemode/MCP moduleのimportを確認する。固定nixpkgsがPi 1.3.0以上を提供したらoverrideを削除する。
 - `pi-mermaid-studio`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
