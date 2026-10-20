@@ -52,10 +52,11 @@
       attopkgs = { pkgs }: attopkgsFor pkgs;
       overlays.default = final: _prev: { attopkgs = attopkgsFor final; };
       inherit legacyPackages;
-      # hermes-desktopはupstream nix/lib.nixがeval中にlockfile sourceを読み、--no-buildのflake checkで
-      # 失敗するため、checkされるpackagesから外す（legacyPackagesとattopkgsには残る）。
+      # passthru.skipFlakeCheck = true を宣言したpackage（hermes-desktop: upstream nix/lib.nixがeval中に
+      # lockfile sourceを読み、--no-buildのflake checkで失敗する）はcheckされるpackagesから外す
+      # （legacyPackagesとattopkgsには残る）。
       packages = lib.mapAttrs (
-        _: lib.filterAttrs (name: value: lib.isDerivation value && name != "hermes-desktop")
+        _: lib.filterAttrs (_: value: lib.isDerivation value && !(value.passthru.skipFlakeCheck or false))
       ) legacyPackages;
       nixosModules.default = default;
       nixos.default = default;
