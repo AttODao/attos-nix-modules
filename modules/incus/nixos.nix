@@ -125,7 +125,7 @@ in
               "incus-startup.service"
             ];
             path = [ native.clientPackage ];
-            unitConfig.RequiresMountsFor = builtins.attrValues guest'.credentialFiles;
+            unitConfig.RequiresMountsFor = map (file: file.source) (builtins.attrValues guest'.credentialFiles);
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;

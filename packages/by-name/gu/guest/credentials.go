@@ -7,16 +7,27 @@ import (
 	"slices"
 )
 
-// The guest parent must be a dedicated root:root 0700 directory; it is never chmod/chowned.
+// The guest parent must be a dedicated 0700 directory owned by the credential's
+// owner and group ($2:$3); it is created so when missing and never chmod/chowned.
 const ensureParent = `PATH=/run/current-system/sw/bin:/bin
 [ ! -L "$1" ]
-mkdir -p -m 0700 -- "$1"
-[ "$(stat -c %u:%g:%a -- "$1")" = "0:0:700" ]
+if [ ! -e "$1" ]; then
+  mkdir -p -m 0700 -- "$1"
+  chown -- "$2:$3" "$1"
+fi
+[ "$(stat -c %U:%G:%a -- "$1")" = "$2:$3:700" ]
 `
 
-// deliverCredentials places each declared credential as root:root 0600 via a
-// temporary file and rename. Host activation never starts guests; guest boot
-// restarts the delivery unit after starting one.
+// The pushed file arrives root:root 0600; hand it to the owner before the atomic rename.
+const installFile = `PATH=/run/current-system/sw/bin:/bin
+chown -- "$2:$3" "$1.new"
+chmod -- "$4" "$1.new"
+mv -fT -- "$1.new" "$1"
+`
+
+// deliverCredentials places each declared credential with its owner, group and
+// mode via a temporary file and rename. Host activation never starts guests;
+// guest boot restarts the delivery unit after starting one.
 func deliverCredentials(name string, definition guestDefinition) error {
 	current, err := instance(name, definition.Type)
 	if err != nil {
@@ -29,11 +40,15 @@ func deliverCredentials(name string, definition guestDefinition) error {
 		if !path.IsAbs(destination) || path.Clean(destination) != destination {
 			return errors.New("invalid credential destination " + destination)
 		}
+		file := definition.CredentialFiles[destination]
+		if !file.valid() {
+			return errors.New("invalid credential file " + destination)
+		}
 		steps := [][]string{
-			guest(name, []string{"/bin/sh", "-eu", "-c", ensureParent, "sh", path.Dir(destination)}, nil, false),
+			guest(name, []string{"/bin/sh", "-eu", "-c", ensureParent, "sh", path.Dir(destination), file.Owner, file.Group}, nil, false),
 			incusArgv("file", "push", "--uid", "0", "--gid", "0", "--mode", "0600",
-				definition.CredentialFiles[destination], name+destination+".new"),
-			guest(name, []string{"mv", "-fT", "--", destination + ".new", destination}, nil, false),
+				file.Source, name+destination+".new"),
+			guest(name, []string{"/bin/sh", "-eu", "-c", installFile, "sh", destination, file.Owner, file.Group, file.Mode}, nil, false),
 		}
 		for _, step := range steps {
 			if _, err := run(step, false, nil); err != nil {

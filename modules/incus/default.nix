@@ -7,6 +7,33 @@
 let
   json = pkgs.formats.json { };
   ps = import ../public-services/lib.nix { inherit lib; };
+  accountName = lib.types.strMatching "[a-z_][a-z0-9_-]*[$]?";
+  # A plain source string keeps the root:root 0600 default; the submodule adds the guest owner.
+  credentialFile = lib.types.coercedTo ps.absolutePath (source: { inherit source; }) (
+    lib.types.submodule {
+      options = {
+        source = lib.mkOption {
+          type = ps.absolutePath;
+          description = "Host runtime path of the credential.";
+        };
+        owner = lib.mkOption {
+          type = accountName;
+          default = "root";
+          description = "Guest user owning the delivered file and its dedicated parent directory.";
+        };
+        group = lib.mkOption {
+          type = accountName;
+          default = "root";
+          description = "Guest group of the delivered file and its dedicated parent directory.";
+        };
+        mode = lib.mkOption {
+          type = lib.types.strMatching "0[0-7]{3}";
+          default = "0600";
+          description = "Delivered file mode.";
+        };
+      };
+    }
+  );
 in
 {
   imports = [ ./nixos.nix ];
@@ -68,7 +95,7 @@ in
               '';
             };
             credentialFiles = lib.mkOption {
-              type = lib.types.addCheck (lib.types.attrsOf ps.absolutePath) (
+              type = lib.types.addCheck (lib.types.attrsOf credentialFile) (
                 files:
                 lib.all (
                   destination:
@@ -100,7 +127,17 @@ in
                 ) (builtins.attrNames files)
               );
               default = { };
-              description = "Guest absolute destination paths mapped to host runtime credential paths. Destination parents must be dedicated credential directories: missing ones are created root:root 0700; existing ones must already be root:root 0700 and are never chmod/chowned. Shared top-level/system parents and dot path segments are rejected. Each file is delivered to this guest only as root:root 0600 via local/default Incus, then atomically renamed. No contents or host Age identity are copied into images/store. Consumer owns secret supply and rotation.";
+              example = lib.literalExpression ''
+                {
+                  "/var/lib/worker/token" = "/run/secrets/worker-token";
+                  "/home/dev/.app/app.env" = {
+                    source = "/run/secrets/app.env";
+                    owner = "dev";
+                    group = "users";
+                  };
+                }
+              '';
+              description = "Guest absolute destination paths mapped to host runtime credential paths, either a plain source path (delivered root:root 0600) or { source, owner, group, mode }. Destination parents must be dedicated credential directories owned by the file's owner and group with mode 0700: missing ones are created so; existing ones must already match and are never chmod/chowned. Shared top-level/system parents and dot path segments are rejected. Each file is delivered to this guest only via local/default Incus, then chowned/chmodded and atomically renamed. No contents or host Age identity are copied into images/store. Consumer owns secret supply and rotation.";
             };
             credentialRestartUnits = lib.mkOption {
               type = lib.types.listOf (lib.types.strMatching "[^[:space:]/]+\\.service");
