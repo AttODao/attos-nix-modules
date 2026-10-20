@@ -6,12 +6,13 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Pinned OCI images: image = lib.mkDefault \"name:tag@sha256:digest\"",
+      "description": "Pinned OCI images: image = lib.mkDefault \"name:tag@sha256:digest\" and runner labels \"label:docker://name:tag@sha256:digest\"",
       "managerFilePatterns": [
         "/^modules/.+\\.nix$/"
       ],
       "matchStrings": [
-        "image = lib\\.mkDefault \"(?<depName>[^:\"@]+(?::\\d+/[^:\"@]+)?):(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""
+        "image = lib\\.mkDefault \"(?<depName>[^:\"@]+(?::\\d+/[^:\"@]+)?):(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"",
+        ":docker://(?<depName>[^:\"@]+(?::\\d+/[^:\"@]+)?):(?<currentValue>[^\"@]+)@(?<currentDigest>sha256:[0-9a-f]{64})\""
       ],
       "datasourceTemplate": "docker"
     }
