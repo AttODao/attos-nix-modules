@@ -320,11 +320,11 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 自動更新
 
-Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけ。PRのタイトル・本文は日本語。
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側ホストの一覧は手動実行時のinput `consumers` で上書きできる。PRのタイトル・本文は日本語。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
 - `update/packages`: version固定のcustom package、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。
-- OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
+- OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` とForgejo runner labelの `docker://name:tag@sha256:...` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
 
 flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
 mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` する。利用側は各repoの週次更新PR（土曜05:00 JST）でpinを上げて採用し、各ホストが自身でbuild・適用する。

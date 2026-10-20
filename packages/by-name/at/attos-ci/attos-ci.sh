@@ -4,6 +4,16 @@ set -euo pipefail
 
 api() { curl -fsS -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/$1" "${@:2}"; }
 
+# git with the bot token in a header; the token never appears in URLs or remotes.
+auth_git() { git -c "http.extraHeader=Authorization: token $FORGEJO_TOKEN" "$@"; }
+
+# substitute FILE EXPECTED SED_SCRIPT: apply the substitution and fail unless EXPECTED (fixed string) is now in FILE.
+substitute() {
+  local file=$1 expected=$2
+  sed -i -E "$3" "$file"
+  grep -qF -- "$expected" "$file" || { echo "::error::$file: substitution did not apply ($expected)" >&2; exit 1; }
+}
+
 usage() {
   cat >&2 <<'USAGE'
 usage: attos-ci COMMAND [ARGS]
@@ -18,12 +28,14 @@ USAGE
 update_shared() {
   local hm tag
   hm=$(git ls-remote https://github.com/nix-community/home-manager refs/heads/master | cut -f1)
-  sed -i -E "s|(github:nix-community/home-manager/)[0-9a-f]{40}|\1$hm|" flake.nix
+  [[ $hm =~ ^[0-9a-f]{40}$ ]] || { echo "::error::could not resolve home-manager master" >&2; exit 1; }
+  substitute flake.nix "github:nix-community/home-manager/$hm" "s|(github:nix-community/home-manager/)[0-9a-f]{40}|\1$hm|"
   # Releases only: skip calendar (v2026.x), rc and +canary tags.
   tag=$(git ls-remote --tags --refs https://github.com/NousResearch/hermes-agent 'v*' | sed 's|.*refs/tags/||' | grep -E '^v[0-9]{1,3}\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-  sed -i -E "s|(github:NousResearch/hermes-agent/)v[0-9.]+|\1$tag|" flake.nix
-  sed -i -E "s|^(  version = \")[0-9.]+(\";)|\1${tag#v}\2|" packages/by-name/he/hermes-desktop/package.nix
-  sed -i -E "s|(Home Manager revision: \`?)[0-9a-f]{40}|\1$hm|; s|(現在は \`)[0-9a-f]{40}|\1$hm|" README.md
+  [ -n "$tag" ] || { echo "::error::could not resolve a hermes-agent release tag" >&2; exit 1; }
+  substitute flake.nix "github:NousResearch/hermes-agent/$tag" "s|(github:NousResearch/hermes-agent/)v[0-9.]+|\1$tag|"
+  substitute packages/by-name/he/hermes-desktop/package.nix "  version = \"${tag#v}\";" "s|^(  version = \")[0-9.]+(\";)|\1${tag#v}\2|"
+  substitute README.md "現在は \`$hm\`" "s|(現在は \`)[0-9a-f]{40}|\1$hm|"
   nix flake update
 }
 
@@ -96,12 +108,15 @@ update_packages() {
 }
 
 check_consumers() {
-  local spec repo hosts host dir
+  local spec repo hosts host tmp dir
   nix flake check --no-build "path:$PWD"
+  tmp=$(mktemp -d)
+  # shellcheck disable=SC2064 # expand $tmp now.
+  trap "rm -rf -- '$tmp'" EXIT
   for spec in "$@"; do
     repo=${spec%%:*}; hosts=${spec#*:}
-    dir=$(mktemp -d)
-    git clone -q --depth 1 "https://bot:$FORGEJO_TOKEN@${GITHUB_SERVER_URL#https://}/$repo.git" "$dir"
+    dir=$tmp/${repo//\//--}
+    auth_git clone -q --depth 1 "$GITHUB_SERVER_URL/$repo.git" "$dir"
     for host in ${hosts//,/ }; do
       echo "== $repo#$host"
       nix eval --no-write-lock-file --override-input attos-nix-modules "path:$PWD" --raw "path:$dir#nixosConfigurations.$host.config.system.build.toplevel.drvPath" >/dev/null
@@ -122,7 +137,7 @@ pr() {
     if [ -s "$summary_file" ]; then cat "$summary_file"; fi
   )
   git -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qam "$title"
-  git push -qf "https://bot:$FORGEJO_TOKEN@${GITHUB_SERVER_URL#https://}/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
+  auth_git push -qf "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
   existing=$(api "pulls?state=open&limit=50" | jq --arg b "$branch" '[.[] | select(.head.ref == $b)][0].number // empty')
   if [ -n "$existing" ]; then
     api "pulls/$existing" -X PATCH -d "$(jq -n --arg t "$title" --arg b "$body" '{title: $t, body: $b}')" >/dev/null
