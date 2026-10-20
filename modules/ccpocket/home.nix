@@ -33,6 +33,9 @@ in
           "BRIDGE_DISABLE_MDNS=1"
           # Keep BRIDGE_API_KEY out of the startup deep link/QR printed to the journal.
           "BRIDGE_DEMO_MODE=1"
+        ]
+        ++ lib.optional cfg.allowClaudeOAuth "BRIDGE_ALLOW_CLAUDE_OAUTH=1"
+        ++ [
           # The agents run claude/codex/git from the user's profile.
           "PATH=${config.home.path}/bin:${
             lib.makeBinPath (

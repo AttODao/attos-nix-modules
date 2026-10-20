@@ -10,6 +10,9 @@ in
       default = 8765;
       description = "WebSocket port the bridge listens on (all addresses); the consumer opens its firewall.";
     };
+    allowClaudeOAuth = lib.mkEnableOption ''
+      Claude sessions using this OS's Claude Code login (BRIDGE_ALLOW_CLAUDE_OAUTH=1)
+      instead of ANTHROPIC_API_KEY; upstream marks this as an explicit opt-in'';
     environmentFile =
       (import ../public-services/lib.nix { inherit lib; }).pathOption
         "Runtime environment file with BRIDGE_API_KEY and Claude/Codex credentials; null uses each user’s ~/.ccpocket/bridge.env.";
