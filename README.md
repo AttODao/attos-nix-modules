@@ -167,7 +167,11 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
 - `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
-- `greeter.{cursor,output}`: cursor archiveは既定`desktop-theme.cursor`で、有効時に非null必須。theme名/sizeは`desktop-theme.{cursorName,cursorSize}`に従う。outputは既定null。
+- `greeter.{cursor,output,defaultUser}`: cursor archiveは既定`desktop-theme.cursor`で、有効時に非null必須。theme名/sizeは`desktop-theme.{cursorName,cursorSize}`に従う。outputは既定null。`defaultUser`（既定null）はgreeterで事前選択するaccountで、nullならuser欄は空のまま。
+- `login-pin.{user,pinDatabaseFile}`: 有効時にどちらも必須。`user`はPINでログインできる唯一のaccount（他のuserはPIN promptを通らずpasswordで認証）。`pinDatabaseFile`はpam_userdbのDB（`.db`で終わる絶対runtime path）。`/etc/security/login-pin/pins.db`を指定した場合だけhost管理となり、`set-login-pin`コマンドを導入してrootがそこへ書く。別pathは復号済みsecretなど利用側が供給する読み取り専用DB。greetd/loginのPAMには`pam_faillock`（5回失敗で300秒lock、成功で解除）と`pam_faildelay`（3秒）を入れる。標準`security.pam.services.<n>.failDelay`は早期pam_unixのpassword promptを追加してPIN promptの前にpasswordを求めるため使わない。
+- `thunderbird.{profile,accounts}`: `profile`（既定`default`）は全HMユーザーに作る既定profile名。`accounts`（既定`{}`）はHMの`accounts.email.accounts`と同じ形のattrsで、全HMユーザーへ`thunderbird.enable = true`既定で適用する。1件以上宣言するときは1件だけ`primary = true`にする。address・server・表示名などの個人識別情報は利用側に置き、認証情報は各ユーザーのprofileに残る。
+- `floorp.{vaultwardenUrl,extensions}`: `vaultwardenUrl`（既定null）はBitwarden拡張のself-hosted server presetで、nullなら拡張の環境設定を出さない。`extensions`（拡張ID→install URL、既定は同梱の一覧）はpolicyで`normal_installed`として導入し、ユーザーは無効化できる。利用側の定義は既定一覧全体を置き換える。
+- `opencloud-client.serverUrl`: 有効時必須。clientのaccount wizardに事前入力するserver URL。
 - `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。accountのpasswordはruntime `passwordFile` で渡す。共通入力は全HMユーザーへの調整可能な既定値。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。falseは共有のPlymouth・quiet kernel/console/initrd presetを適用しない。kernel/GPUの選択はconsumer。
@@ -176,8 +180,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 - `steam.firewall.{remotePlay,dedicatedServer,localNetworkGameTransfers}`: 各既定false。必要な開放をconsumerが選択する。Steam enableだけでこれらのportは開かない。
 - `home-manager.backupFileExtension`: nullまたは非空文字列、既定null。標準HMの既存ファイルbackup suffixへ転送する。
 - `open-deck-desktop.binfmt`: 既定false。Open-Deck有効時だけ`programs.appimage`をbinfmt付きで有効化する（他のAppImage用。Open-Deck自体はappimageToolsで包装済み）。
-- `paseo.{hostname,environmentFile}`: 単独時のhostnameは既定`localhost`。公開時は登録FQDNを継承する。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
-- `ccpocket.{port,allowClaudeOAuth,environmentFile}`（公開 `public-services.<FQDN>.ccpocket` と共通）: 単独利用は127.0.0.1、公開時は同じhostnameの`ssh.address`でlistenし、起動時のURL・QRに`ws://<FQDN>:<port>`を出す。公開recordは同じhostnameのssh登録が必須（local DNSはssh.addressを返す）で、`private`は既定true。portは既定8765（firewallはconsumerが開ける）。`allowClaudeOAuth`（既定false）はAPI keyの代わりにClaude Codeのログインを使う`BRIDGE_ALLOW_CLAUDE_OAUTH=1`を設定する（upstreamが規約上の不確実性を明記した明示opt-in）。environmentFile未指定は各ユーザーの `~/.ccpocket/bridge.env`。fileが無ければ起動せず、`BRIDGE_API_KEY`が空なら起動を拒否する。`ANTHROPIC_API_KEY`もこのfileへ書く。API keyをjournalへ出さないためQR・deep linkにtokenを含めない（appでAPI keyを入力する）。固定portのため複数HMユーザーは拒否する。
+- `paseo.{hostname,environmentFile,relay.enable}`: 単独時のhostnameは既定`localhost`。公開時は登録FQDNを継承する。environmentFile未指定は各ユーザーの `~/paseo/daemon.env`。`relay.enable`（既定false）はPaseo relayを有効にし、local listenerの外からdaemonへ到達できるようにする。既存の固定ポート127.0.0.1:6767を維持するため、複数ユーザーでのdaemon同時起動は競合する。
+- `ccpocket.{port,allowClaudeOAuth,environmentFile}`（公開 `public-services.<FQDN>.ccpocket` と共通）: 単独利用は127.0.0.1、公開時は同じhostnameの`ssh.address`でlistenし、起動時のURL・QRに`ws://<FQDN>:<port>`を出す。bridgeはTLSなしの平文ws://で話すため、listen addressと登録hostnameはprivate DNS/VPN network内からだけ到達できるものに限る。公開recordは同じhostnameのssh登録が必須（local DNSはssh.addressを返す）で、`private`は既定true。portは既定8765（firewallはconsumerが開ける）。`allowClaudeOAuth`（既定false）はAPI keyの代わりにClaude Codeのログインを使う`BRIDGE_ALLOW_CLAUDE_OAUTH=1`を設定する（upstreamが規約上の不確実性を明記した明示opt-in）。environmentFile未指定は各ユーザーの `~/.ccpocket/bridge.env`。fileが無ければ起動せず、`BRIDGE_API_KEY`が空なら起動を拒否する。`ANTHROPIC_API_KEY`もこのfileへ書く。API keyをjournalへ出さないためQR・deep linkにtokenを含めない（appでAPI keyを入力する）。固定portのため複数HMユーザーは拒否する。
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: monitor / wallpaperのリスト。scalingの既定はfill。assetsやユーザーごとの調整は標準HM設定を使う。
 - `wireguard-client.tunnels`: interface名からtunnel定義（`privateKeyFile`・`addresses`・`dns`・`peers`）へのattrset、既定 `{}`。標準`networking.networkmanager.ensureProfiles`でautoconnect無効のruntime profileを作り、秘密鍵は`NetworkManager-ensure-profiles.service`がruntime fileから読んでroot専用profileへ書く（NetworkManagerは利用者uidのsecret agentにしか問い合わせないため、root agent方式では手動接続できない）。秘密の取得・復号・権限・rotationはconsumerが管理し、rotation後は同serviceを再起動する。
@@ -253,7 +257,13 @@ DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `publ
 HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
 
-Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはForgejo内蔵SSH server（user `git`）を `backendUrl` のaddressの2222でlistenさせ、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。
+Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはForgejo内蔵SSH server（user `git`）を `backendUrl` のaddressの2222でlistenさせ、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。`forgejo.trustedProxies`（IP/CIDRのlist、既定loopbackのみ）は`X-Forwarded-*`を信頼するproxyで、公開時は`backendUrl`へ接続してくるgateway（Traefik）のaddressを利用側が列挙する。未指定のままではclient IPがgateway addressとして記録される。
+
+Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（WireGuard等）で、Traefikのwants/afterへ追加する。
+
+SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
+OpenCloudの公開共有linkは既定でpasswordを必須にする（`OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD=true`）。Jellyfinの保存先は`jellyfin:jellyfin` 0750で作る。
+attos-hoyo-dashboardの `timezoneOffset`（`+09:00`形式、local配置時必須）はdailyリセット時刻の固定UTC offsetで、`time.timeZone`から導出しない。DBはimageが作る`POSTGRES_USER`（superuser）で接続する。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上書きするdomain whitelistも空にする。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。設定はNixと `environmentFile` だけが正で、`CONFIG_FILE` を読み書きできないpathに向けるため既存 `dataDir/vw-data/config.json` は読まれず、adminパネルの設定保存は永続化しない。
@@ -281,7 +291,7 @@ Traefikはgateway host上のnative serviceで、各 `backendUrl` へ直接接続
 code-server / Sunshineも `enable = true; host = "<所有OS>";` でnative実体を有効にする。
 単独利用は同じtyped入力を`modules.code-server` / `modules.sunshine`へ指定する。
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
-`HASHED_PASSWORD`）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
+`HASHED_PASSWORD`）。単独利用は127.0.0.1:4444、公開時は他のnative serviceと同じく `backendUrl` のaddress:portでlistenする（全interfaceへbindしない）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 Nerd Font組み込みpackage（`attopkgs.code-server { src = <固定したstandalone release>; }`）は、
 公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
 SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。headless待機とnative autoStartが有効なら、output再作成後にSunshineも起動する。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
@@ -306,7 +316,7 @@ native serviceは127.0.0.1でlistenし、OCI frontendはloopbackだけへportを
 サーバーの追加入力は`dns.listenAddresses`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flake}`。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、Vaultwardenの`extraHosts`（hostの`networking.hosts`へ追加）、Karakeepの非秘密environmentも公開service recordへ指定する。
 Incusの公開 `guests.<name>.{type,launchConfig,managedDeviceNames}`（`type` は `virtual-machine` / `container`）はhost activationでは適用せず、`guest <name> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足guestだけ `rebuild.flake`（registry別名やgit URLなどのflake参照。毎回最新を取得し、`rebuild ACTION FLAKE` か `--flake` で上書き可能）の標準NixOS metadataとVMならqcow2、containerならsquashfsをbuild・importして作成し、作成用imageを削除する。同名の別type instanceは削除/変換せず拒否する。consumer guestは標準 `incus-virtual-machine-image.nix` / `incus-container-image.nix` とroot password lockを明示する。初期login password/private fileの再供給は `guest <name> passwd <user>` / `guest <name> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
-Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。nixpkgs標準 `services.forgejo-runner` を使い、Forgejoの「新しいランナーを作成」で得た `uuid` と、対になるtokenだけを含む `tokenFile` が必要（廃止された登録トークンには非対応）。`docker=false` はhost実行専用runner用。VMへのtoken配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。destinationの親directoryは専用credential用root:root 0700に限定し、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下やdot path segmentsも型で拒否する。共有 `incus-guest-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600へatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
+Forgejo runnerはIncus agentを持つ非container VMだけで有効化できる。nixpkgs標準 `services.forgejo-runner` を使い、Forgejoの「新しいランナーを作成」で得た `uuid` と、対になるtokenだけを含む `tokenFile` が必要（廃止された登録トークンには非対応）。`docker=false` はhost実行専用runner用。`dockerHost`（既定null）はjob containerへ渡すDocker socket（`container.docker_host`）で、nullは `-`（socketを渡さない）。`"automount"` はrunner VMのsocketを全jobへmountし、workflowにVMのrootを与えるため明示opt-inに限る。VMへのtoken配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。値はsource pathの文字列（root:root 0600で配置）か `{ source; owner; group; mode; }`（既定 `root` / `root` / `0600`）。destinationの親directoryは専用credential用でowner:group 0700に限定し、無ければそのowner:groupで作り、既存directoryのowner/modeは変更せず、不一致なら拒否する。`/etc`・`/root` 等の共有directory直下や`.`/`..`のpath segmentも型で拒否する。共有 `incus-guest-credentials-<name>.service` がlocal/default Incusで各fileをroot:root 0600で送り、guest内でchown/chmodしてatomic配置し、`credentialRestartUnits`（既定[]）をguestでrestartする。guest側のuser serviceが読むenvはownerをそのuserにして直接配送でき、root所有fileを置き直すoneshot unitは不要。sourceの復号/owner/modeとrotation時の配送unit restartはconsumerの責任。画像/storeには内容を入れず、host Age identityを自動配送しない。ytdl-subの`startConditionFile`は任意のruntime readiness marker。
 Karakeep/ChromeのOCI version/index digestとPaseo 0.12.0を固定し、runtime latest取得をしない。Forgejo（LTSでなく`forgejo`）・Immich・Vaultwarden・OpenCloud（rolling）・Jellyfin・SearXNG・ytdl-subは利用ホストのnixpkgsのpackageを使う。既存dataを作ったversionより古いpackageへ戻さない（Karakeep・Open WebUIはnixpkgs版がimageより古いためDockerのまま）。
 localサービスの必須値、Docker依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
@@ -315,7 +325,7 @@ localサービスの必須値、Docker依存、既存stateの扱いは[Wiki](htt
 機器固有の音声設定、Steamのfirewall policy、Wallpaper Engine assets、unfree licenseの許可は利用側で管理する。
 公開APIがある機能はそのoptionで選択し、package導入だけのアプリ、標準OBS設定、外部AAGLは利用側に残す。
 `modules.openssh.enable` はserver有効化、`modules.ssh.enable` はclient設定で別の選択。
-login-pinはattodaoのgreetd / TTYに限定する。
+login-pinは`login-pin.user`に指定した1 accountのgreetd / TTYに限定する。
 Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron sandboxは無効。
 
 ## 自動更新
