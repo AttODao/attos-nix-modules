@@ -22,6 +22,12 @@ in
       default = true;
       description = "Run jobs in Docker containers (the default ubuntu-latest/docker labels). False leaves Docker off for host-only runners whose labels are set through the standard services.forgejo-runner option.";
     };
+    dockerHost = lib.mkOption {
+      type = lib.types.nullOr lib.types.nonEmptyStr;
+      default = null;
+      example = "automount";
+      description = "container.docker_host for the runner. Null keeps the host Docker socket out of job containers (\"-\"); \"automount\" mounts it into every job and gives workflows root on the runner VM.";
+    };
   };
 
   config = lib.mkIf (cfg.enable && cfg.docker) {

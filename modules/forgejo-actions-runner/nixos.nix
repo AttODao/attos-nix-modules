@@ -56,7 +56,10 @@ in
                 ]
               );
             };
-            container.docker_host = lib.mkIf cfg.docker (lib.mkDefault "automount");
+            # Jobs get the host Docker socket only when the consumer opts in via dockerHost.
+            container.docker_host = lib.mkIf cfg.docker (
+              lib.mkDefault (if cfg.dockerHost == null then "-" else cfg.dockerHost)
+            );
           };
           secrets.server.connections.default.token_url = cfg.tokenFile;
         };
