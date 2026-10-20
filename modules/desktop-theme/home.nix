@@ -1,5 +1,6 @@
 {
   osConfig,
+  options,
   config,
   lib,
   pkgs,
@@ -7,6 +8,7 @@
   ...
 }:
 let
+  cfg = osConfig.modules.desktop-theme;
   cursor = config.home.pointerCursor;
   cursorSize = toString cursor.size;
   cursorEnvironment = {
@@ -20,19 +22,27 @@ let
     QT_IM_MODULE = "fcitx";
     SDL_IM_MODULE = "fcitx";
   };
+  waylandEnvironment = {
+    QT_QPA_PLATFORM = "wayland;xcb";
+    MOZ_ENABLE_WAYLAND = "1";
+  };
 in
 {
-  config = lib.mkIf osConfig.modules.desktop-theme.enable {
+  config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = cfg.cursor != null || options.home.pointerCursor.package.isDefined;
+        message = "desktop-theme: supply modules.desktop-theme.cursor or home.pointerCursor.package for every HM user.";
+      }
+    ];
+
     home.pointerCursor = {
       enable = true;
-      package = lib.mkDefault (
-        if osConfig.modules.desktop-theme.cursor != null then
-          attopkgs.custom-cursors { cursor = osConfig.modules.desktop-theme.cursor; }
-        else
-          throw "desktop-theme: supply modules.desktop-theme.cursor or home.pointerCursor.package for every HM user."
+      package = lib.mkIf (cfg.cursor != null) (
+        lib.mkDefault (attopkgs.custom-cursors { cursor = cfg.cursor; })
       );
-      name = lib.mkDefault osConfig.modules.desktop-theme.cursorName;
-      size = lib.mkDefault osConfig.modules.desktop-theme.cursorSize;
+      name = lib.mkDefault cfg.cursorName;
+      size = lib.mkDefault cfg.cursorSize;
       gtk.enable = true;
       x11.enable = true;
       hyprcursor.enable = true;
@@ -60,15 +70,14 @@ in
       };
     };
 
-    home.sessionVariables = lib.mapAttrs (_: lib.mkDefault) inputEnvironment;
+    home.sessionVariables = lib.mapAttrs (_: lib.mkDefault) (inputEnvironment // waylandEnvironment);
 
     systemd.user.sessionVariables = lib.mapAttrs (_: lib.mkDefault) (
       inputEnvironment
+      // waylandEnvironment
       // cursorEnvironment
       // {
-        QT_QPA_PLATFORM = "wayland;xcb";
         QT_AUTO_SCREEN_FACTOR = "1";
-        MOZ_ENABLE_WAYLAND = "1";
       }
     );
   };
