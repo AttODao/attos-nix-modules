@@ -75,7 +75,7 @@ in
               PUBLIC_ORIGIN = ps.url s 8082;
               RP_ID = s.hostname;
               SESSION_TTL_DAYS = "7";
-              TIMEZONE_OFFSET = "+09:00";
+              TIMEZONE_OFFSET = ps.require "attos-hoyo-dashboard" "timezoneOffset" s.cfg.timezoneOffset;
             }
           );
           autoRemoveOnStop = lib.mkDefault false;
