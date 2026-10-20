@@ -15,7 +15,7 @@ in
       port = lib.mkOption {
         type = lib.types.port;
         default = 8765;
-        description = "WebSocket port; the consumer opens its firewall.";
+        description = "WebSocket port; the consumer opens its firewall. The bridge speaks plain ws:// without TLS, so the listen address and the registered hostname must only be reachable over the private DNS/VPN network.";
       };
       allowClaudeOAuth = lib.mkEnableOption ''
         Claude sessions using this OS's Claude Code login (BRIDGE_ALLOW_CLAUDE_OAUTH=1)

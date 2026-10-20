@@ -16,6 +16,12 @@ in
         default = "admin";
         description = "Administrator created on first start while no users exist; changing it later does not rename existing users.";
       };
+      timezoneOffset = lib.mkOption {
+        type = lib.types.nullOr (lib.types.strMatching "[+-][0-9]{2}:[0-9]{2}");
+        default = null;
+        example = "+09:00";
+        description = "Fixed UTC offset (TIMEZONE_OFFSET) used for the dashboard's daily reset times; required when deployed locally. Nix cannot derive it from time.timeZone.";
+      };
     }
   );
 

@@ -6,6 +6,7 @@
   ...
 }:
 let
+  cfg = osConfig.modules.thunderbird;
   thunderbirdMinimizeOnStartupAddon = pkgs.runCommandLocal "thunderbird-minimize-on-startup" { } ''
     install -Dm444 ${
       pkgs.fetchurl {
@@ -17,18 +18,14 @@ let
   '';
 in
 {
-  config = lib.mkIf osConfig.modules.thunderbird.enable {
+  config = lib.mkIf cfg.enable {
     programs.thunderbird = {
       enable = true;
       package = pkgs.thunderbird-esr;
       languagePacks = [ "ja" ];
 
-      profiles.attodao = {
+      profiles.${cfg.profile} = {
         isDefault = true;
-        accountsOrder = [
-          "attodao"
-          "gmail"
-        ];
         settings = {
           "extensions.autoDisableScopes" = 0;
           "mail.shell.checkDefaultClient" = false;
@@ -42,40 +39,17 @@ in
     accounts = {
       calendar.basePath = ".local/share/calendars";
 
-      email.accounts = {
-        attodao = {
-          primary = true;
-          address = "attodao@attodao.cc";
-          realName = "AttODao";
-          userName = "attodao@attodao.cc";
-
-          imap = {
-            host = "mail.attodao.cc";
-            port = 993;
-            authentication = "plain";
-            tls.enable = true;
-          };
-
-          smtp = {
-            host = "mail.attodao.cc";
-            port = 587;
-            authentication = "plain";
-            tls = {
-              enable = true;
-              useStartTls = true;
-            };
-          };
-
-          thunderbird.enable = true;
-        };
-
-        gmail = {
-          address = "atsuatat@gmail.com";
-          realName = "AttODao";
-          flavor = "gmail.com";
-          thunderbird.enable = true;
-        };
-      };
+      # Consumer-declared accounts; each is wired to Thunderbird unless the consumer says otherwise.
+      email.accounts = lib.mapAttrs (
+        _: account:
+        account
+        // {
+          thunderbird = {
+            enable = lib.mkDefault true;
+          }
+          // (account.thunderbird or { });
+        }
+      ) cfg.accounts;
     };
   };
 }

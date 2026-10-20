@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	allowedUser = "attodao"
-	directory   = "/etc/security/login-pin"
+	// The NixOS module sets this to the account the PAM stack accepts a PIN for.
+	userVariable = "LOGIN_PIN_USER"
+	directory    = "/etc/security/login-pin"
 )
 
 var pinPattern = regexp.MustCompile(`^[0-9]{6}$`)
@@ -27,6 +28,21 @@ func validPIN(pin string) bool { return pinPattern.MatchString(pin) }
 
 // pam_userdb reads a Berkeley DB hash keyed by user name with a crypt(3) value.
 func dbLoadInput(user, hash string) string { return user + "\n" + hash + "\n" }
+
+// allowedUser resolves the only account a PIN may be stored for: the optional
+// argument must match the configured user, and an unset variable refuses every user.
+func allowedUser(configured string, arguments []string) (string, error) {
+	if len(arguments) > 1 {
+		return "", errors.New("usage: set-login-pin [user]")
+	}
+	if configured == "" {
+		return "", errors.New(userVariable + " is not set; the login-pin module configures it")
+	}
+	if len(arguments) == 1 && arguments[0] != "" && arguments[0] != configured {
+		return "", fmt.Errorf("user '%s' is not enabled for login PIN", arguments[0])
+	}
+	return configured, nil
+}
 
 func stty(argument string) {
 	command := exec.Command("stty", argument)
@@ -92,15 +108,9 @@ func store(dir, user, hash string) error {
 }
 
 func set(arguments []string) error {
-	user := allowedUser
-	if len(arguments) > 1 {
-		return errors.New("usage: set-login-pin [user]")
-	}
-	if len(arguments) == 1 && arguments[0] != "" {
-		user = arguments[0]
-	}
-	if user != allowedUser {
-		return fmt.Errorf("user '%s' is not enabled for login PIN", user)
+	user, err := allowedUser(os.Getenv(userVariable), arguments)
+	if err != nil {
+		return err
 	}
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("run as root, for example: sudo set-login-pin %s", user)

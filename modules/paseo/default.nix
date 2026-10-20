@@ -12,6 +12,7 @@
     environmentFile =
       (import ../public-services/lib.nix { inherit lib; }).pathOption
         "Runtime environment file; null uses each user’s ~/paseo/daemon.env.";
+    relay.enable = lib.mkEnableOption "the Paseo relay, which exposes the daemon beyond the local listener through the relay service";
   };
 
   config = lib.mkIf config.modules.paseo.enable {

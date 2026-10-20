@@ -20,7 +20,6 @@ in
       enable = true;
 
       settings = {
-        user.default = lib.mkDefault "attodao";
         session.default = lib.mkDefault "Hyprland (uwsm-managed)";
 
         cursor = {
@@ -28,6 +27,9 @@ in
           size = lib.mkDefault config.modules.desktop-theme.cursorSize;
           path = lib.mkDefault "${cursorPackage}/share/icons";
         };
+      }
+      // lib.optionalAttrs (cfg.defaultUser != null) {
+        user.default = lib.mkDefault cfg.defaultUser;
       }
       // lib.optionalAttrs (cfg.output != null) {
         output.name = lib.mkDefault cfg.output;

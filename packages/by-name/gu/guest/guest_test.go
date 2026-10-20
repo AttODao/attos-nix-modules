@@ -16,7 +16,10 @@ const sampleConfig = `{
       "launchConfig": {"devices": {"gpu": {"type": "gpu", "pci": "0000:01:00.0", "productid": 1, "required": true}}},
       "managedDeviceNames": ["gpu"],
       "credentialUnit": "incus-guest-credentials-worker.service",
-      "credentialFiles": {"/var/lib/worker/token.env": "/run/secrets/worker.env"},
+      "credentialFiles": {
+        "/var/lib/worker/token.env": {"source": "/run/secrets/worker.env", "owner": "root", "group": "root", "mode": "0600"},
+        "/home/dev/.app/app.env": {"source": "/run/secrets/app.env", "owner": "dev", "group": "users", "mode": "0640"}
+      },
       "credentialRestartUnits": ["worker.service"]
     },
     "box": {"type": "container", "launchConfig": {}}
@@ -41,6 +44,25 @@ func TestParseConfigRejectsInvalidNames(t *testing.T) {
 	cfg := testConfig(t)
 	if unit := cfg.Guests["worker"].CredentialUnit; unit == nil || *unit != "incus-guest-credentials-worker.service" {
 		t.Errorf("credential unit %v", unit)
+	}
+	if file := cfg.Guests["worker"].CredentialFiles["/home/dev/.app/app.env"]; file.Owner != "dev" || file.Group != "users" || file.Mode != "0640" {
+		t.Errorf("credential file %+v", file)
+	}
+}
+
+func TestParseConfigRejectsInvalidCredentialFiles(t *testing.T) {
+	for _, file := range []string{
+		`"/run/secrets/x"`,
+		`{"owner": "root", "group": "root", "mode": "0600"}`,
+		`{"source": "/run/secrets/x", "owner": "Bad User", "group": "root", "mode": "0600"}`,
+		`{"source": "/run/secrets/x", "owner": "root", "group": "r;m", "mode": "0600"}`,
+		`{"source": "/run/secrets/x", "owner": "root", "group": "root", "mode": "600"}`,
+		`{"source": "/run/secrets/x", "owner": "root", "group": "root", "mode": "0699"}`,
+	} {
+		data := `{"guests": {"ok": {"type": "container", "credentialFiles": {"/var/lib/ok/x": ` + file + `}}}}`
+		if _, err := parseConfig([]byte(data)); err == nil {
+			t.Errorf("accepted %s", file)
+		}
 	}
 }
 

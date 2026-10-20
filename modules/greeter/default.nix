@@ -19,6 +19,11 @@
       default = null;
       description = "Greeter output name; null leaves output selection to Noctalia.";
     };
+    defaultUser = lib.mkOption {
+      type = lib.types.nullOr lib.types.nonEmptyStr;
+      default = null;
+      description = "Account preselected in the greeter; null leaves the user field empty.";
+    };
   };
 
   config = lib.mkIf config.modules.greeter.enable {

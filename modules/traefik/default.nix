@@ -32,5 +32,11 @@ in
       default = [ ];
       description = "Explicit wildcard certificate requests; empty lets Traefik request certificates for the configured hostname rules.";
     };
+    listenServices = mkOption {
+      type = types.listOf (types.strMatching "[^[:space:]/]+\\.service");
+      default = [ ];
+      example = [ "wireguard-wg0.service" ];
+      description = "Network setup services pulled in and ordered before Traefik, for listeners bound to addresses those services create.";
+    };
   };
 }

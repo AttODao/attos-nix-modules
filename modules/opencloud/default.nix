@@ -46,7 +46,7 @@ in
           # The gateway terminates TLS with a valid certificate; keep verification on.
           OC_INSECURE = "false";
           PROXY_TLS = "false";
-          OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD = "false";
+          OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD = "true";
         };
       };
       systemd.tmpfiles.settings."10-opencloud-root" = {
