@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "sunshine";
   cfg = selected.cfg;
   steam = lib.getExe config.programs.steam.package;

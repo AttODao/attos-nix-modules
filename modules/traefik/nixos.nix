@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   cfg = config.modules.traefik;
   environmentFile = ps.require "modules.traefik" "environmentFile" cfg.environmentFile;
   routes = ps.routes config;
@@ -308,8 +308,8 @@ in
     systemd.services.traefik = {
       unitConfig.RequiresMountsFor = [ environmentFile ];
       # Bound listeners need their addresses configured before Traefik binds them.
-      wants = [ "network-online.target" ] ++ cfg.listenServices;
-      after = [ "network-online.target" ] ++ cfg.listenServices;
+      wants = ps.afterNetworkOnline.wants ++ cfg.listenServices;
+      after = ps.afterNetworkOnline.after ++ cfg.listenServices;
       serviceConfig = {
         EnvironmentFile = environmentFile;
         # The Cloudflare DNS-01 provider reads CF_DNS_API_TOKEN.

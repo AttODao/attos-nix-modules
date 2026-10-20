@@ -2,10 +2,10 @@
   config,
   lib,
   options,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "ollama";
   root = ps.require "open-webui" "dataDir" s.cfg.dataDir;
   terminalEnabled = !s.standalone || config.modules.open-terminal.enable;

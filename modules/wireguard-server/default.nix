@@ -3,10 +3,10 @@
   lib,
   pkgs,
   attopkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "wireguard-server";
   inherit (lib) mkOption types;
   mode = types.strMatching "0[0-7]{3}";

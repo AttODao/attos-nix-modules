@@ -1,11 +1,11 @@
 {
   config,
   lib,
+  ps,
   ...
 }:
 let
   cfg = config.modules.ytdl-sub;
-  ps = import ../public-services/lib.nix { inherit lib; };
   root = ps.require "ytdl-sub" "dataDir" cfg.dataDir;
   cookie = ps.require "ytdl-sub" "cookieFile" cfg.cookieFile;
 in

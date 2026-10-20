@@ -1,22 +1,15 @@
 {
   config,
   lib,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "vaultwarden";
   root = ps.require "vaultwarden" "dataDir" s.cfg.dataDir;
   dataFolder = "${root}/vw-data";
   environmentFile = ps.require "vaultwarden" "environmentFile" s.cfg.environmentFile;
-  listen =
-    if s.standalone then
-      {
-        address = "127.0.0.1";
-        port = "8000";
-      }
-    else
-      ps.backendEndpoint s;
+  listen = ps.listen s 8000;
 in
 {
   options.modules = ps.moduleOptions "vaultwarden" (
@@ -54,8 +47,8 @@ in
         config = lib.mapAttrs (_: lib.mkDefault) (
           {
             DATA_FOLDER = dataFolder;
-            ROCKET_ADDRESS = lib.removeSuffix "]" (lib.removePrefix "[" listen.address);
-            ROCKET_PORT = lib.toInt listen.port;
+            ROCKET_ADDRESS = listen.address;
+            ROCKET_PORT = listen.port;
             # Ignore any saved config.json so Nix and the environment file stay authoritative.
             CONFIG_FILE = "/dev/null/config.json";
             DOMAIN = ps.url s 8000;

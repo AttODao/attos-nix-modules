@@ -1,6 +1,10 @@
-{ lib, options, ... }:
+{
+  lib,
+  options,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   nullable =
     type: description:
     lib.mkOption {

@@ -3,10 +3,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   registrySettings = builtins.listToAttrs (
     map (entry: {
       name = entry.hostname;

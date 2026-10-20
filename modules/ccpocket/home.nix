@@ -4,10 +4,11 @@
   lib,
   pkgs,
   attopkgs,
+  ps,
   ...
 }:
 let
-  selected = (import ../public-services/lib.nix { inherit lib; }).select osConfig "ccpocket";
+  selected = ps.select osConfig "ccpocket";
   cfg = selected.cfg;
   # Standalone stays on loopback; a public owner listens on its same-hostname SSH address.
   listenAddress =

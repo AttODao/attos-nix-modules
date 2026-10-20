@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "hermes";
   cfg = selected.cfg;
   dataDir = ps.require "hermes" "dataDir" cfg.dataDir;

@@ -2,11 +2,11 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
   cfg = config.modules.open-terminal;
-  ps = import ../public-services/lib.nix { inherit lib; };
   dataDir = ps.require "modules.open-terminal" "dataDir" cfg.dataDir;
   workspaceDir = "${dataDir}/workspace";
   environmentFile = ps.require "modules.open-terminal" "environmentFile" cfg.environmentFile;

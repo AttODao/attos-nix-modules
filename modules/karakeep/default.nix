@@ -1,6 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "karakeep";
   ownership =
     description:

@@ -1,6 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "mailserver";
   cfg = selected.cfg;
   require = field: ps.require "mailserver" field cfg.${field};

@@ -2,11 +2,11 @@
   lib,
   options,
   pkgs,
+  ps,
   ...
 }:
 let
   json = pkgs.formats.json { };
-  ps = import ../public-services/lib.nix { inherit lib; };
   accountName = lib.types.strMatching "[a-z_][a-z0-9_-]*[$]?";
   # A plain source string keeps the root:root 0600 default; the submodule adds the guest owner.
   credentialFile = lib.types.coercedTo ps.absolutePath (source: { inherit source; }) (

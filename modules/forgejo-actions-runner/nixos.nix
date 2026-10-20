@@ -2,11 +2,11 @@
   config,
   lib,
   options,
+  ps,
   ...
 }:
 let
   cfg = config.modules.forgejo-actions-runner;
-  ps = import ../public-services/lib.nix { inherit lib; };
   forgejo = ps.entries config "forgejo";
   localForgejo = ps.select config "forgejo";
   local = localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo;

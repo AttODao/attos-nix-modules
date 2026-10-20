@@ -3,10 +3,10 @@
   lib,
   pkgs,
   attopkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "mcsmanager";
   cfg = s.cfg;
   required = field: ps.require "mcsmanager" field cfg.${field};

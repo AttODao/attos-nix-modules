@@ -3,10 +3,10 @@
   lib,
   pkgs,
   attopkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "karakeep";
   cfg = s.cfg;
   dataDir = ps.require "karakeep" "dataDir" cfg.dataDir;

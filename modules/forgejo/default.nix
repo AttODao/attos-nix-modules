@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "forgejo";
   nullableString =
     description:
@@ -45,14 +45,7 @@ in
         cfg = s.cfg;
         root = "${ps.require "forgejo" "dataDir" cfg.dataDir}/forgejo";
         mailEnabled = !s.standalone || cfg.mailHost != null || cfg.mailAddress != null;
-        listen =
-          if s.standalone then
-            {
-              address = "127.0.0.1";
-              port = "3000";
-            }
-          else
-            ps.backendEndpoint s;
+        listen = ps.listen s 3000;
         sshPort = if s.standalone then 2222 else 22;
         hostKeys = map (type: "${root}/ssh/ssh_host_${type}_key") [
           "ed25519"
@@ -82,7 +75,7 @@ in
               DOMAIN = s.hostname;
               ROOT_URL = "${ps.url s 3000}/";
               HTTP_ADDR = listen.address;
-              HTTP_PORT = lib.toInt listen.port;
+              HTTP_PORT = listen.port;
               SSH_DOMAIN = s.hostname;
               SSH_PORT = sshPort;
               # The built-in server replaces the image's OpenSSH and keeps its host keys and git@ user.
@@ -115,9 +108,7 @@ in
         };
         systemd.services.forgejo = {
           unitConfig.RequiresMountsFor = [ root ];
-          # A public owner binds the backendUrl address, which must exist first.
-          wants = [ "network-online.target" ];
-          after = [ "network-online.target" ];
+          inherit (ps.afterNetworkOnline) wants after;
         };
         networking.firewall = ps.backendFirewall config s [ ps.forgejoSshBackendPort ];
       }

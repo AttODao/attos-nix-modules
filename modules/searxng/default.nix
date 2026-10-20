@@ -1,20 +1,13 @@
 {
   config,
   lib,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "searxng";
   environmentFile = ps.require "searxng" "environmentFile" s.cfg.environmentFile;
-  listen =
-    if s.standalone then
-      {
-        address = "127.0.0.1";
-        port = "8081";
-      }
-    else
-      ps.backendEndpoint s;
+  listen = ps.listen s 8081;
 in
 {
   options.modules = ps.moduleOptions "searxng" (
@@ -57,8 +50,8 @@ in
           };
           server = {
             base_url = "${ps.url s 8081}/";
-            bind_address = lib.removeSuffix "]" (lib.removePrefix "[" listen.address);
-            port = lib.toInt listen.port;
+            bind_address = listen.address;
+            port = listen.port;
             # searx-init substitutes the environment file value; the start check below rejects an unset one.
             secret_key = "$SEARXNG_SECRET";
             limiter = s.cfg.limiter;
@@ -76,9 +69,7 @@ in
       };
       systemd.services.searx = {
         unitConfig.RequiresMountsFor = [ environmentFile ];
-        # A public owner binds the backendUrl address, which must exist first.
-        wants = [ "network-online.target" ];
-        after = [ "network-online.target" ];
+        inherit (ps.afterNetworkOnline) wants after;
       };
     })
   ];

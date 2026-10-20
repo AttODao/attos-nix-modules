@@ -1,6 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "ollama";
   cfg = s.cfg;
 in
@@ -29,8 +33,7 @@ in
     };
 
     systemd.services.ollama = {
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
+      inherit (ps.afterNetworkOnline) wants after;
       unitConfig.RequiresMountsFor = [
         config.services.ollama.home
         config.services.ollama.modelsDir

@@ -1,10 +1,10 @@
 {
   config,
   lib,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "attos-hoyo-dashboard";
 in
 {

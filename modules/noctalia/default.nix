@@ -1,7 +1,9 @@
-{ config, lib, ... }:
-let
-  publicServices = import ../public-services/lib.nix { inherit lib; };
-in
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 {
   options.modules.noctalia = {
     enable = lib.mkEnableOption "shared Noctalia configuration";
@@ -58,7 +60,7 @@ in
               default = [ ];
               description = "Calendar identifiers selected for this account.";
             };
-            passwordFile = publicServices.pathOption "Absolute runtime password file path (not a Nix store path); null leaves credentials unspecified. The consumer supplies the file and permissions.";
+            passwordFile = ps.pathOption "Absolute runtime password file path (not a Nix store path); null leaves credentials unspecified. The consumer supplies the file and permissions.";
           };
         }
       );
