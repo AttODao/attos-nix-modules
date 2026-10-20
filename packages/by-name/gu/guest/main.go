@@ -32,7 +32,8 @@ commands:
 BUILD options: --flake REF, --max-jobs N, --cores N, --override-input NAME REFERENCE
 
 FLAKE / --flake REF selects the flake holding nixosConfigurations.GUEST (default: the
-configured one, e.g. a registry alias). The latest revision is always fetched (--refresh).
+configured one, e.g. a registry alias). The latest revision is fetched once per invocation
+(--refresh on the first evaluation); the following builds reuse that revision.
 `
 
 var (
