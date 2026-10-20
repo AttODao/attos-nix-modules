@@ -81,6 +81,12 @@ in
   };
 
   config = lib.mkIf config.modules.noctalia.enable {
+    # Recording from a monitor or window goes through gsr-kms-server, which needs the setcap
+    # wrapper from the NixOS module; the portal source records through PipeWire without it.
+    programs.gpu-screen-recorder.enable = lib.mkDefault (
+      config.modules.noctalia.screenRecorder.enable
+      && config.modules.noctalia.screenRecorder.source != "portal"
+    );
     home-manager.sharedModules = [ ./home.nix ];
   };
 }
