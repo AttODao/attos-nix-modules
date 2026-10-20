@@ -43,6 +43,7 @@ in
           "BRIDGE_DEMO_MODE=1"
         ]
         # The startup URL/QR uses the registered hostname instead of the LAN addresses.
+        # Plain ws://: the hostname must resolve only inside the private DNS/VPN network.
         ++ lib.optional (
           !selected.standalone
         ) "BRIDGE_PUBLIC_WS_URL=ws://${selected.hostname}:${toString cfg.port}"
