@@ -2,7 +2,7 @@
 {
   imports = [
     ./nixos.nix
-    ../pcmanfm
+    ../yazi
   ];
 
   options.modules.steam = {
@@ -15,7 +15,7 @@
   };
 
   config = lib.mkIf config.modules.steam.enable {
-    modules.pcmanfm.enable = true;
+    modules.yazi.enable = true;
     home-manager.sharedModules = [ ./home.nix ];
   };
 }

@@ -10,7 +10,7 @@
     ../noctalia
     ../fcitx5
     ../foot
-    ../pcmanfm
+    ../yazi
     ../userDirs
   ];
 
@@ -65,7 +65,7 @@
     modules.noctalia.enable = true;
     modules.fcitx5.enable = true;
     modules.foot.enable = true;
-    modules.pcmanfm.enable = true;
+    modules.yazi.enable = true;
     modules.userDirs.enable = true;
     home-manager.sharedModules = [ ./home.nix ];
   };
