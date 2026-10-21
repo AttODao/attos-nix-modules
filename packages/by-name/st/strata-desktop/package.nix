@@ -3,6 +3,8 @@
   fetchurl,
   appimageTools,
   flavor ? "amd-rx7900",
+  # Port the app's LAN sharing listener prefers (upstream default: its host port + 1).
+  sharePort ? null,
 }:
 let
   pname = "strata-desktop";
@@ -22,6 +24,9 @@ let
 in
 appimageTools.wrapType2 {
   inherit pname version src;
+  profile = lib.optionalString (sharePort != null) ''
+    export STRATA_SHARE_PORT=${toString sharePort}
+  '';
   # The image bundles WebKitGTK 4.1, GTK, Node, Python and its HIP engine.
   # appimageTools supplies the excluded system libraries (libdrm, Wayland,
   # libgbm, fontconfig, etc.); do not mix a second WebKitGTK into that bundle.
