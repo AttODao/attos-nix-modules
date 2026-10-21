@@ -100,6 +100,23 @@
         "type": "github"
       }
     },
+    "nixos-mailserver": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791231530,
+        "narHash": "sha256-sj7RiYmHW+d7NjH2TWKozEaYp8nhdGas6/zMKjTCO5k=",
+        "owner": "simple-nixos-mailserver",
+        "repo": "nixos-mailserver",
+        "rev": "4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2",
+        "type": "gitlab"
+      },
+      "original": {
+        "owner": "simple-nixos-mailserver",
+        "repo": "nixos-mailserver",
+        "rev": "4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2",
+        "type": "gitlab"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1785318670,
@@ -208,6 +225,7 @@
         "claude-code-nix": "claude-code-nix",
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager_2",
+        "nixos-mailserver": "nixos-mailserver",
         "nixpkgs": "nixpkgs_2"
       }
     },

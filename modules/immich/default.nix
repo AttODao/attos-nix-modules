@@ -1,16 +1,13 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "immich";
   root = ps.require "immich" "dataDir" s.cfg.dataDir;
-  listen =
-    if s.standalone then
-      {
-        address = "127.0.0.1";
-        port = "2283";
-      }
-    else
-      ps.backendEndpoint s;
+  listen = ps.listen s 2283;
 in
 {
   options.modules = ps.moduleOptions "immich" (
@@ -25,8 +22,8 @@ in
     (lib.mkIf s.enabled {
       services.immich = {
         enable = true;
-        host = lib.removeSuffix "]" (lib.removePrefix "[" listen.address);
-        port = lib.toInt listen.port;
+        host = listen.address;
+        port = listen.port;
         # The database stores absolute /data paths from the official image; keep them valid.
         mediaLocation = "/data";
       };
@@ -50,9 +47,7 @@ in
       };
       systemd.services.immich-server = {
         unitConfig.RequiresMountsFor = [ root ];
-        # A public owner binds the backendUrl address, which must exist first.
-        wants = [ "network-online.target" ];
-        after = [ "network-online.target" ];
+        inherit (ps.afterNetworkOnline) wants after;
         serviceConfig.BindPaths = [ "${root}/library:/data" ];
       };
       networking.firewall = ps.backendFirewall config s [ ];

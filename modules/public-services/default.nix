@@ -52,6 +52,10 @@ in
 
   config = lib.mkMerge [
     {
+      # Every module takes public-services/lib.nix as the `ps` argument instead of importing it.
+      # Home Manager modules cannot reach NixOS module arguments, so supply it there as well.
+      _module.args.ps = ps;
+      home-manager.sharedModules = [ { _module.args.ps = ps; } ];
       assertions =
         paseo.assertions
         ++ lib.mapAttrsToList (hostname: _: {
@@ -69,10 +73,7 @@ in
                 }
                 {
                   assertion =
-                    !cfg.enable
-                    || !(cfg ? backendUrl)
-                    || (service == "ollama" && !cfg.webui)
-                    || cfg.backendUrl != null;
+                    !cfg.enable || !(cfg ? backendUrl) || (service == "ollama" && !cfg.webui) || cfg.backendUrl != null;
                   message = "modules.public-services.${hostname}.${service}: HTTP services require backendUrl (the gateway upstream and owner publish address).";
                 }
               ]) services

@@ -1,6 +1,10 @@
-{ lib, options, ... }:
+{
+  lib,
+  options,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   nullable =
     type: description:
     lib.mkOption {
@@ -10,13 +14,9 @@ let
     };
 in
 {
-  imports = [
-    ./nixos.nix
-    (builtins.fetchTarball {
-      url = "https://gitlab.com/simple-nixos-mailserver/nixos-mailserver/-/archive/4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2/nixos-mailserver-4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2.tar.gz";
-      sha256 = "sha256-sj7RiYmHW+d7NjH2TWKozEaYp8nhdGas6/zMKjTCO5k=";
-    })
-  ];
+  # The upstream simple-nixos-mailserver module comes from the flake input nixos-mailserver,
+  # imported next to ./modules by nixosModules.default in flake.nix.
+  imports = [ ./nixos.nix ];
 
   options.modules = ps.moduleOptions "mailserver" (
     ps.common "shared simple-nixos-mailserver integration"

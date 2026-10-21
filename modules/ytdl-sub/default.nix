@@ -1,7 +1,11 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
   inherit (lib) mkOption types;
-  ps = import ../public-services/lib.nix { inherit lib; };
 in
 {
   imports = [ ./nixos.nix ];

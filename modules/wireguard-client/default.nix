@@ -1,6 +1,5 @@
-{ lib, ... }:
+{ lib, ps, ... }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   inherit (lib) mkOption types;
   interfaceName = types.addCheck types.str (
     name: builtins.match "[a-zA-Z0-9_=+.-]{1,15}" name != null && name != "." && name != ".."

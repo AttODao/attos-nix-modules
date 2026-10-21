@@ -2,10 +2,12 @@
 
 共有設定に必要なcustom derivation / overrideだけを、nixpkgsと同じ `by-name/<先頭2文字>/<name>/package.nix` に置く。
 `default.nix` がby-nameを `lib.makeScope` へ自動登録し、外部input表のpackageを加える。package名はディレクトリ名。
+登録時に `package.nix` の無いディレクトリ、shard名とpackage名先頭2文字の不一致、外部input表との名前衝突を評価エラーにする。
+`nix flake check --no-build` で評価できないpackageは `passthru.skipFlakeCheck = true` を宣言する（`flake.nix` が `packages` 出力から除外し、`legacyPackages` と `attopkgs` には残る）。
 
 外部inputから供給:
 - `claude-code`: `flake.nix` の `claude-code-nix`（github:sadjow/claude-code-nix、`flake = false`）root直下の `package.nix` を利用ホストのpkgsで `callPackage` する。versionは共有flake.lockで固定し、`nix flake update claude-code-nix` で更新する。
-- `hermes-desktop`: `flake.nix` の `hermes-agent`（github:NousResearch/hermes-agent、release tag固定。hermes moduleのupstream NixOS moduleと共用）の `nix/desktop.nix` を利用ホストのpkgsで呼ぶremote専用build。scopeの `hermes-agent-src` でsourceを受け取り、install stampを `payload = "light"` にして、agent（Python venv）の代わりに失敗するだけのstubを渡し、起動時に `HERMES_DESKTOP_HERMES` を外す。`extraRun`（既定[]）は起動前に実行するshell行。
+- `hermes-desktop`: `flake.nix` の `hermes-agent`（github:NousResearch/hermes-agent、release tag固定。hermes moduleのupstream NixOS moduleと共用）の `nix/desktop.nix` を利用ホストのpkgsで呼ぶremote専用build。scopeの `hermes-agent-src` でsourceと、`default.nix` が `flake.lock` の `original.ref`（release tag）から取った `version` を受け取り（packageにversionを書かない）、install stampを `payload = "light"` にして、agent（Python venv）の代わりに失敗するだけのstubを渡し、起動時に `HERMES_DESKTOP_HERMES` を外す。`extraRun`（既定[]）は起動前に実行するshell行。
 
 実装済み:
 - `build-go-program`: repo内script用のGo builder。`{ build-go-program }: build-go-program { pname = "<name>"; src = ./.; }` で、`src`直下の`.go`（単一 `package main`、標準libraryのみ、go.modなし）を1つの実行ファイル `bin/<pname>` にする。Goは利用ホストの `pkgs.go` をビルド時だけ使い、runtime closureへ入らない。buildで `go vet`、`*_test.go` があればcheckPhaseで `go test` を実行する。srcは`.go`だけをfilesetで取り込むため、package.nixや文書の変更では再ビルドしない。host設定はderivationへ含めず、JSON pathや引数を実行時に渡す。外部moduleが必要になったpackageはgo.mod + `buildGoModule` へ切り替える。
@@ -39,7 +41,7 @@
 
 `default.nix` に `{ pkgs, inputs }` を渡すと、利用ホストのpkgsで構築したscopeを返す。flakeは `attopkgs { pkgs }`・`overlays.default`（`pkgs.attopkgs`）・共有nixpkgsで構築した `legacyPackages.<system>`、そのうちderivationだけの `packages.<system>` を公開する（`nix shell attos-nix-modules#claude-code` 等）。
 `code-server`・`custom-cursors`・`centered-plymouth-theme` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
-`hermes-desktop` はupstreamの `nix/lib.nix` がeval中にlockfile用sourceを読み、`nix flake check --no-build` で失敗するため `packages` 出力から外す。`legacyPackages` とmodule引数 `attopkgs` には残り、評価は `nix eval --raw 'path:.#legacyPackages.x86_64-linux.hermes-desktop.drvPath'`（IFDのsource生成を伴う）で行う。
+`hermes-desktop` はupstreamの `nix/lib.nix` がeval中にlockfile用sourceを読み、`nix flake check --no-build` で失敗するため `passthru.skipFlakeCheck = true` で `packages` 出力から外す。`legacyPackages` とmodule引数 `attopkgs` には残り、評価は `nix eval --raw 'path:.#legacyPackages.x86_64-linux.hermes-desktop.drvPath'`（IFDのsource生成を伴う）で行う。
 `code-server { src = <固定したstandalone release>; }` で使用する。
 `centered-plymouth-theme { image = <consumer画像path>; }` も同じsetに含む関数。ImageMagickの `-resize '960x360>'` で縦横比を保ち最大960x360へ縮小し、拡大しない。出力は `share/plymouth/themes/centered-logo/` にdescriptor・script・logo.pngを置く。画像は公開可能なbuild入力としてstoreへ入るため、秘密・可変データを渡さない。
 code-server releaseの取得URL/hash・versionはconsumer inputに固定し、共有側でlatest取得や新しい供給元へ切り替えない。

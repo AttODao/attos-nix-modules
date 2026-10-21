@@ -2,21 +2,21 @@
   config,
   lib,
   options,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "ollama";
-  root = ps.require "open-webui" "dataDir" s.cfg.dataDir;
+  root = ps.require "ollama" "dataDir" s.cfg.dataDir;
   terminalEnabled = !s.standalone || config.modules.open-terminal.enable;
   environmentFile =
-    ps.require "open-webui" "modules.open-terminal.environmentFile"
+    ps.require "ollama" "modules.open-terminal.environmentFile"
       config.modules.open-terminal.environmentFile;
   ollamaUrl =
     if s.standalone && s.cfg.ollamaUrl == null then
       "http://127.0.0.1:${toString config.services.ollama.port}"
     else
-      ps.require "open-webui" "ollamaUrl" s.cfg.ollamaUrl;
+      ps.require "ollama" "ollamaUrl" s.cfg.ollamaUrl;
   searchRoutes = lib.filter (route: route.service == "searxng") (ps.routes config);
   localSearch = ps.select config "searxng";
   searchEnabled = !s.standalone || config.modules.searxng.enable;
@@ -31,7 +31,7 @@ let
     if s.standalone then
       "http://127.0.0.1:8081/search"
     else
-      ps.require "open-webui" "an enabled SearXNG registry entry" (
+      ps.require "ollama" "an enabled SearXNG registry entry" (
         if searchRoutes == [ ] then null else "${(builtins.head searchRoutes).cfg.backendUrl}/search"
       );
 in

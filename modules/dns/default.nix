@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   cfg = config.modules.dns;
   hosts = ps.hosts config;
   # Forgejo SSH is published only on these gateway addresses; HTTP and SSH share the hostname.
@@ -89,8 +89,7 @@ in
       };
     };
     systemd.services.dnsmasq = {
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
+      inherit (ps.afterNetworkOnline) wants after;
       restartTriggers = [ hostsFile ];
     };
   };

@@ -2,10 +2,10 @@
   config,
   lib,
   attopkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "code-server";
   cfg = selected.cfg;
   native = config.services.code-server;
@@ -14,15 +14,7 @@ let
       ps.require "code-server" "environmentFile for password authentication" cfg.environmentFile
     else
       cfg.environmentFile;
-  # Standalone stays on loopback; a public owner listens on its backendUrl like the other native services.
-  listen =
-    if selected.standalone then
-      {
-        address = "127.0.0.1";
-        port = "4444";
-      }
-    else
-      ps.backendEndpoint selected;
+  listen = ps.listen selected 4444;
 in
 {
   config = lib.mkIf selected.enabled {
@@ -33,8 +25,8 @@ in
       );
       user = lib.mkDefault cfg.user;
       group = lib.mkDefault cfg.group;
-      host = lib.mkDefault (lib.removeSuffix "]" (lib.removePrefix "[" listen.address));
-      port = lib.mkDefault (lib.toInt listen.port);
+      host = lib.mkDefault listen.address;
+      port = lib.mkDefault listen.port;
       auth = lib.mkDefault "password";
       disableTelemetry = lib.mkDefault true;
       disableUpdateCheck = lib.mkDefault true;
@@ -50,9 +42,8 @@ in
         lib.optional (environmentFile != null) environmentFile
         ++ lib.optional (native.userDataDir != null) native.userDataDir
         ++ lib.optional (native.extensionsDir != null) native.extensionsDir;
-      # A public owner binds the backendUrl address, which must exist first.
-      wants = lib.mkIf (!selected.standalone) [ "network-online.target" ];
-      after = lib.mkIf (!selected.standalone) [ "network-online.target" ];
+      wants = lib.mkIf (!selected.standalone) ps.afterNetworkOnline.wants;
+      after = lib.mkIf (!selected.standalone) ps.afterNetworkOnline.after;
     };
     networking.firewall = ps.backendFirewall config selected [ ];
   };

@@ -1,6 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "mailserver";
   cfg = selected.cfg;
   require = field: ps.require "mailserver" field cfg.${field};
@@ -60,6 +64,11 @@ in
             {
               assertion = cfg.acme.dnsProvider == null || acmeHost != null;
               message = "mailserver.acme.dnsProvider requires native mailserver.x509.useACMEHost; standalone defaults to caller-supplied certificates.";
+            }
+            {
+              # rspamd resolves through the upstream local resolver (kresd) on 127.0.0.1:53 below.
+              assertion = !config.modules.dns.enable;
+              message = "mailserver: modules.dns (dnsmasq) cannot share port 53 with the mail resolver on 127.0.0.1; deploy them on different hosts.";
             }
           ];
           mailserver = {

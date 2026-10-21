@@ -2,11 +2,11 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
   cfg = config.modules.open-terminal;
-  ps = import ../public-services/lib.nix { inherit lib; };
   dataDir = ps.require "modules.open-terminal" "dataDir" cfg.dataDir;
   workspaceDir = "${dataDir}/workspace";
   environmentFile = ps.require "modules.open-terminal" "environmentFile" cfg.environmentFile;
@@ -25,8 +25,9 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = environmentFile != null && allowedOrigins != "";
-        message = "Open Terminal requires a runtime environmentFile and a nonempty CORS origin when enabled.";
+        # environmentFile is already enforced by ps.require above.
+        assertion = allowedOrigins != "";
+        message = "Open Terminal requires a nonempty CORS origin when enabled.";
       }
     ];
 

@@ -227,10 +227,31 @@ func run(arguments []string) error {
 	return bootstrap(arguments[0], cfg, os.Getenv("CREDENTIALS_DIRECTORY"))
 }
 
+// describe names only the operation, path and errno of a file-system failure.
+// Upstream JSON/parser errors may contain secret contents and are never printed.
+func describe(err error) string {
+	message := "MCSManager runtime initialization failed; check credential formats and state permissions."
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		kind := "filesystem error"
+		switch {
+		case errors.Is(pathErr, os.ErrNotExist):
+			kind = "not found"
+		case errors.Is(pathErr, os.ErrPermission):
+			kind = "permission denied"
+		case errors.Is(pathErr, os.ErrExist):
+			kind = "already exists"
+		case errors.Is(pathErr, os.ErrInvalid):
+			kind = "invalid operation"
+		}
+		message += " (" + pathErr.Op + " " + pathErr.Path + ": " + kind + ")"
+	}
+	return message
+}
+
 func main() {
-	if run(os.Args[1:]) != nil {
-		// Upstream JSON/parser errors may contain secret contents. Never print them.
-		fmt.Fprintln(os.Stderr, "MCSManager runtime initialization failed; check credential formats and state permissions.")
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, describe(err))
 		os.Exit(1)
 	}
 }

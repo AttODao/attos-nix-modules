@@ -12,7 +12,8 @@
 }:
 let
   src = hermes-agent-src;
-  version = "0.22.2";
+  # Release tag of the hermes-agent flake input (packages/default.nix reads it from flake.lock).
+  inherit (hermes-agent-src) version;
   hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix; };
   # icon生成はPillowとresvg-pyだけを使う。
   generatedIcons = callPackage "${src}/nix/icons.nix" {
@@ -47,8 +48,15 @@ let
     exit 1
   '';
 in
-callPackage "${src}/nix/desktop.nix" {
+(callPackage "${src}/nix/desktop.nix" {
   inherit hermesNpmLib generatedIcons installStampFile;
   hermesAgent = noBackend;
   extraRun = [ "unset HERMES_DESKTOP_HERMES" ] ++ extraRun;
-}
+}).overrideAttrs
+  (previous: {
+    # upstream nix/lib.nix reads lockfile sources during evaluation, which fails under
+    # nix flake check --no-build; flake.nix keeps this package out of the checked packages.
+    passthru = (previous.passthru or { }) // {
+      skipFlakeCheck = true;
+    };
+  })

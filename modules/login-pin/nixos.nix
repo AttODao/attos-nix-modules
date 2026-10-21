@@ -3,12 +3,12 @@
   lib,
   pkgs,
   attopkgs,
+  ps,
   ...
 }:
 
 let
   cfg = config.modules.login-pin;
-  ps = import ../public-services/lib.nix { inherit lib; };
   user = ps.require "modules.login-pin" "user" cfg.user;
   loginPinDatabase = ps.require "modules.login-pin" "pinDatabaseFile" cfg.pinDatabaseFile;
   # set-login-pin writes here; a consumer-supplied database elsewhere is read-only for the host.

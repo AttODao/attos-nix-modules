@@ -98,13 +98,32 @@ func (c *cloudflare) request(method, suffix string, query url.Values, body any) 
 	defer response.Body.Close()
 	var data map[string]json.RawMessage
 	if json.NewDecoder(response.Body).Decode(&data) != nil {
-		return nil, errors.New("Cloudflare DNS request failed")
+		return nil, apiError(method, response.StatusCode, nil)
 	}
 	var success bool
 	if json.Unmarshal(data["success"], &success) != nil || !success || response.StatusCode >= 300 {
-		return nil, errors.New("Cloudflare refused the DNS operation")
+		return nil, errors.New(strings.ReplaceAll(apiError(method, response.StatusCode, data["errors"]).Error(), c.token, "[redacted]"))
 	}
 	return data, nil
+}
+
+// apiError names the HTTP status and the Cloudflare errors[].code/message list of a
+// refused operation; it never includes the token, the request or the response body.
+func apiError(method string, status int, raw json.RawMessage) error {
+	var items []struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	json.Unmarshal(raw, &items)
+	text := fmt.Sprintf("Cloudflare refused the DNS %s request (HTTP %d)", method, status)
+	var parts []string
+	for _, item := range items {
+		parts = append(parts, strconv.Itoa(item.Code)+" "+item.Message)
+	}
+	if len(parts) > 0 {
+		text += ": " + strings.Join(parts, "; ")
+	}
+	return errors.New(text)
 }
 
 func records(c api, query url.Values) ([]record, error) {

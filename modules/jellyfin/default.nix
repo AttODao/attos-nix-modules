@@ -1,6 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "jellyfin";
   root = ps.require "jellyfin" "dataDir" s.cfg.dataDir;
   mediaDir = if s.standalone then s.cfg.mediaDir else ps.require "jellyfin" "mediaDir" s.cfg.mediaDir;

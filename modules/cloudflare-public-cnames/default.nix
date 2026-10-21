@@ -3,10 +3,10 @@
   lib,
   pkgs,
   attopkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   cfg = config.modules.cloudflare-public-cnames;
   target = ps.require "modules.cloudflare-public-cnames" "target" cfg.target;
   publicHosts = lib.filterAttrs (
@@ -52,8 +52,7 @@ in
     systemd.services.cloudflare-public-cnames = {
       description = "Synchronize enabled, nonprivate public-service CNAMEs";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
+      inherit (ps.afterNetworkOnline) wants after;
       restartTriggers = [ settings ];
       serviceConfig = {
         Type = "oneshot";

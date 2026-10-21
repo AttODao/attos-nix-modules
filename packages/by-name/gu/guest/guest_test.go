@@ -172,6 +172,17 @@ func TestDeviceValues(t *testing.T) {
 	}
 }
 
+func TestNixArgs(t *testing.T) {
+	build := buildOptions{overrides: [][2]string{{"attos-nix-modules", "path:/tmp/modules"}}}
+	want := []string{"--no-write-lock-file", "--refresh", "--override-input", "attos-nix-modules", "path:/tmp/modules"}
+	if got := nixArgs(build, true); !slices.Equal(got, want) {
+		t.Fatalf("refresh args = %v, want %v", got, want)
+	}
+	if got := nixArgs(build, false); slices.Contains(got, "--refresh") || !slices.Equal(got, slices.DeleteFunc(slices.Clone(want), func(arg string) bool { return arg == "--refresh" })) {
+		t.Fatalf("cached args = %v", got)
+	}
+}
+
 func TestGuestShape(t *testing.T) {
 	if !guestShape([]byte(`{"isContainer":false,"incusAgent":true}`), virtualMachine) {
 		t.Error("valid VM shape rejected")

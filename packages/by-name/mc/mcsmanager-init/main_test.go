@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -72,6 +73,18 @@ func TestBootstrapMergesState(t *testing.T) {
 	}
 	if bootstrap("other", cfg, creds) == nil {
 		t.Fatal("unknown component accepted")
+	}
+}
+
+func TestDescribe(t *testing.T) {
+	_, err := os.ReadFile(filepath.Join(t.TempDir(), "missing"))
+	got := describe(err)
+	if !strings.HasSuffix(got, "missing: not found)") || !strings.Contains(got, "(open ") {
+		t.Fatalf("got %q", got)
+	}
+	secret := errors.New("invalid character 's' looking for beginning of value: secret")
+	if got := describe(secret); strings.Contains(got, "secret") {
+		t.Fatalf("leaked parser error: %q", got)
 	}
 }
 

@@ -2,22 +2,15 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   s = ps.select config "opencloud";
   root = ps.require "opencloud" "dataDir" s.cfg.dataDir;
   environmentFile = ps.require "opencloud" "environmentFile" s.cfg.environmentFile;
   configDir = "${root}/config";
-  listen =
-    if s.standalone then
-      {
-        address = "127.0.0.1";
-        port = "9200";
-      }
-    else
-      ps.backendEndpoint s;
+  listen = ps.listen s 9200;
 in
 {
   options.modules = ps.moduleOptions "opencloud" (
@@ -35,8 +28,8 @@ in
         enable = true;
         # The image is the rolling release; production would be a downgrade.
         package = lib.mkDefault pkgs.opencloud;
-        address = lib.removeSuffix "]" (lib.removePrefix "[" listen.address);
-        port = lib.toInt listen.port;
+        address = listen.address;
+        port = listen.port;
         url = ps.url s 9200;
         stateDir = "${root}/data";
         inherit environmentFile;
@@ -71,9 +64,7 @@ in
             root
             environmentFile
           ];
-          # A public owner binds the backendUrl address, which must exist first.
-          wants = [ "network-online.target" ];
-          after = [ "network-online.target" ];
+          inherit (ps.afterNetworkOnline) wants after;
           serviceConfig.ReadWritePaths = [ configDir ];
         };
       };

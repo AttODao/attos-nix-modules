@@ -1,7 +1,4 @@
-{ config, lib, ... }:
-let
-  ps = import ../public-services/lib.nix { inherit lib; };
-in
+{ lib, ps, ... }:
 {
   imports = [ ./nixos.nix ];
 

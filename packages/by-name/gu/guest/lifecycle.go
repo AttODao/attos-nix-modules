@@ -26,8 +26,28 @@ var storePath = regexp.MustCompile(`^/nix/store/[a-z0-9]{32}-[^/\s]+$`)
 
 const agentTimeout = 300 * time.Second
 
+// refreshed records that the flake reference was already re-resolved in this
+// process; later nix calls reuse the fetched revision from the cache.
+var refreshed bool
+
+// nixArgs are the common flake options; refresh re-resolves git and registry
+// references to their latest revision.
+func nixArgs(build buildOptions, refresh bool) []string {
+	args := []string{"--no-write-lock-file"}
+	if refresh {
+		args = append(args, "--refresh")
+	}
+	for _, pair := range build.overrides {
+		args = append(args, "--override-input", pair[0], pair[1])
+	}
+	return args
+}
+
 // flake validates the selected guest configuration against the declared
 // instance type and returns its attribute path plus the nix build argv prefix.
+// The latest revision is fetched once (--refresh on the first evaluation);
+// every later evaluation and build in this process uses the same cached
+// revision instead of re-fetching the flake.
 func flake(cfg *config, name string, build buildOptions) (string, []string, error) {
 	ref := build.flake
 	if ref == "" {
@@ -36,17 +56,13 @@ func flake(cfg *config, name string, build buildOptions) (string, []string, erro
 	if ref == "" || strings.ContainsAny(ref, "#\n") {
 		return "", nil, errors.New("flake must be a flake reference without an attribute (for example server-nix)")
 	}
-	// Always fetch the latest revision of git and registry references.
-	nixArgs := []string{"--no-write-lock-file", "--refresh"}
-	for _, pair := range build.overrides {
-		nixArgs = append(nixArgs, "--override-input", pair[0], pair[1])
-	}
 	configuration := ref + "#nixosConfigurations." + name + ".config"
-	shape, err := run(append(append([]string{"nix", "eval"}, nixArgs...), "--json", configuration,
+	shape, err := run(append(append([]string{"nix", "eval"}, nixArgs(build, !refreshed)...), "--json", configuration,
 		"--apply", "c: { isContainer = c.boot.isContainer; incusAgent = c.virtualisation.incus.agent.enable; }"), true, nil)
 	if err != nil {
 		return "", nil, err
 	}
+	refreshed = true
 	kind := cfg.Guests[name].Type
 	if !guestShape([]byte(shape), kind) {
 		if kind == container {
@@ -54,7 +70,7 @@ func flake(cfg *config, name string, build buildOptions) (string, []string, erro
 		}
 		return "", nil, errors.New("Selected flake configuration must be an Incus NixOS VM guest (not a container, with the Incus agent enabled)")
 	}
-	command := append(append([]string{"nix", "build"}, nixArgs...), "--print-out-paths")
+	command := append(append([]string{"nix", "build"}, nixArgs(build, false)...), "--print-out-paths")
 	if build.maxJobs != nil {
 		command = append(command, "--max-jobs", strconv.Itoa(*build.maxJobs))
 	}

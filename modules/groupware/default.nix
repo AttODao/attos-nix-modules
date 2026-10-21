@@ -1,6 +1,10 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "groupware";
   serviceOptions = ps.common "shared Roundcube and Radicale groupware" // {
     backendUrl = lib.mkOption {

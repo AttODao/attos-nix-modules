@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +87,17 @@ func TestSync(t *testing.T) {
 	}
 }
 
+func TestAPIError(t *testing.T) {
+	err := apiError("POST", 403, json.RawMessage(`[{"code":10000,"message":"Authentication error"},{"code":81057,"message":"Record already exists"}]`))
+	want := "Cloudflare refused the DNS POST request (HTTP 403): 10000 Authentication error; 81057 Record already exists"
+	if err.Error() != want {
+		t.Fatalf("got %q", err.Error())
+	}
+	if got := apiError("GET", 502, nil).Error(); got != "Cloudflare refused the DNS GET request (HTTP 502)" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestSyncRejects(t *testing.T) {
 	f := &fake{byName: map[string][]record{"mx.example.org": {{ID: "m", Type: "MX", Name: "mx.example.org"}}}}
 	cases := []config{
@@ -105,5 +119,36 @@ func TestSyncRejects(t *testing.T) {
 	}
 	if _, err := newCloudflare("", "0123456789abcdef0123456789abcdef"); err == nil {
 		t.Fatal("empty token accepted")
+	}
+}
+
+func TestRequestError(t *testing.T) {
+	const token = "test-private-token"
+	for _, body := range []string{
+		`{"success":false,"errors":[{"code":10000,"message":"Rejected test-private-token"}],"other":"private response"}`,
+		`invalid private response`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") != "Bearer "+token {
+					t.Error("missing auth")
+				}
+				w.WriteHeader(http.StatusForbidden)
+				w.Write([]byte(body))
+			}))
+			defer server.Close()
+			client := cloudflare{token: token, base: server.URL, client: server.Client()}
+			_, err := client.request("POST", "", nil, nil)
+			if err == nil {
+				t.Fatal("accepted error response")
+			}
+			text := err.Error()
+			if !strings.Contains(text, "HTTP 403") || strings.Contains(text, token) || strings.Contains(text, "private response") {
+				t.Fatalf("unsafe/missing diagnostics: %s", text)
+			}
+			if strings.HasPrefix(body, "{") && (!strings.Contains(text, "10000") || !strings.Contains(text, "Rejected")) {
+				t.Fatalf("missing code/message: %s", text)
+			}
+		})
 	}
 }

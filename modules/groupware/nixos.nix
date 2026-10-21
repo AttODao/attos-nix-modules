@@ -2,10 +2,10 @@
   config,
   lib,
   pkgs,
+  ps,
   ...
 }:
 let
-  ps = import ../public-services/lib.nix { inherit lib; };
   selected = ps.select config "groupware";
   cfg = selected.cfg;
   hostname = if selected.enabled then selected.hostname else "";

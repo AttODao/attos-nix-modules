@@ -34,7 +34,6 @@ update_shared() {
   tag=$(git ls-remote --tags --refs https://github.com/NousResearch/hermes-agent 'v*' | sed 's|.*refs/tags/||' | grep -E '^v[0-9]{1,3}\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
   [ -n "$tag" ] || { echo "::error::could not resolve a hermes-agent release tag" >&2; exit 1; }
   substitute flake.nix "github:NousResearch/hermes-agent/$tag" "s|(github:NousResearch/hermes-agent/)v[0-9.]+|\1$tag|"
-  substitute packages/by-name/he/hermes-desktop/package.nix "  version = \"${tag#v}\";" "s|^(  version = \")[0-9.]+(\";)|\1${tag#v}\2|"
   substitute README.md "現在は \`$hm\`" "s|(現在は \`)[0-9a-f]{40}|\1$hm|"
   nix flake update
 }

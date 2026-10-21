@@ -70,7 +70,7 @@ func ensureBridge(d dockerCLI, spec bridgeSpec) error {
 		}
 		_, _ = d.output(append(create, spec.name)...)
 		if raw, err = d.output("network", "inspect", spec.name); err != nil {
-			return fmt.Errorf("could not create Docker network %s", spec.name)
+			return fmt.Errorf("could not create Docker network %s: %w", spec.name, err)
 		}
 	}
 	return checkBridge(raw, spec)

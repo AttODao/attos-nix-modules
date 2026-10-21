@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ps,
+  ...
+}:
 {
   imports = [ ../pi ];
 
@@ -9,9 +14,7 @@
       default = "localhost";
       description = "Hostname advertised by Paseo; standalone defaults to localhost.";
     };
-    environmentFile =
-      (import ../public-services/lib.nix { inherit lib; }).pathOption
-        "Runtime environment file; null uses each user’s ~/paseo/daemon.env.";
+    environmentFile = ps.pathOption "Runtime environment file; null uses each user’s ~/paseo/daemon.env.";
     relay.enable = lib.mkEnableOption "the Paseo relay, which exposes the daemon beyond the local listener through the relay service";
   };
 

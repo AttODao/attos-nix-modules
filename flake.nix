@@ -15,6 +15,11 @@
     # hermes moduleが使うupstream NixOS moduleと、hermes-desktopのsource。
     # upstreamのPython環境はupstreamのlockで固定するため、nixpkgsはfollowsしない。
     hermes-agent.url = "github:NousResearch/hermes-agent/v0.22.2";
+    # Upstream module imported by modules/mailserver; pinned here instead of a fetchTarball in the module.
+    nixos-mailserver = {
+      url = "gitlab:simple-nixos-mailserver/nixos-mailserver/4a06abf89ea5e38a3e0f9bf12f3036095d4a24a2";
+      flake = false;
+    };
   };
 
   outputs =
@@ -29,6 +34,7 @@
             "${home-manager}/nixos"
             inputs.hermes-agent.nixosModules.default
             ./modules
+            "${inputs.nixos-mailserver}"
           ];
           _module.args.attopkgs = attopkgsFor pkgs;
         };
@@ -46,10 +52,11 @@
       attopkgs = { pkgs }: attopkgsFor pkgs;
       overlays.default = final: _prev: { attopkgs = attopkgsFor final; };
       inherit legacyPackages;
-      # hermes-desktopはupstream nix/lib.nixがeval中にlockfile sourceを読み、--no-buildのflake checkで
-      # 失敗するため、checkされるpackagesから外す（legacyPackagesとattopkgsには残る）。
+      # passthru.skipFlakeCheck = true を宣言したpackage（hermes-desktop: upstream nix/lib.nixがeval中に
+      # lockfile sourceを読み、--no-buildのflake checkで失敗する）はcheckされるpackagesから外す
+      # （legacyPackagesとattopkgsには残る）。
       packages = lib.mapAttrs (
-        _: lib.filterAttrs (name: value: lib.isDerivation value && name != "hermes-desktop")
+        _: lib.filterAttrs (_: value: lib.isDerivation value && !(value.passthru.skipFlakeCheck or false))
       ) legacyPackages;
       nixosModules.default = default;
       nixos.default = default;

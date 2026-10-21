@@ -109,6 +109,29 @@ rec {
         port = builtins.elemAt parts 1;
       };
   # Standalone stays on loopback; a public owner publishes on its backendUrl for the gateway.
+  # Native services bind this address (IPv6 literal without brackets) and integer port.
+  listen =
+    selected: defaultPort:
+    let
+      endpoint =
+        if selected.standalone then
+          {
+            address = "127.0.0.1";
+            port = toString defaultPort;
+          }
+        else
+          backendEndpoint selected;
+    in
+    {
+      address = lib.removeSuffix "]" (lib.removePrefix "[" endpoint.address);
+      port = lib.toInt endpoint.port;
+    };
+  # A public owner binds the backendUrl address, which must exist first.
+  afterNetworkOnline = {
+    wants = [ "network-online.target" ];
+    after = [ "network-online.target" ];
+  };
+  # Standalone stays on loopback; a public owner publishes on its backendUrl for the gateway.
   # A native owner listens itself, so admit the gateway to the backendUrl port on that address only.
   backendFirewall =
     config: selected: extraPorts:
