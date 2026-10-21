@@ -275,6 +275,8 @@ HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port�
 
 Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはForgejo内蔵SSH server（user `git`）を `backendUrl` のaddressの2222でlistenさせ、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。`forgejo.trustedProxies`（IP/CIDRのlist、既定loopbackのみ）は`X-Forwarded-*`を信頼するproxyで、公開時は`backendUrl`へ接続してくるgateway（Traefik）のaddressを利用側が列挙する。未指定のままではclient IPがgateway addressとして記録される。
 
+Traefikの`accessLog.enable`（既定false）は`/var/log/traefik/access.log`へ最小JSONログを記録する（header・queryは保存しない、日次rotation、`accessLog.rotate`は既定7世代＋現行）。`fail2ban.enable`（既定false、access log必須）は公開registryのForgejo・Immich・Jellyfin・AttOsHoYoDashboardの検証済みログイン失敗だけをhostname・method・path・statusで絞り、gatewayの`traefik-auth` jailで全port・protocolを遮断する。既定は10分10回・1時間（反復時延長、最大1日）で、調整は標準`services.fail2ban.jails.traefik-auth.settings`、信頼IPはconsumerの`services.fail2ban.ignoreIP`を使う。Vaultwardenの400は正常な2FA要求とも重なるため数えない。その他の未対応サービス・メール/Forgejo SSHのTCP認証失敗は検出しない。根拠・制約は[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-traefik)を参照。
+
 Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（WireGuard等）で、Traefikのwants/afterへ追加する。
 
 SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。

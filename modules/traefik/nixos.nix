@@ -116,6 +116,27 @@ let
         ];
       };
     };
+  }
+  // lib.optionalAttrs cfg.accessLog.enable {
+    accessLog = {
+      filePath = "/var/log/traefik/access.log";
+      format = "json";
+      bufferingSize = 0;
+      fields = {
+        defaultMode = "drop";
+        names = lib.genAttrs [
+          "ClientHost"
+          "RequestHost"
+          "RequestMethod"
+          "RequestPath"
+          "DownstreamStatus"
+          "RouterName"
+        ] (_: "keep");
+        headers.defaultMode = "drop";
+        # OAuth codes, reset links and other query secrets must not enter the log.
+        queryParameters.defaultMode = "drop";
+      };
+    };
   };
   dynamic = {
     http = {
