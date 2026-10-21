@@ -41,13 +41,19 @@ let
 
   # greetd's PAM service substacks/includes `login`, so one stack covers greetd and the TTY.
   loginRules = config.security.pam.services.login.rules;
-  base = loginRules.auth.unix.order;
+  # NixOS inserts an early optional pam_unix (`unix-early`) when gnome-keyring, zfs, failDelay
+  # and similar hooks need the password; it prompts before every later rule. The PIN rules run
+  # ahead of it so the first (and, on success, only) prompt is the PIN prompt.
+  base = loginRules.auth.unix-early.order;
   denyOrder = loginRules.auth.deny.order;
   loginPinPam = {
     unixAuth = true;
 
-    # pam_userdb stores the prompted PIN as PAM_AUTHTOK, which pam_unix try_first_pass reuses.
+    # pam_userdb stores the prompted PIN as PAM_AUTHTOK. A PIN match ends the auth stack
+    # (sufficient); otherwise unix-early and pam_unix reuse that token as the password via
+    # try_first_pass, so a password also needs only one prompt.
     rules.auth = {
+      unix-early.settings.try_first_pass = true;
       # Lock the account after repeated failures; the account rule below resets the tally on success.
       login-pin-faillock-preauth = {
         order = base - 50;
