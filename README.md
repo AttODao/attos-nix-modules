@@ -164,7 +164,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 
 依存先を通常代入でfalseにすると競合する。
 
-Hyprlandの既定packageは通常の`Hyprland` sessionを除外し、`Hyprland (uwsm-managed)`だけを提供する。標準`programs.hyprland.package`を置換した場合のsession管理は利用側の責任。
+Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.desktop`）に`NoDisplay=true`を付けてgreeterに出さず、`Hyprland (uwsm-managed)`だけを選択肢にする。UWSM sessionはこのentryをIDで参照して起動するため、entry自体は消さない（uwsmは`Hidden`のentryを拒否する）。標準`programs.hyprland.package`を置換した場合のsession管理は利用側の責任。
 
 ### enable以外の独自option
 
