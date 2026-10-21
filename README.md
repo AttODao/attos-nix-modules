@@ -238,6 +238,19 @@ NixOSの `programs.ssh.systemd-ssh-proxy.enable` は既定falseにする。
 `~/.ssh/config` の手編集は次回activationで置き換わる。
 鍵・known_hostsは管理せず、sshd・firewall・認証policyも変更しない。
 
+## ホスト状態レポート（NixOS）
+
+`modules.host-report.enable` はrootのtimerで15分ごとにホスト状態とjournalの認証兆候を集計し、
+`/var/lib/host-report/<host>.json` をatomic更新する（生ログ・秘密鍵・sudo引数は出力しない）。
+`readerGroup`（既定null）は既存の閲覧group、`onCalendar` は収集時刻。
+`publish.{enable,address,port}` は自ホストJSONだけの静的HTTP配信（既定無効、address必須、port 9180）。
+`fetch.<host>.url` は信頼する内部link上の他ホストのJSONをrootで取得する。firewallは利用側で限定する。
+`alert.{enable,to,from,sendmail,repeatInterval,staleAfter,authFailures,diskPercent}` はsendmailによる
+新規・継続・解消通知（既定無効、宛先必須、間隔86400秒・鮮度3600秒・認証失敗20件/run・disk 90%）。
+`logChecks.<name>.{units,pattern,ipPattern,failure}` は有効なnative serviceだけに追加するjournal checkの調整入力。
+SSH成功・sudo・Fail2banは認証失敗とは別集計。直近24時間の件数と前回cursorをroot専用stateに保持する。
+閲覧側の管理権限・ネットワーク制限は緩めない。[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-host-report)参照。
+
 ## サーバー機能
 
 公開サービスは、enableを含む独自設定を一つのnamespaceへ集約する。
@@ -273,8 +286,8 @@ Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上�
 
 MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
 
-Hermesはupstreamのrelease（`flake.nix`の`hermes-agent` tag、`flake.lock`を参照）のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
-両unitは既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`だけをbindする（`bash -l`用の`/run/current-system`、glibcが`/var/run/nscd`で探すnscd、systemd-resolvedの`/run/systemd/resolve`はread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む（upstreamの実行時tool `nodejs`・`ripgrep`・`ffmpeg-headless`も入れる。terminalの`bash -l`がpackage wrapperのPATHを外すため）。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
+Hermesはupstreamのrelease（`flake.nix`の`hermes-agent` tag、`flake.lock`を参照）のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl,readOnlyPaths}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
+両unitは既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`をread-write、明示した`hermes.readOnlyPaths`（絶対pathのlist、既定[]）をread-onlyでbindする（`bash -l`用の`/run/current-system`、glibcが`/var/run/nscd`で探すnscd、systemd-resolvedの`/run/systemd/resolve`はread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む（upstreamの実行時tool `nodejs`・`ripgrep`・`ffmpeg-headless`も入れる。terminalの`bash -l`がpackage wrapperのPATHを外すため）。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
 upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。両unitは`HERMES_MANAGED=false`とHermesのmanaged scope（`HERMES_MANAGED_DIR`）で、Nixが書くkeyだけを固定し、他のkeyはHermesが`hermes config set`で変更できる。unit外のshellは`.managed`により全keyが変更不可のまま。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/web-dashboard.md)。
 
 ### 複数マシンへの配置

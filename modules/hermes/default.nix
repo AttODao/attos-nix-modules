@@ -30,7 +30,24 @@ in
         default = null;
         description = "HTTP upstream of the dashboard reachable by the gateway; required for every enabled record.";
       };
-      dataDir = ps.pathOption "Writable state directory (HOME): HERMES_HOME is <dataDir>/.hermes and the workspace <dataDir>/workspace. The only host path visible to Hermes besides the system.";
+      dataDir = ps.pathOption "Writable state directory (HOME): HERMES_HOME is <dataDir>/.hermes and the workspace <dataDir>/workspace. The only writable host path; additional read-only paths require explicit readOnlyPaths.";
+      readOnlyPaths = lib.mkOption {
+        type = lib.types.listOf (
+          lib.types.addCheck ps.absolutePath (
+            path:
+            lib.all (character: !lib.hasInfix character path) [
+              "%"
+              " "
+              "\t"
+              "\\"
+              "\""
+              "'"
+            ]
+          )
+        );
+        default = [ ];
+        description = "Explicit read-only host paths visible in both default-deny sandboxes; absent paths are ignored. Does not grant write access or bypass Unix permissions. Do not expose credentials or management sockets.";
+      };
       user = account "account";
       group = account "group";
     }
