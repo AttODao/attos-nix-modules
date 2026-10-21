@@ -80,6 +80,13 @@ let
   // lib.optionalAttrs (cfg.certificateDomains != [ ]) { domains = cfg.certificateDomains; };
   # Every HTTPS router carries the shared security headers; private routes add the allowlist.
   httpMiddlewares = extra: [ "security-headers" ] ++ extra;
+  extraPrivate = route: route.cfg.private && route.cfg.privateExtraNetworks != [ ];
+  privateMiddleware =
+    route:
+    if extraPrivate route then
+      "private-${route.hostname}-${route.service or "mcsmanager"}"
+    else
+      "private";
   static = {
     global = {
       checkNewVersion = false;
@@ -149,7 +156,7 @@ let
               rule = "Host(`${route.hostname}`)";
               service = route.hostname;
               middlewares = httpMiddlewares (
-                lib.optionals (route.cfg.private || route.service == "mcsmanager") [ "private" ]
+                lib.optionals (route.cfg.private || route.service == "mcsmanager") [ (privateMiddleware route) ]
               );
               inherit tls;
             };
@@ -162,7 +169,7 @@ let
               entryPoints = [ "websecure" ];
               rule = "Host(`${entry.hostname}`) && PathPrefix(`/daemon/`)";
               service = "${entry.hostname}-daemon";
-              middlewares = httpMiddlewares [ "private" ];
+              middlewares = httpMiddlewares [ (privateMiddleware entry) ];
               inherit tls;
               # Preserve the native Socket.IO/upload/download prefix (no strip middleware).
             };
@@ -198,7 +205,13 @@ let
       }
       // lib.optionalAttrs privateEnabled {
         private.ipAllowList.sourceRange = cfg.privateNetworks;
-      };
+      }
+      // builtins.listToAttrs (
+        map (route: {
+          name = privateMiddleware route;
+          value.ipAllowList.sourceRange = cfg.privateNetworks ++ route.cfg.privateExtraNetworks;
+        }) (lib.filter extraPrivate routes)
+      );
       serversTransports = builtins.listToAttrs (
         map (route: {
           name = route.hostname;

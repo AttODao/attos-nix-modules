@@ -27,6 +27,7 @@
     ./opencloud
     ./openssh
     ./searxng
+    ./strata
     ./traefik
     ./vaultwarden
     ./wireguard-server
@@ -60,6 +61,7 @@
     ./solaar
     ./ssh
     ./steam
+    ./strata-desktop
     ./thunderbird
     ./userDirs
     ./vscode

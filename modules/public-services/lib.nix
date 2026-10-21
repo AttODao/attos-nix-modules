@@ -12,6 +12,7 @@ let
     "jellyfin"
     "ollama"
     "searxng"
+    "strata"
   ];
   upstream = _: cfg: cfg.backendUrl or null;
 in
@@ -61,6 +62,7 @@ rec {
         "host"
         "deploy"
         "private"
+        "privateExtraNetworks"
         "backendUrl"
         "backendAddress"
         "sshAddresses"
@@ -176,6 +178,11 @@ rec {
       type = types.bool;
       default = true;
       description = "Deploy on the owner host when enabled. False explicitly registers an externally managed endpoint without creating local dependencies or units.";
+    };
+    privateExtraNetworks = mkOption {
+      type = types.listOf types.nonEmptyStr;
+      default = [ ];
+      description = "Additional source ranges admitted to this service's private HTTP gateway routes on top of modules.traefik.privateNetworks; requires private = true. Does not change TCP routes.";
     };
     private = mkOption {
       type = types.bool;
