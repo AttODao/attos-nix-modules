@@ -7,8 +7,9 @@
 }:
 let
   cfg = config.modules.hyprland;
-  # Keep the compositor unchanged, but remove the unmanaged session from both
-  # displayManager.sessionPackages and the system profile's wayland-sessions.
+  # Keep the compositor unchanged, but hide the unmanaged session in the greeter.
+  # The UWSM session starts `uwsm start ... hyprland.desktop`, so the entry must stay
+  # resolvable: uwsm rejects Hidden entries but accepts NoDisplay, which the greeter skips.
   # HM applies enableXWayland through .override; wrap that result as well.
   sessionPackage = lib.makeOverridable (
     {
@@ -26,7 +27,12 @@ let
       # Fold default documentation outputs into the single joined output.
       paths = map (output: package.${output}) (package.meta.outputsToInstall or [ "out" ]);
       postBuild = ''
-        rm -f "$out/share/wayland-sessions/hyprland.desktop"
+        entry="$out/share/wayland-sessions/hyprland.desktop"
+        source=$(readlink -f "$entry")
+        rm "$entry"
+        sed '/^\[Desktop Entry\]$/a NoDisplay=true' "$source" > "$entry"
+        grep -qx 'NoDisplay=true' "$entry"
+        grep -q ' hyprland.desktop$' "$out/share/wayland-sessions/hyprland-uwsm.desktop"
       '';
       passthru =
         package.passthru
