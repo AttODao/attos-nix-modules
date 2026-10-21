@@ -31,6 +31,8 @@
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
 - `file-manager-icon`: Papirusの`system-file-manager` SVGを256x256 PNGへ変換した単一file。pcmanfm・yaziのdesktop entryが共用する。
+- `strata-desktop`: RX 7000向けx86_64-linux AppImageを`appimageTools.wrapType2`で包装し、同梱desktop entry・iconを導入する。取得URL・version・hashは`by-name/st/strata-desktop/package.nix`を参照。packageの`flavor`引数は現状`amd-rx7900`のみ。更新はNix経由で行う。
+- `strata-headless-session`: `{ sessionConfig }`を受けるcurried builder。`modules/strata/{session.py,prepare.py}`とPython/evdevを包装し、`strata-headless {session,status,stop}`・`strata-headless-session`・`Strata (API only)`のsession entryを供給する。checkPhaseで両Python sourceを`py_compile`する。unit・secret・Docker image管理はmodule側。`sessionConfig`（systemctl/settermの絶対path、endpoint/healthUrl、model/unit/logのlist）はstoreのJSONになるため秘密を含めない。
 - `open-deck-desktop`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
 - `pi`: Pi 1.3.0のversion override。base nixpkgsのworkspace一覧はそのPi releaseに従うため、このversionのruntime workspaceをcopyするinstall処理で置き換える。install checkでcodemode/MCP moduleのimportを確認する。固定nixpkgsがPi 1.3.0以上を提供したらoverrideを削除する。
 - `pi-mermaid-studio`: Mermaid Studio 0.2.1（`42ce06fac0572e7e8672d5ef6c86c1d7a2a23fe1`）とproduction npm依存をhash固定し、`attopkgs.pi-mermaid-studio/lib/pi-mermaid-studio`へextension・skills・browser assetsを配置。dev-only lock entriesを除き、host供給のPi/typebox peerを同梱せず、runtime npm installを行わない。install checkはMermaid assets・linkedom import・peer非同梱を確認する。
@@ -40,7 +42,7 @@
 - `centered-plymouth-theme`: consumer画像を受け取り、黒背景でlogoを中央配置する汎用Plymouth script theme `centered-logo` を構築。共有側にホスト名・ブランド画像を含めない。
 
 `default.nix` に `{ pkgs, inputs }` を渡すと、利用ホストのpkgsで構築したscopeを返す。flakeは `attopkgs { pkgs }`・`overlays.default`（`pkgs.attopkgs`）・共有nixpkgsで構築した `legacyPackages.<system>`、そのうちderivationだけの `packages.<system>` を公開する（`nix shell attos-nix-modules#claude-code` 等）。
-`code-server`・`custom-cursors`・`centered-plymouth-theme` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
+`code-server`・`custom-cursors`・`centered-plymouth-theme`・`strata-headless-session` はconsumer/module引数を受けるcurried builderで、`packages` 出力には含まれない。
 `hermes-desktop` はupstreamの `nix/lib.nix` がeval中にlockfile用sourceを読み、`nix flake check --no-build` で失敗するため `passthru.skipFlakeCheck = true` で `packages` 出力から外す。`legacyPackages` とmodule引数 `attopkgs` には残り、評価は `nix eval --raw 'path:.#legacyPackages.x86_64-linux.hermes-desktop.drvPath'`（IFDのsource生成を伴う）で行う。
 `code-server { src = <固定したstandalone release>; }` で使用する。
 `centered-plymouth-theme { image = <consumer画像path>; }` も同じsetに含む関数。ImageMagickの `-resize '960x360>'` で縦横比を保ち最大960x360へ縮小し、拡大しない。出力は `share/plymouth/themes/centered-logo/` にdescriptor・script・logo.pngを置く。画像は公開可能なbuild入力としてstoreへ入るため、秘密・可変データを渡さない。

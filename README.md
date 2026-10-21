@@ -118,7 +118,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | thunderbird | NixOS + HM | EDS・GNOME Keyring |
 | fonts | NixOS | — |
 | zsh | NixOS + HM | Starship同梱（gruvbox-rainbow presetはrepoへコピー済み。評価はpackageを読まない） |
-| hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・Yazi・userDirs（FootからFonts） |
+| hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・Yazi・userDirs（FootからFonts）。sessionは`Hyprland (uwsm-managed)`のみ |
 | greeter | NixOS | Hyprland |
 | solaar | NixOS + HM | Noctalia、HM側にKando同梱 |
 | pipeasio | NixOS + HM | PipeWire・Steam（`programs.steam.package`へWINEDLLPATH付きSteamを既定値として渡す） |
@@ -143,6 +143,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | karakeep / attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
+| strata | NixOS | Docker（digest固定のAMD image、greeterからon-demand起動するAPI専用session・モデル別unit・polkit・`strata-headless` CLI） |
+| strata-desktop | HM | —（RX 7000向けAppImage、現状x86_64-linuxのみ。アプリ本体はNix経由で更新） |
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
@@ -162,6 +164,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 
 依存先を通常代入でfalseにすると競合する。
 
+Hyprlandの既定packageは通常の`Hyprland` sessionを除外し、`Hyprland (uwsm-managed)`だけを提供する。標準`programs.hyprland.package`を置換した場合のsession管理は利用側の責任。
+
 ### enable以外の独自option
 
 デスクトップ・非公開機能はNixOS側の `modules.<feature>`、公開サーバーは
@@ -169,6 +173,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
 - `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
+- `strata.{flavor,dataDir,models,context,apiKeyFile,user}`（公開`public-services.<FQDN>.strata`と共通）: DockerによるAPI専用機能。ローカル配置時はGPU flavor・保存先・root:root 0400の秘密file・既存accountが必須。単独時は127.0.0.1:8080。boot時には起動せず、`Strata (API only)`でモデルを選択する。greeter・GPU設定・電源キー用の`input` groupは利用側が用意する。Dockerのport publishはhost firewallを迂回するため到達性を別途制限する。詳細は[Strata](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-strata)。
+- `strata-desktop`はenableのみ。全HMユーザーへAppImageを導入し、API専用機能は有効化しない。対応GPU・driver権限は利用側が管理し、更新・制約は[Strata Desktop](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-strata-desktop)を参照。
 - `greeter.{cursor,output,defaultUser}`: cursor archiveは既定`desktop-theme.cursor`で、有効時に非null必須。theme名/sizeは`desktop-theme.{cursorName,cursorSize}`に従う。outputは既定null。`defaultUser`（既定null）はgreeterで事前選択するaccountで、nullならuser欄は空のまま。
 - `login-pin.{user,pinDatabaseFile}`: 有効時にどちらも必須。`user`はPINでログインできる唯一のaccount（他のuserはPIN promptを通らずpasswordで認証）。`pinDatabaseFile`はpam_userdbのDB（`.db`で終わる絶対runtime path）。`/etc/security/login-pin/pins.db`を指定した場合だけhost管理となり、`set-login-pin`コマンドを導入してrootがそこへ書く。別pathは復号済みsecretなど利用側が供給する読み取り専用DB。greetd/loginのPAMには`pam_faillock`（5回失敗で300秒lock、成功で解除）と`pam_faildelay`（3秒）を入れる。PIN ruleはNixOSが挿入する早期pam_unix（gnome-keyring・zfs・`failDelay`などが有効なときの`unix-early`）より前に置き、最初のpromptでPINかpasswordのどちらか1回の入力でログインできる（PINが一致すればそこで認証完了、不一致なら同じ入力をpasswordとしてpam_unixが再利用）。PINでログインしたときはgnome-keyringはpasswordで解錠されない。標準`failDelay`は使わない（同じ早期pam_unixを追加するだけで順序を制御できないため）。
 - `thunderbird.{profile,accounts}`: `profile`（既定`default`）は全HMユーザーに作る既定profile名。`accounts`（既定`{}`）はHMの`accounts.email.accounts`と同じ形のattrsで、全HMユーザーへ`thunderbird.enable = true`既定で適用する。1件以上宣言するときは1件だけ`primary = true`にする。address・server・表示名などの個人識別情報は利用側に置き、認証情報は各ユーザーのprofileに残る。
@@ -272,11 +278,13 @@ modules.public-services."vault.example.org".vaultwarden = {
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`,
-`paseo`, `ccpocket`, `ssh`, `code-server`, `sunshine`, `hermes`。
+`paseo`, `ccpocket`, `ssh`, `code-server`, `sunshine`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
 HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
+
+`public-services.<FQDN>.<service>.privateExtraNetworks`（非空文字列のlist、既定`[]`）は、そのprivate HTTP routeだけに`modules.traefik.privateNetworks`からの追加許可を与える。非空なら`private = true`必須。TCP/UDPやstandaloneには適用せず、firewall・routing・認証も変更しない。
 
 Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはForgejo内蔵SSH server（user `git`）を `backendUrl` のaddressの2222でlistenさせ、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。`forgejo.trustedProxies`（IP/CIDRのlist、既定loopbackのみ）は`X-Forwarded-*`を信頼するproxyで、公開時は`backendUrl`へ接続してくるgateway（Traefik）のaddressを利用側が列挙する。未指定のままではclient IPがgateway addressとして記録される。
 

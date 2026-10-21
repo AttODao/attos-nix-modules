@@ -7,6 +7,35 @@
 }:
 let
   cfg = config.modules.hyprland;
+  # Keep the compositor unchanged, but remove the unmanaged session from both
+  # displayManager.sessionPackages and the system profile's wayland-sessions.
+  # HM applies enableXWayland through .override; wrap that result as well.
+  sessionPackage = lib.makeOverridable (
+    {
+      enableXWayland ? true,
+    }:
+    let
+      package = pkgs.hyprland.override { inherit enableXWayland; };
+    in
+    pkgs.symlinkJoin {
+      name = "hyprland-uwsm-only-${package.version}";
+      inherit (package) pname version;
+      meta = package.meta // {
+        outputsToInstall = [ "out" ];
+      };
+      # Fold default documentation outputs into the single joined output.
+      paths = map (output: package.${output}) (package.meta.outputsToInstall or [ "out" ]);
+      postBuild = ''
+        rm -f "$out/share/wayland-sessions/hyprland.desktop"
+      '';
+      passthru =
+        package.passthru
+        // lib.genAttrs (lib.remove "out" package.outputs) (output: package.${output})
+        // {
+          providedSessions = lib.remove "hyprland" (package.providedSessions or [ ]);
+        };
+    }
+  ) { };
   hyprctl = lib.getExe' config.programs.hyprland.package "hyprctl";
   outputArgs = utils.escapeSystemdExecArgs;
 in
@@ -17,6 +46,7 @@ in
       hyprland = {
         enable = true;
         withUWSM = true;
+        package = lib.mkDefault sessionPackage;
       };
     };
 

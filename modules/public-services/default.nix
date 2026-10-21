@@ -68,6 +68,10 @@ in
             lib.concatLists (
               lib.mapAttrsToList (service: cfg: [
                 {
+                  assertion = cfg.privateExtraNetworks == [ ] || cfg.private;
+                  message = "modules.public-services.${hostname}.${service}.privateExtraNetworks requires private = true.";
+                }
+                {
                   assertion = !cfg.enable || cfg.host != null;
                   message = "modules.public-services.${hostname}.${service}.host must name the owner machine when enabled.";
                 }
