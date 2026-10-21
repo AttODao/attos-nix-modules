@@ -43,6 +43,10 @@ in
         };
       };
       docker = "${pkgs.docker}/bin/docker";
+      # Host GIDs: a group name given to --group-add resolves in the image's /etc/group instead.
+      gid = pkgs.writeShellScript "strata-host-gid" ''
+        ${pkgs.getent}/bin/getent group "$1" | ${pkgs.coreutils}/bin/cut -d: -f3 | ${pkgs.gnugrep}/bin/grep .
+      '';
       q = lib.escapeShellArg;
       services = lib.imap0 (
         index: model:
@@ -52,15 +56,20 @@ in
           prepare = pkgs.writeShellScript "${n}-prepare" ''
             set -euo pipefail
             ${docker} rm -f strata-headless >/dev/null 2>&1 || true
+            # The desktop app shares <dataDir>/Strata-data as its models folder; hand over files an older root container wrote.
+            ${pkgs.findutils}/bin/find ${q root} -xdev \( ! -user ${q user} -o ! -group ${q group} \) \
+              -exec ${pkgs.coreutils}/bin/chown -h ${q "${user}:${group}"} {} +
             ${sessionPackage.python}/bin/python ${sessionPackage}/libexec/prepare.py ${q keyFile} ${q runtime} "$(${pkgs.coreutils}/bin/id -g ${q user})"
           '';
           run = pkgs.writeShellScript "${n}-run" ''
             set -euo pipefail
             exec > >(${pkgs.coreutils}/bin/tee -a ${q "${runtime}/console.log"}) 2>&1
             # Upstream HEALTHCHECK passes its key in argv; use unauthenticated /health in the session instead.
+            # Run as the session user so the desktop app can use the same model files.
             exec ${docker} run --rm --name strata-headless --no-healthcheck \
+              --user "$(${pkgs.coreutils}/bin/id -u ${q user}):$(${pkgs.coreutils}/bin/id -g ${q user})" \
               --device /dev/kfd --device /dev/dri \
-              --group-add video --group-add "$(${pkgs.getent}/bin/getent group render | ${pkgs.coreutils}/bin/cut -d: -f3)" \
+              --group-add "$(${gid} video)" --group-add "$(${gid} render)" \
               --ulimit memlock=-1:-1 --shm-size 2g --stop-timeout 120 \
               --env-file ${q "${runtime}/secret/environment"} \
               --env ${q "MODEL=${model}"} --env ${q "PRESET=headless-${lib.toLower model}"} --env PORT=8080 \
@@ -120,7 +129,7 @@ in
       systemd.services = lib.listToAttrs services;
       systemd.tmpfiles.settings."10-strata".${root}.d = {
         mode = lib.mkDefault "0750";
-        user = lib.mkDefault "root";
+        user = lib.mkDefault user;
         group = lib.mkDefault group;
       };
       environment.systemPackages = [ sessionPackage ];
