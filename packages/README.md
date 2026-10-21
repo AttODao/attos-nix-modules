@@ -31,7 +31,7 @@
 - `pipeasio`: PipeASIO 1.10.0のWine / Proton用ASIO driverと設定・管理GUI。version・hash固定。
 - `pandora-launcher`: 日本語localeでの起動失敗を避ける英語UTF-8 wrapper override。
 - `file-manager-icon`: Papirusの`system-file-manager` SVGを256x256 PNGへ変換した単一file。pcmanfm・yaziのdesktop entryが共用する。
-- `strata-desktop`: RX 7000向けx86_64-linux AppImageを`appimageTools.wrapType2`で包装し、同梱desktop entry・iconを導入する。取得URL・version・hashは`by-name/st/strata-desktop/package.nix`を参照。packageの`flavor`引数は現状`amd-rx7900`のみ。`sharePort`引数（既定null）を渡すと、FHS環境の`profile`で`STRATA_SHARE_PORT`を設定する。更新はNix経由で行う。
+- `strata-desktop`: RX 7000向けx86_64-linux AppImageを`appimageTools.wrapType2`で包装し、同梱desktop entry・iconを導入する。取得URL・version・hashは`by-name/st/strata-desktop/package.nix`を参照。packageの`flavor`引数は現状`amd-rx7900`のみ。`sharePort`引数（既定null）を渡すと、FHS環境の`profile`で`STRATA_SHARE_PORT`を設定する。同梱PythonのOpenSSLはNixOSにない`/etc/ssl/cert.pem`を見るため、`profile`で`SSL_CERT_FILE`（未設定時はhostの`/etc/ssl/certs/ca-certificates.crt`）を設定する。更新はNix経由で行う。
 - `strata-headless-session`: `{ sessionConfig }`を受けるcurried builder。`modules/strata/{session.py,prepare.py}`とPython/evdevを包装し、`strata-headless {session,status,stop}`・`strata-headless-session`・`Strata (API only)`のsession entryを供給する。checkPhaseで両Python sourceを`py_compile`する。unit・secret・Docker image管理はmodule側。`sessionConfig`（systemctl/settermの絶対path、endpoint/healthUrl、model/unit/logのlist）はstoreのJSONになるため秘密を含めない。
 - `open-deck-desktop`: Open-Deck Desktop 1.0.6のx86_64 AppImageをURL・hash固定で包装。アイコンとdesktop entryはAppImage内のものを使用。
 - `pi`: Pi 1.3.0のversion override。base nixpkgsのworkspace一覧はそのPi releaseに従うため、このversionのruntime workspaceをcopyするinstall処理で置き換える。install checkでcodemode/MCP moduleのimportを確認する。固定nixpkgsがPi 1.3.0以上を提供したらoverrideを削除する。

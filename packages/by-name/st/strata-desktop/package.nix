@@ -24,7 +24,12 @@ let
 in
 appimageTools.wrapType2 {
   inherit pname version src;
-  profile = lib.optionalString (sharePort != null) ''
+  # The bundled Python's OpenSSL only looks at /etc/ssl/cert.pem and a hashed /etc/ssl/certs,
+  # neither of which NixOS provides; point it at the host bundle buildFHSEnv binds in.
+  profile = ''
+    export SSL_CERT_FILE="''${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}"
+  ''
+  + lib.optionalString (sharePort != null) ''
     export STRATA_SHARE_PORT=${toString sharePort}
   '';
   # The image bundles WebKitGTK 4.1, GTK, Node, Python and its HIP engine.
