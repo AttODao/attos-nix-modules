@@ -180,7 +180,7 @@ rec {
     private = mkOption {
       type = types.bool;
       default = false;
-      description = "Exclude this hostname from public CNAMEs and restrict HTTP access to the configured private networks.";
+      description = "Restrict this service's gateway HTTP/TCP routes to the configured private networks. The hostname is excluded from public CNAMEs only when every enabled service on it is private.";
     };
   };
 

@@ -258,7 +258,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
 HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
-通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。private hostnameは公開CNAMEから除外し、gatewayでallowlist制限する。
+通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
 
 Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはForgejo内蔵SSH server（user `git`）を `backendUrl` のaddressの2222でlistenさせ、TraefikがTCP 22からそこへ中継する（`private` はHTTPと共通）。`forgejo.sshAddresses`（既定[]=全address）を指定するとTraefikはそのgateway addressごとに22でlistenしてfirewallもそのaddress宛てだけを許可し、local DNSもそのhostnameへ `ingressAddresses` のうち一致するaddressだけを返す。同じ22を使うhost sshdは別addressへbindする。`forgejo.trustedProxies`（IP/CIDRのlist、既定loopbackのみ）は`X-Forwarded-*`を信頼するproxyで、公開時は`backendUrl`へ接続してくるgateway（Traefik）のaddressを利用側が列挙する。未指定のままではclient IPがgateway addressとして記録される。
 
