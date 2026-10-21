@@ -34,7 +34,8 @@ let
         "/run/current-system"
         "-/run/nscd:/var/run/nscd"
         "-/run/systemd/resolve"
-      ];
+      ]
+      ++ map (path: "-${path}") cfg.readOnlyPaths;
       InaccessiblePaths = [ "-/boot" ];
       PrivateDevices = true;
       ProtectProc = "invisible";
