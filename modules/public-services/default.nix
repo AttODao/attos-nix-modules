@@ -80,15 +80,6 @@ in
             )
           ) hosts
         )
-        ++ lib.mapAttrsToList (hostname: services: {
-          assertion =
-            builtins.length (
-              lib.unique (
-                map (service: service.private) (lib.filter (service: service.enable) (lib.attrValues services))
-              )
-            ) <= 1;
-          message = "modules.public-services.${hostname}: enabled services must agree on private visibility.";
-        }) hosts
         ++ lib.mapAttrsToList (hostname: _: {
           assertion = builtins.length (lib.filter (route: route.hostname == hostname) routes) <= 1;
           message = "modules.public-services.${hostname}: only one HTTP backend may be enabled for a hostname.";
