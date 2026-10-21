@@ -64,9 +64,12 @@ let
         args = [ "delay=3000000" ];
       };
       # Only the configured account sees the PIN prompt; others skip it (the next rule) and use pam_unix.
+      # ignore=ignore: pam_succeed_if returns PAM_IGNORE from setcred. Taking the jump there makes
+      # libpam carry PAM_IGNORE as the stack status, so pam_setcred fails for sessions that never
+      # authenticated (the greetd greeter) and greetd does not start.
       login-pin-user = {
         order = base - 20;
-        control = "[success=ok default=1]";
+        control = "[success=ok ignore=ignore default=1]";
         modulePath = pamModule "pam_succeed_if";
         args = [
           "quiet"
