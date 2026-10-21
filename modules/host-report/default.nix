@@ -65,6 +65,16 @@ in
       repeatInterval = seconds 86400 "Seconds between reminders for ongoing problems.";
       staleAfter = seconds 3600 "Maximum report age in seconds, including remote reports.";
       authFailures = seconds 20 "Matching failure events per collection interval before alerting.";
+      smartPercentageUsed = mkOption {
+        type = types.nullOr (types.ints.between 1 255);
+        default = 80;
+        description = "NVMe percentage used warning threshold; null disables this check. Spare at or below its threshold + 10 percentage points always warns.";
+      };
+      diskWritesPerDayGB = mkOption {
+        type = types.nullOr types.ints.positive;
+        default = null;
+        description = "Disk writes in decimal GB per rolling 24h above which to warn; null disables. Requires a complete history window; partial intervals are not extrapolated.";
+      };
       diskPercent = mkOption {
         type = types.ints.between 1 100;
         default = 90;

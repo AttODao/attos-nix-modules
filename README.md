@@ -245,8 +245,13 @@ NixOSの `programs.ssh.systemd-ssh-proxy.enable` は既定falseにする。
 `readerGroup`（既定null）は既存の閲覧group、`onCalendar` は収集時刻。
 `publish.{enable,address,port}` は自ホストJSONだけの静的HTTP配信（既定無効、address必須、port 9180）。
 `fetch.<host>.url` は信頼する内部link上の他ホストのJSONをrootで取得する。firewallは利用側で限定する。
-`alert.{enable,to,from,sendmail,repeatInterval,staleAfter,authFailures,diskPercent}` はsendmailによる
+`alert.{enable,to,from,sendmail,repeatInterval,staleAfter,authFailures,diskPercent,smartPercentageUsed,diskWritesPerDayGB}` はsendmailによる
 新規・継続・解消通知（既定無効、宛先必須、間隔86400秒・鮮度3600秒・認証失敗20件/run・disk 90%）。
+SMARTはmodel・温度・稼働時間・exit statusの意味、NVMeのcritical_warningとビットの意味・percentage_used・spare・累積書込bytes・media errors、ATAの主要raw属性を保存する（serialは含めない）。
+失敗通知には具体的なSMART値を含める。`alert.smartPercentageUsed` は既定80（1–255、nullで無効）、NVMeの寿命使用率が以上なら `smart-wear/<device>`、spareがthreshold+10ポイント以下でも警告する。
+`disk_writes` は実ディスクの書込量、`swap_io` はpswpin/pswpoutを直近24時間のbytesで記録する。
+`alert.diskWritesPerDayGB` は正整数またはnull（既定null=無効、decimal GB）。24時間分の履歴が揃い、観測した書込量が超過すると `disk-writes/<device>` を通知する。
+再起動・カウンタ減少の区間は破棄し、履歴不足時は通知しない。24時間境界をまたぐ区間を含めず外挿もしないため、`observed_seconds` と `window_complete` を併記する。schemaは1のまま、新fieldを持たないpeerも読み取れる。
 `logChecks.<name>.{units,pattern,ipPattern,failure}` は有効なnative serviceだけに追加するjournal checkの調整入力。
 SSH成功・sudo・Fail2banは認証失敗とは別集計。直近24時間の件数と前回cursorをroot専用stateに保持する。
 閲覧側の管理権限・ネットワーク制限は緩めない。[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-host-report)参照。
