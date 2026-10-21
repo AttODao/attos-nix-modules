@@ -148,6 +148,147 @@ def journal(checks, state, errors, now):
     return results
 
 
+# smartctl(8) EXIT STATUS (bits 4-7 primarily describe ATA history).
+SMART_EXIT_BITS = (
+    'command line parse error', 'device open/identify failed or low power',
+    'SMART command failed or checksum error', 'disk failing',
+    'prefail attribute at/below threshold', 'attribute threshold in past',
+    'error log contains errors', 'self-test log contains errors')
+NVME_WARNING_BITS = (
+    'spare below threshold', 'temperature', 'reliability degraded',
+    'read-only', 'volatile backup failed', 'PMR read-only')
+ATA_ATTRIBUTES = {5: 'reallocated_sectors', 197: 'pending_sectors',
+                  198: 'offline_uncorrectable', 241: 'total_lbas_written'}
+
+
+def bit_meanings(value, meanings):
+    if value is None:
+        return None
+    result = [text for bit, text in enumerate(meanings) if value & (1 << bit)]
+    unknown = value & ~((1 << len(meanings)) - 1)
+    if unknown:
+        result.append(f'unknown bits 0x{unknown:x}')
+    return result
+
+
+def smart_details(device, data):
+    nvme = data.get('nvme_smart_health_information_log', {})
+    units = nvme.get('data_units_written')
+    warning = nvme.get('critical_warning')
+    status = data.get('smartctl', {}).get('exit_status')
+    table = data.get('ata_smart_attributes', {}).get('table', [])
+    attributes = {row['id']: row.get('raw', {}).get('value') for row in table}
+    return {
+        'device': device, 'model': data.get('model_name'),
+        'passed': data.get('smart_status', {}).get('passed'),
+        'exit_status': status,
+        'exit_status_meanings': bit_meanings(status, SMART_EXIT_BITS),
+        'temperature': data.get('temperature', {}).get('current'),
+        'power_on_hours': data.get('power_on_time', {}).get(
+            'hours', nvme.get('power_on_hours')),
+        'nvme': dict({key: nvme.get(key) for key in (
+            'critical_warning', 'available_spare', 'available_spare_threshold',
+            'percentage_used', 'data_units_written', 'media_errors',
+            'unsafe_shutdowns')},
+            critical_warning_meanings=bit_meanings(warning, NVME_WARNING_BITS),
+            data_units_written_bytes=units * 512000 if units is not None
+            else None),
+        'ata': {name: attributes.get(key)
+                for key, name in ATA_ATTRIBUTES.items()}}
+
+
+def counter_window(history, now, boot_id, counters):
+    # Keep one sample on/before the boundary, plus bounded newer history.
+    # Sum only whole observed intervals inside 24h: no extrapolation, and no
+    # allocation of writes across the boundary based on an assumed rate.
+    cutoff = now - 86400
+    history = [row for row in history if row['at'] < now]
+    older = [row for row in history if row['at'] <= cutoff]
+    newer = [row for row in history if row['at'] > cutoff]
+    rows = ((older[-1:] + newer)[-2047:]
+            + [{'at': now, 'boot_id': boot_id, 'counters': counters}])
+    result = {}
+    for key in counters:
+        total = 0
+        seconds = 0
+        complete = rows[0]['at'] <= cutoff
+        resets = 0
+        for before, after in zip(rows, rows[1:]):
+            start = before['counters'].get(key)
+            end = after['counters'].get(key)
+            if (before['boot_id'] != after['boot_id'] or start is None
+                    or end is None or end < start):
+                complete = False
+                resets += 1
+                continue
+            if before['at'] >= cutoff:
+                total += end - start
+                seconds += after['at'] - before['at']
+        result[key] = {'count': total, 'observed_seconds': seconds,
+                       'window_complete': complete,
+                       'discarded_intervals': resets}
+    return rows, result
+
+
+def io_activity(state, now, proc=Path('/proc'), sys_block=Path('/sys/block')):
+    counters = {}
+    for line in (proc / 'diskstats').read_text().splitlines():
+        parts = line.split()
+        name = parts[2]
+        # /sys/block contains whole disks, not partitions; device excludes
+        # virtual dm/md/loop/zram. Do not count stacked devices twice.
+        if ((sys_block / name / 'device').exists()
+                and not name.startswith(('dm-', 'loop', 'zram'))):
+            counters['disk/' + name] = int(parts[9])
+    vmstat = dict(line.split() for line in
+                  (proc / 'vmstat').read_text().splitlines())
+    for key in ('pswpin', 'pswpout'):
+        counters[key] = int(vmstat[key])
+    boot_id = (proc / 'sys/kernel/random/boot_id').read_text().strip()
+    rows, windows = counter_window(state.get('io_history', []), now,
+                                   boot_id, counters)
+    state['io_history'] = rows
+    disks = []
+    for key, window in windows.items():
+        if key.startswith('disk/'):
+            sectors = counters[key]
+            disks.append(dict(window, device='/dev/' + key[5:],
+                              write_sectors=sectors,
+                              written_bytes_24h=window['count'] * 512))
+    page_size = os.sysconf('SC_PAGE_SIZE')
+    swap = {'page_size': page_size}
+    for key in ('pswpin', 'pswpout'):
+        swap[key] = dict(windows[key], pages=counters[key],
+                         bytes_24h=windows[key]['count'] * page_size)
+    return disks, swap
+
+
+def smart_summary(item):
+    details = []
+    nvme = item.get('nvme') or {}
+    warning = nvme.get('critical_warning')
+    if warning is not None:
+        meanings = bit_meanings(warning, NVME_WARNING_BITS)
+        details.append(f'critical_warning=0x{warning:02x} '
+                       f"({', '.join(meanings) or 'none'})")
+    for key, label, suffix in (
+            ('percentage_used', 'percentage_used', '%'),
+            ('available_spare', 'spare', '%'),
+            ('available_spare_threshold', 'spare_threshold', '%'),
+            ('media_errors', 'media_errors', ''),
+            ('data_units_written_bytes', 'written_bytes', '')):
+        if nvme.get(key) is not None:
+            details.append(f'{label}={nvme[key]}{suffix}')
+    for key, value in (item.get('ata') or {}).items():
+        if value is not None:
+            details.append(f'{key}={value}')
+    details.append(f"passed={item.get('passed')}")
+    status = item.get('exit_status')
+    meanings = bit_meanings(status, SMART_EXIT_BITS)
+    details.append(f"exit_status={status} ({', '.join(meanings or [])})")
+    return ', '.join(details)
+
+
 def collect(cfg, state):
     now = time.time()
     errors = []
@@ -233,15 +374,16 @@ def collect(cfg, state):
         'smartctl', '--scan', '--json']).get('devices', []), [])
     for device in devices:
         def health():
-            data = command_json(['smartctl', '--json', '-H', '-d',
+            data = command_json(['smartctl', '--json', '-H', '-A', '-i', '-d',
                                  device['type'], device['name']],
                                 allowed=tuple(range(256)))
-            return {'device': device['name'],
-                    'passed': data.get('smart_status', {}).get('passed'),
-                    'exit_status': data['smartctl']['exit_status']}
+            return smart_details(device['name'], data)
         status = attempt('smart health', health, None)
         if status:
             report['smart'].append(status)
+    activity = attempt('io activity', lambda: io_activity(state, now),
+                       ([], {}))
+    report['disk_writes'], report['swap_io'] = activity
     # Interface/peer dumps contain private/preshared keys.
     # Select public fields explicitly and never publish a dump or stderr.
     report['wireguard'] = attempt('wireguard', lambda: [
@@ -308,9 +450,31 @@ def problems(report, alert):
         if any(row['value'] for row in item['counters']):
             add('btrfs/' + item['mount'], 'btrfs errors: ' + item['mount'])
     for item in report['smart']:
-        if item['passed'] is not True or item['exit_status'] != 0:
+        nvme = item.get('nvme') or {}
+        summary = smart_summary(item)
+        if (item['passed'] is not True or item['exit_status'] != 0
+                or nvme.get('critical_warning')):
+            label = 'FAILED' if (item['passed'] is False
+                                 or nvme.get('critical_warning')) else 'CHECK'
             add('smart/' + item['device'],
-                f"SMART {item['device']}: {item['passed']}")
+                f"SMART {item['device']} {label}: {summary}")
+        wear = alert.get('smartPercentageUsed', 80)
+        used = nvme.get('percentage_used')
+        spare = nvme.get('available_spare')
+        threshold = nvme.get('available_spare_threshold')
+        if ((wear is not None and used is not None and used >= wear)
+                or (spare is not None and threshold is not None
+                    and spare <= threshold + 10)):
+            add('smart-wear/' + item['device'],
+                f"SMART {item['device']} wear warning: {summary}")
+    limit = alert.get('diskWritesPerDayGB')
+    for item in report.get('disk_writes', []):
+        if (limit is not None and item.get('window_complete')
+                and item['written_bytes_24h'] > limit * 1000000000):
+            gb = item['written_bytes_24h'] / 1000000000
+            add('disk-writes/' + item['device'],
+                f"disk writes {item['device']}: {gb:.2f} GB/24h > {limit} GB; "
+                f"observed {item['observed_seconds']:.0f}s (not extrapolated)")
     for item in report['containers']:
         if item['state'] not in ('running',) or item['health'] == 'unhealthy':
             add('container/' + item['name'], f"container {item['name']}: "
