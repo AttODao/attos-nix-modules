@@ -58,7 +58,12 @@ in
             "${root}/fonts:/usr/local/share/fonts/custom"
           ]
           ++ lib.optional (mediaDir != null) "${mediaDir}:/ytdl-sub";
-          BindPaths = [ "${root}/music:/music" ];
+          # The database stores library roots and image paths under the container's /config and /cache.
+          BindPaths = [
+            "${root}/music:/music"
+            "${root}/config:/config"
+            "${root}/cache:/cache"
+          ];
         };
       };
       networking.firewall = ps.backendFirewall config s [ ];
