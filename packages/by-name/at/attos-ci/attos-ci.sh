@@ -109,11 +109,18 @@ sync_strata_images() {
 }
 
 update_packages() {
-  local pkg failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop strata-desktop)
+  local pkg version failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop strata-desktop ccpocket-bridge)
   before=$(package_versions "${packages[@]}")
   for pkg in "${packages[@]}"; do
     local args=(--flake "$pkg")
     [ "$pkg" = pi ] && args+=(--custom-dep modelData)
+    if [ "$pkg" = ccpocket-bridge ]; then
+      # The releases feed nix-update reads is flooded by the monorepo's app tags; take the newest bridge tag.
+      version=$(git ls-remote --tags --refs https://github.com/K9i-0/ccpocket 'bridge/v*' | sed 's|.*refs/tags/bridge/v||' |
+        grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1) || true
+      [ -n "$version" ] || { failed+=("$pkg"); continue; }
+      args+=(--version "$version")
+    fi
     nix-update "${args[@]}" || failed+=("$pkg")
   done
   update-nix-fetchgit modules/pi/resources.nix modules/skills/sources.nix || failed+=(pi-and-skill-sources)

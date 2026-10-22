@@ -1,7 +1,7 @@
 {
   lib,
   buildNpmPackage,
-  fetchurl,
+  fetchFromGitHub,
   nodejs_22,
   makeWrapper,
   patchelf,
@@ -11,11 +11,12 @@ buildNpmPackage (finalAttrs: {
   pname = "ccpocket-bridge";
   version = "1.90.0";
 
-  # Raw archive hash of the bridge/v1.90.0 tag, not the unpacked fetchFromGitHub hash.
-  src = fetchurl {
-    url = "https://codeload.github.com/K9i-0/ccpocket/tar.gz/f20a339dd100c5e0f60060340b171eb5315fd9f4";
-    name = "ccpocket-${finalAttrs.version}.tar.gz";
-    hash = "sha256-cMPCNy3v8QwWAuQbxuESQC6kdR88s3w7yzYO23MbswI=";
+  # The monorepo tags each app separately; the bridge releases are bridge/v<version>.
+  src = fetchFromGitHub {
+    owner = "K9i-0";
+    repo = "ccpocket";
+    tag = "bridge/v${finalAttrs.version}";
+    hash = "sha256-pYP5/FPXlbpQj7tZaH9l6JQj0LWWP2vdN3LGoxWBThw=";
   };
 
   nodejs = nodejs_22;
