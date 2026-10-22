@@ -68,7 +68,7 @@ in
       karakeep-chrome = {
         # Official image labels: Chrome 154.0.8037.57; no version tag exists.
         # Review browser updates and replace this registry index digest explicitly.
-        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep-chrome:release@sha256:c51a8c8e6c3c1040a50fa0ecfd0b2fc298401b4229262636552458151f6f18fa";
+        image = lib.mkDefault "ghcr.io/karakeep-app/karakeep-chrome:release@sha256:4ad61127638dd27bfe685222787c5780dd1d083d23a7658c39af657775814c44";
         autoRemoveOnStop = lib.mkDefault false;
         extraOptions = lib.mkDefault [
           "--restart=unless-stopped"
