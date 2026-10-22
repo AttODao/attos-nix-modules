@@ -18,7 +18,7 @@ usage() {
   cat >&2 <<'USAGE'
 usage: attos-ci COMMAND [ARGS]
   update-shared            bump attos-nix-modules inputs: HM/hermes pins in flake.nix, flake.lock
-  update-packages          nix-update every versioned custom package, update-nix-fetchgit the Pi and skill sources
+  update-packages          nix-update every versioned custom package (Strata API images follow strata-desktop), update-nix-fetchgit the Pi and skill sources
   check-consumers REPO...  evaluate consumer hosts (owner/repo:host,host) against this checkout
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
 USAGE
@@ -78,8 +78,38 @@ fetch_summary() {
   '
 }
 
+# The API-only Strata images (modules/strata) and strata-desktop share one data folder, so the images follow the
+# desktop release: every flavor's <version>-<flavor> tag is resolved to its registry digest. Returns 1 (file
+# unchanged) when any flavor is not published yet.
+strata_images=modules/strata/nixos.nix
+strata_repo=niko1221/strata
+sync_strata_images() {
+  local version token tag tags flavor digest work
+  version=$(nix eval --raw .#strata-desktop.version) || return 1
+  token=$(curl -fsS "https://ghcr.io/token?scope=repository:$strata_repo:pull" | jq -r .token) || return 1
+  work=$(mktemp)
+  cp "$strata_images" "$work"
+  mapfile -t tags < <(grep -oE "ghcr\.io/$strata_repo:[^@\"]+" "$strata_images" | cut -d: -f2)
+  [ ${#tags[@]} -gt 0 ] || { rm -f "$work"; return 1; }
+  for tag in "${tags[@]}"; do
+    flavor=${tag#*-}
+    digest=$(curl -fsSI -H "Authorization: Bearer $token" \
+      -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+      "https://ghcr.io/v2/$strata_repo/manifests/$version-$flavor" | tr -d '\r' | awk 'tolower($1) == "docker-content-digest:" { print $2 }') || true
+    if ! [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]; then
+      echo "::warning::$strata_repo:$version-$flavor is not published; keeping strata-desktop and its images" >&2
+      rm -f "$work"
+      return 1
+    fi
+    sed -i -E "s|(ghcr\.io/$strata_repo:)[^@\"]+-$flavor@sha256:[0-9a-f]{64}|\1$version-$flavor@$digest|" "$work"
+    grep -qF "$strata_repo:$version-$flavor@$digest" "$work" || { rm -f "$work"; return 1; }
+  done
+  cat "$work" >"$strata_images"
+  rm -f "$work"
+}
+
 update_packages() {
-  local pkg failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio)
+  local pkg failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop strata-desktop)
   before=$(package_versions "${packages[@]}")
   for pkg in "${packages[@]}"; do
     local args=(--flake "$pkg")
@@ -87,6 +117,11 @@ update_packages() {
     nix-update "${args[@]}" || failed+=("$pkg")
   done
   update-nix-fetchgit modules/pi/resources.nix modules/skills/sources.nix || failed+=(pi-and-skill-sources)
+  if ! sync_strata_images; then
+    # Keep the desktop app on the release the API images have; both share one data folder.
+    git checkout -- packages/by-name/st/strata-desktop/package.nix
+    failed+=(strata-desktop-and-images)
+  fi
   after=$(package_versions "${packages[@]}")
   {
     echo "### package"
@@ -101,6 +136,7 @@ update_packages() {
     echo "| --- | --- | --- |"
     fetch_summary modules/pi/resources.nix modules/skills/sources.nix
     echo
+    git diff --quiet -- "$strata_images" || { echo "Strata API image: strata-desktopと同じ版のtag・digestへ更新"; echo; }
     [ ${#failed[@]} -eq 0 ] || echo "更新できなかったもの: ${failed[*]}"
   } >"$summary_file"
   [ ${#failed[@]} -eq 0 ] || echo "::warning::not updated: ${failed[*]}"
