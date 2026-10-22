@@ -7,16 +7,16 @@
 # Remove this override once the pinned nixpkgs provides Pi >= 1.3.0.
 pi-coding-agent.overrideAttrs (
   finalAttrs: previousAttrs: {
-    version = "1.3.0";
+    version = "1.4.0";
 
     src = fetchFromGitHub {
       owner = "earendil-works";
       repo = "pi";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-AsutbwnjiwwLkB5tqLW+1GdGZyLmXsU0W+SNdNhJu7U=";
+      hash = "sha256-N9NOpiiZTbOMDMV+CxvJAgtLjJJ1/8NJBGS0cFHkhsc=";
     };
 
-    npmDepsHash = "sha256-+gFyvrhkCsF99oNvs0gBmLXnDW0hWnZI/wFId7UbI6Q=";
+    npmDepsHash = "sha256-aBzVz78IxZQlzPYC72Ufa2YFtkow6nZR24YBYZrv9W0=";
     npmDeps = fetchNpmDeps {
       name = "pi-coding-agent-${finalAttrs.version}-npm-deps";
       inherit (finalAttrs) src;
@@ -25,7 +25,7 @@ pi-coding-agent.overrideAttrs (
 
     modelData = fetchurl {
       url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-      hash = "sha256-U0PhY5vzQ73DNE3zrWwxwFpQtoutB6xrzhCJDUtrimE=";
+      hash = "sha256-tA4rqLtvwzKQj4uW6DfcLR/ftF65zTgvWu0RFGKYHjw=";
     };
 
     buildPhase = ''
