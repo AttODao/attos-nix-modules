@@ -6,10 +6,10 @@
 }:
 let
   pname = "open-deck-desktop";
-  version = "1.0.6";
+  version = "1.0.7";
   src = fetchurl {
     url = "https://github.com/kawa-nobu/Open-Deck-Desktop/releases/download/v${version}/Open-Deck-${version}-linux-x86_64.AppImage";
-    hash = "sha256-khOQQ9HJYxveg6LO+AwLKUwkghSj3jelNtLNZUoH+iY=";
+    hash = "sha256-3vedy+0+smWET/lVL7DcG1HL2lHz0AlB3wWFnYOMhjw=";
   };
   contents = appimageTools.extract { inherit pname version src; };
 in
