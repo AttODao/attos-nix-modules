@@ -67,6 +67,26 @@
       default = { };
       description = "Custom CalDAV accounts keyed by account ID, applied as adjustable defaults to every Home Manager user.";
     };
+    idle = {
+      lockAfter = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.positive;
+        default = null;
+        description = "Idle seconds before locking; null leaves the behavior unspecified.";
+      };
+      screenOffAfter = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.positive;
+        default = null;
+        description = "Idle seconds before turning screens off; null leaves the behavior unspecified.";
+      };
+      suspendAfter = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.positive;
+        default = null;
+        description = "Idle seconds before locking and suspending; null leaves the behavior unspecified.";
+      };
+    };
+    headroom.enable = lib.mkEnableOption "Headroom AI plan usage in the Noctalia bar";
+    systemdUnits.enable = lib.mkEnableOption "systemd unit management through the Noctalia /svc launcher";
+    wallpaperEngine.enable = lib.mkEnableOption "Wallpaper Engine through the Noctalia W Engine plugin";
     screenRecorder = {
       enable = lib.mkEnableOption "Noctalia screen recorder";
       source = lib.mkOption {
@@ -83,6 +103,13 @@
   };
 
   config = lib.mkIf config.modules.noctalia.enable {
+    assertions = [
+      {
+        assertion =
+          !(config.modules.noctalia.wallpaperEngine.enable && config.modules.linux-wallpaperengine.enable);
+        message = "modules.noctalia.wallpaperEngine and modules.linux-wallpaperengine cannot be enabled together: W Engine kills all linux-wallpaperengine processes on startup.";
+      }
+    ];
     # Recording from a monitor or window goes through gsr-kms-server, which needs the setcap
     # wrapper from the NixOS module; the portal source records through PipeWire without it.
     programs.gpu-screen-recorder.enable = lib.mkDefault (

@@ -12,13 +12,22 @@ let
   noctalia = cmd: "noctalia msg ${cmd}";
   powerButtonCommand = "${noctalia "session lock"} && sleep 1 && ${noctalia "monitors off"}";
   lidMonitorCommand = action: "sleep 1 && ${noctalia "monitors ${action}"}";
-  screenshotDirectory = lib.escapeShellArg "${config.xdg.userDirs.pictures}/Screenshots";
   lua = lib.generators.mkLuaInline;
   # Shared settings override the preset; per-user HM settings can override both.
   sharedSettings =
     defaults:
     lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault) (
       lib.recursiveUpdate defaults cfg.settings
+      // {
+        # Controller input is not Wayland activity. Keep this additive with consumer rules.
+        window_rule = [
+          {
+            match.class = ".*";
+            idle_inhibit = "fullscreen";
+          }
+        ]
+        ++ (cfg.settings.window_rule or [ ]);
+      }
     );
 
   luaBind = keys: dispatcher: options: {
@@ -60,10 +69,7 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
-    home.packages = [
-      pkgs.hyprshot
-    ]
-    ++ lib.optional cfg.neowall.enable pkgs.neowall;
+    home.packages = lib.optional cfg.neowall.enable pkgs.neowall;
 
     xdg.configFile = lib.mkIf cfg.neowall.enable {
       "neowall/config.vibe".text = ''
@@ -321,10 +327,10 @@ in
         ++ workspaceBinds
         ++ [
 
-          # Keep the frozen preview; hyprshot/grim still omits the cursor.
-          (modCommand "SHIFT + S" "uwsm app -t service -- hyprshot --freeze -m region -o ${screenshotDirectory}")
-          (modCommand "ALT + SHIFT + S" "uwsm app -t service -- hyprshot --freeze -m window -o ${screenshotDirectory}")
-          (modCommand "CTRL + SHIFT + S" "uwsm app -t service -- hyprshot --freeze -m output -o ${screenshotDirectory}")
+          (modCommand "SHIFT + S" (noctalia "screenshot-region"))
+          (modCommand "ALT + SHIFT + S" (noctalia "screenshot-annotate"))
+          (modCommand "CTRL + SHIFT + S" (noctalia "screenshot-fullscreen"))
+          (luaBind ''"ALT + Tab"'' ''hl.dsp.exec_cmd("noctalia msg window-switcher hold")'' null)
 
           (modCommand "SHIFT + R" "hyprctl reload")
           (modBind "SHIFT + E" "hl.dsp.exit()")

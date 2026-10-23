@@ -11,6 +11,32 @@ let
   recordingsDirectory =
     config.programs.noctalia.settings.plugin_settings."noctalia/screen_recorder".directory;
   recorderPackage = osConfig.programs.gpu-screen-recorder.package;
+  externalWallpaper =
+    osConfig.modules.hyprland.neowall.enable
+    || config.services.linux-wallpaperengine.enable
+    || cfg.wallpaperEngine.enable;
+  idleBehaviors =
+    lib.optionalAttrs (cfg.idle.lockAfter != null) {
+      lock = {
+        action = "lock";
+        timeout = cfg.idle.lockAfter;
+        enabled = true;
+      };
+    }
+    // lib.optionalAttrs (cfg.idle.screenOffAfter != null) {
+      "screen-off" = {
+        action = "screen_off";
+        timeout = cfg.idle.screenOffAfter;
+        enabled = true;
+      };
+    }
+    // lib.optionalAttrs (cfg.idle.suspendAfter != null) {
+      "lock-and-suspend" = {
+        action = "lock_and_suspend";
+        timeout = cfg.idle.suspendAfter;
+        enabled = true;
+      };
+    };
   # Every leaf (lists included) becomes a default so users can override parts without mkForce.
   sharedSettings = lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault);
 in
@@ -19,7 +45,12 @@ in
     home.packages = [
       pkgs.wl-clipboard
     ]
-    ++ lib.optional cfg.screenRecorder.enable recorderPackage;
+    ++ lib.optional cfg.screenRecorder.enable recorderPackage
+    ++ lib.optionals cfg.wallpaperEngine.enable [
+      pkgs.linux-wallpaperengine
+      pkgs.util-linux
+      pkgs.procps
+    ];
 
     systemd.user.tmpfiles.rules = lib.mkIf cfg.screenRecorder.enable [
       "d ${builtins.toJSON recordingsDirectory} 0755 - - -"
@@ -45,20 +76,48 @@ in
       customPalettes.Everforest = ./Everforest.json;
 
       settings = lib.mkMerge [
-        {
-          plugins.enabled = lib.optional cfg.screenRecorder.enable "noctalia/screen_recorder";
-          plugin_settings = lib.mkIf cfg.screenRecorder.enable {
-            "noctalia/screen_recorder" = {
-              directory = lib.mkDefault defaultRecordingsDirectory;
-              video_source = lib.mkDefault cfg.screenRecorder.source;
-              video_codec = lib.mkDefault cfg.screenRecorder.codec;
-            };
+        (lib.mkIf cfg.screenRecorder.enable (sharedSettings {
+          plugin_settings."noctalia/screen_recorder" = {
+            directory = defaultRecordingsDirectory;
+            video_source = cfg.screenRecorder.source;
+            video_codec = cfg.screenRecorder.codec;
           };
-          widget = lib.mkIf cfg.screenRecorder.enable {
-            screen_recorder.type = "noctalia/screen_recorder:recorder";
+          widget.screen_recorder.type = "noctalia/screen_recorder:recorder";
+        }))
+        (lib.mkIf cfg.headroom.enable (sharedSettings {
+          widget.headroom.type = "ayagmar/headroom:usage";
+          plugin_settings."ayagmar/headroom" = {
+            provider_codex = "off";
+            provider_antigravity = "off";
           };
-        }
+        }))
+        (lib.mkIf cfg.wallpaperEngine.enable (sharedSettings {
+          widget.wallpaper_engine.type = "tadomika_ari/w-engine:w-engine-widget";
+          plugin_settings."tadomika_ari/w-engine".sync_colors = false;
+        }))
+        (lib.mkIf (idleBehaviors != { }) (sharedSettings {
+          idle.behavior = idleBehaviors;
+        }))
         (sharedSettings {
+          plugins = {
+            auto_update = "official";
+            enabled =
+              lib.optional cfg.screenRecorder.enable "noctalia/screen_recorder"
+              ++ lib.optional cfg.headroom.enable "ayagmar/headroom"
+              ++ lib.optional cfg.systemdUnits.enable "srounce/systemd"
+              ++ lib.optional cfg.wallpaperEngine.enable "tadomika_ari/w-engine";
+          };
+          wallpaper.enabled = !externalWallpaper;
+          lockscreen.blurred_desktop = true;
+          hot_corners = {
+            enabled = true;
+            delay_ms = 150;
+            top_left.action = "launcher";
+          };
+          widget.network = {
+            type = "network";
+            show_vpn_label = true;
+          };
           bar = {
             order = [ "main" ];
             main = {
@@ -76,8 +135,9 @@ in
                 "launcher"
                 "clock"
                 "sysmon"
-                "active_window"
-              ];
+              ]
+              ++ lib.optional cfg.headroom.enable "headroom"
+              ++ [ "active_window" ];
               center = [
                 "workspaces"
               ];
@@ -85,6 +145,7 @@ in
                 "media"
               ]
               ++ lib.optional cfg.screenRecorder.enable "screen_recorder"
+              ++ lib.optional cfg.wallpaperEngine.enable "wallpaper_engine"
               ++ [
                 "tray"
                 "notifications"
@@ -105,9 +166,12 @@ in
             time_format = "{:%H:%M}";
             date_format = "%Y-%m-%d";
             launch_apps_as_systemd_services = true;
+            polkit_agent = true;
+            window_switcher.mru = true;
+            screenshot.directory = "${config.xdg.userDirs.pictures}/Screenshots";
             panel = {
               transparency_mode = "glass";
-              launcher_placement = "centered";
+              launcher_placement = "floating";
               control_center_placement = "attached";
               session_placement = "attached";
             };
