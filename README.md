@@ -143,8 +143,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | karakeep / attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
-| strata | NixOS | Docker（digest固定のAMD image、greeterからon-demand起動するAPI専用session・モデル別unit・polkit・`strata-headless` CLI） |
-| strata-desktop | HM | —（RX 7000向けAppImage、現状x86_64-linuxのみ。アプリ本体はNix経由で更新） |
+| strata | NixOS | Docker（digest固定のAMD image、greeter sessionまたはデスクトップの`strata-headless start`でon-demand起動するAPI・モデル別unit・polkit） |
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
@@ -173,8 +172,7 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
 - `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
-- `strata.{flavor,dataDir,models,context,apiKeyFile,user}`（公開`public-services.<FQDN>.strata`と共通）: DockerによるAPI専用機能。ローカル配置時はGPU flavor・保存先・root:root 0400の秘密file・既存accountが必須。単独時は127.0.0.1:8080。boot時には起動せず、`Strata (API only)`でモデルを選択する。greeter・GPU設定・電源キー用の`input` groupは利用側が用意する。containerは`user`の権限で動き、Desktopのmodels folderに`<dataDir>/Strata-data`を選ぶとmodelを共有できる。Dockerのport publishはhost firewallを迂回するため到達性を別途制限する。詳細は[Strata](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-strata)。
-- `strata-desktop.sharePort`: 全HMユーザーへAppImageを導入し、API専用機能は有効化しない。`sharePort`はアプリのLAN共有（`0.0.0.0`で待ち受け、アプリ内で毎回有効化）が優先して使うport。既定nullはupstreamの選択で、firewallは利用側が開ける。対応GPU・driver権限は利用側が管理し、更新・制約は[Strata Desktop](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-strata-desktop)を参照。
+- `strata.{flavor,dataDir,models,context,apiKeyFile,user}`（公開`public-services.<FQDN>.strata`と共通）: DockerによるAPI専用機能。ローカル配置時はGPU flavor・保存先・root:root 0400の秘密file・既存accountが必須。単独時は127.0.0.1:8080。boot時には起動せず、`Strata (API only)`でモデルを選択する。greeter・GPU設定・電源キー用の`input` groupは利用側が用意する。containerは`user`の権限で動く。デスクトップの`strata-headless start [モデル名|番号]`でも起動でき、Servingまで待つ（`--no-wait`で即座に戻る）。startは設定userのlocalかつactiveなsessionだけ、stopはSSHからも許可する。`strata-headless status`はreadinessも表示する。デスクトップではcompositorやアプリとVRAMを共有する。Dockerのport publishはhost firewallを迂回するため到達性を別途制限する。詳細は[Strata](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-strata)。
 - `greeter.{cursor,output,defaultUser}`: cursor archiveは既定`desktop-theme.cursor`で、有効時に非null必須。theme名/sizeは`desktop-theme.{cursorName,cursorSize}`に従う。outputは既定null。`defaultUser`（既定null）はgreeterで事前選択するaccountで、nullならuser欄は空のまま。
 - `login-pin.{user,pinDatabaseFile}`: 有効時にどちらも必須。`user`はPINでログインできる唯一のaccount（他のuserはPIN promptを通らずpasswordで認証）。`pinDatabaseFile`はpam_userdbのDB（`.db`で終わる絶対runtime path）。`/etc/security/login-pin/pins.db`を指定した場合だけhost管理となり、`set-login-pin`コマンドを導入してrootがそこへ書く。別pathは復号済みsecretなど利用側が供給する読み取り専用DB。greetd/loginのPAMには`pam_faillock`（5回失敗で300秒lock、成功で解除）と`pam_faildelay`（3秒）を入れる。PIN ruleはNixOSが挿入する早期pam_unix（gnome-keyring・zfs・`failDelay`などが有効なときの`unix-early`）より前に置き、最初のpromptでPINかpasswordのどちらか1回の入力でログインできる（PINが一致すればそこで認証完了、不一致なら同じ入力をpasswordとしてpam_unixが再利用）。PINでログインしたときはgnome-keyringはpasswordで解錠されない。標準`failDelay`は使わない（同じ早期pam_unixを追加するだけで順序を制御できないため）。
 - `thunderbird.{profile,accounts}`: `profile`（既定`default`）は全HMユーザーに作る既定profile名。`accounts`（既定`{}`）はHMの`accounts.email.accounts`と同じ形のattrsで、全HMユーザーへ`thunderbird.enable = true`既定で適用する。1件以上宣言するときは1件だけ`primary = true`にする。address・server・表示名などの個人識別情報は利用側に置き、認証情報は各ユーザーのprofileに残る。
@@ -364,7 +362,7 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側ホストの一覧は手動実行時のinput `consumers` で上書きできる。PRのタイトル・本文は日本語。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
-- `update/packages`: version固定のcustom package（Open-Deck・Strata DesktopなどのAppImage、CC Pocket Bridgeを含む）、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。StrataのAPI専用image（`modules/strata/nixos.nix`）はRenovateの対象外で、Strata Desktopと同じ版のtag・digestへ一緒に上げる（保存先を共有するため。全flavorのimageが公開されるまでは両方とも据え置く）。
+- `update/packages`: version固定のcustom package（Open-DeckのAppImage、CC Pocket Bridgeを含む）、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。StrataのAPI専用image（`modules/strata/nixos.nix`）はRenovateの対象外で、registryのtag一覧から全flavorの`<version>-<flavor>`が揃う最新の数値版を選び、tag・digestをまとめて更新する。取得失敗や揃う版がない場合はimageの固定を変更しない。
 - OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` とForgejo runner labelの `docker://name:tag@sha256:...` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
 
 flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。

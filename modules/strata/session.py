@@ -1,4 +1,4 @@
-"""Strata VT session and unprivileged status/stop CLI."""
+"""Strata VT session and unprivileged desktop start/status/stop CLI."""
 import argparse
 import json
 import os
@@ -216,11 +216,68 @@ def session():
         print("\033[?25h\033[0m", end="", flush=True)
 
 
+def wait_for_start(model, offset):
+    grace = time.monotonic() + 3
+    next_health = 0
+    try:
+        while True:
+            try:
+                with open(model["log"], "rb") as stream:
+                    if os.fstat(stream.fileno()).st_size < offset:
+                        offset = 0
+                    stream.seek(offset)
+                    print(safe(stream.read().decode("utf-8", "replace")), end="", flush=True)
+                    offset = stream.tell()
+            except OSError:
+                offset = 0
+            status = state(model["unit"])
+            active = status.get("ActiveState", "unknown")
+            if active in ("inactive", "failed") and time.monotonic() >= grace:
+                print(f"Strata {active}; Result: {status.get('Result', 'unknown')}", file=sys.stderr)
+                raise SystemExit(1)
+            if time.monotonic() >= next_health:
+                if active == "active" and ready():
+                    print(safe(f"Serving {model['model']} at {CONFIG['endpoint']}"))
+                    return
+                next_health = time.monotonic() + 2
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nDetached; Strata keeps starting. Check progress with `strata-headless status`, stop with `strata-headless stop`.")
+        raise SystemExit(130) from None
+
+
 def main():
-    parser = argparse.ArgumentParser(description="On-demand Strata API session/control")
-    parser.add_argument("command", choices=["session", "status", "stop"])
+    parser = argparse.ArgumentParser(description="On-demand Strata API: VT session or desktop start/status/stop")
+    parser.add_argument("command", choices=["session", "start", "status", "stop"])
+    parser.add_argument("model", nargs="?")
+    parser.add_argument("--no-wait", action="store_true")
     args = parser.parse_args()
-    if args.command == "session":
+    if args.command != "start" and (args.model is not None or args.no_wait):
+        parser.error("model and --no-wait are only valid with start")
+    if args.command == "start":
+        model = CONFIG["models"][0] if args.model is None else next(
+            (model for i, model in enumerate(CONFIG["models"], 1)
+             if args.model.casefold() == model["model"].casefold() or args.model == str(i)), None)
+        if model is None:
+            available = ", ".join(f"{i}. {model['model']}" for i, model in enumerate(CONFIG["models"], 1))
+            parser.error(f"Unknown model {args.model!r}. Available models: {available}")
+        for other in CONFIG["models"]:
+            if other != model and state(other["unit"]).get("ActiveState") == "active":
+                print(safe(f"Stopping {other['model']} and switching to {model['model']}"), flush=True)
+        offset = 0
+        if state(model["unit"]).get("ActiveState") == "active":
+            try:
+                offset = os.path.getsize(model["log"])
+            except OSError:
+                pass
+        started = systemctl("start", "--no-block", model["unit"])
+        if started.returncode:
+            print(safe(started.stderr), file=sys.stderr)
+            print("start is allowed only from the configured user's local active session (the desktop or the Strata greeter session); stop also works over SSH.", file=sys.stderr)
+            raise SystemExit(1)
+        if not args.no_wait:
+            wait_for_start(model, offset)
+    elif args.command == "session":
         session()
     else:
         found = False
@@ -231,7 +288,7 @@ def main():
                 if args.command == "stop":
                     stop(model["unit"])
                 else:
-                    print(f"{model['unit']} model={model['model']} state={current}")
+                    print(f"{model['unit']} model={model['model']} state={current} ready={'yes' if ready() else 'no'}")
         if args.command == "status":
             if not found:
                 print("No active model.")
