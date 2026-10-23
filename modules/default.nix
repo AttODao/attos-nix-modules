@@ -61,7 +61,6 @@
     ./solaar
     ./ssh
     ./steam
-    ./strata-desktop
     ./thunderbird
     ./userDirs
     ./vscode

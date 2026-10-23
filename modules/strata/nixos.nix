@@ -56,7 +56,7 @@ in
           prepare = pkgs.writeShellScript "${n}-prepare" ''
             set -euo pipefail
             ${docker} rm -f strata-headless >/dev/null 2>&1 || true
-            # The desktop app shares <dataDir>/Strata-data as its models folder; hand over files an older root container wrote.
+            # Hand over files an older root container wrote before running as the configured user.
             ${pkgs.findutils}/bin/find ${q root} -xdev \( ! -user ${q user} -o ! -group ${q group} \) \
               -exec ${pkgs.coreutils}/bin/chown -h ${q "${user}:${group}"} {} +
             ${sessionPackage.python}/bin/python ${sessionPackage}/libexec/prepare.py ${q keyFile} ${q runtime} "$(${pkgs.coreutils}/bin/id -g ${q user})"
@@ -65,7 +65,7 @@ in
             set -euo pipefail
             exec > >(${pkgs.coreutils}/bin/tee -a ${q "${runtime}/console.log"}) 2>&1
             # Upstream HEALTHCHECK passes its key in argv; use unauthenticated /health in the session instead.
-            # Run as the session user so the desktop app can use the same model files.
+            # Run without root privileges, with user-owned persistent data.
             exec ${docker} run --rm --name strata-headless --no-healthcheck \
               --user "$(${pkgs.coreutils}/bin/id -u ${q user}):$(${pkgs.coreutils}/bin/id -g ${q user})" \
               --device /dev/kfd --device /dev/dri \
