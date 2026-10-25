@@ -1,8 +1,8 @@
 # Hermes Desktopのremote専用build。upstreamのnix/desktop.nixを利用ホストのpkgsで呼び、
 # local backend（Python venv）をclosureへ入れない。
 {
-  lib,
   callPackage,
+  nodejs_26,
   writeText,
   writeShellScriptBin,
   python3,
@@ -14,22 +14,10 @@ let
   src = hermes-agent-src;
   # Release tag of the hermes-agent flake input (packages/default.nix reads it from flake.lock).
   inherit (hermes-agent-src) version;
-  # Match upstream nix/packages.nix: pm/lock.json supplies the Node/npm toolchain.
-  pinnedPmPackages = lib.filterAttrs (_: lib.isDerivation) (
-    callPackage "${src}/nix/pm-packages.nix" { }
-  );
-  pmPackages = pinnedPmPackages // {
-    node = pinnedPmPackages.node.overrideAttrs (previous: {
-      # Sorting this upstream ELF's program headers makes glibc's loader segfault.
-      # Preserve their order while still patching the interpreter/RPATH for NixOS.
-      patchelfFlags = (previous.patchelfFlags or [ ]) ++ [ "--no-sort" ];
-      doInstallCheck = true;
-      installCheckPhase = ''
-        runHook preInstallCheck
-        "$out/bin/node" --version
-        runHook postInstallCheck
-      '';
-    });
+  # Upstream lib.nix reads only pmPackages.node; nixpkgs' Node avoids patching
+  # the prebuilt pm binary, which segfaults with patchelf 0.19.x.
+  pmPackages = {
+    node = nodejs_26;
   };
   hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix pmPackages; };
   # icon生成はPillowとresvg-pyだけを使う。
