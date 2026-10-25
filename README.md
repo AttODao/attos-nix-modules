@@ -289,7 +289,7 @@ Traefikの`accessLog.enable`（既定false）は`/var/log/traefik/access.log`へ
 
 Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（WireGuard等）で、Traefikのwants/afterへ追加する。
 
-SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
+SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`trustedProxies`（文字列list、既定[]）はclient addressを判別するために `X-Forwarded-For` / `X-Real-IP` を信頼するreverse proxyのaddress/CIDRで、loopbackは引き続き信頼する。`passNetworks`（文字列list、既定[]）はlimiter・bot対策を除外して無制限のAPI利用を許すclient address/CIDRで、信頼する自動化hostなど最小範囲に絞る。どちらも `limiter = true` が必要。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
 OpenCloudの公開共有linkは既定でpasswordを必須にする（`OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD=true`）。Jellyfinの保存先は`jellyfin:jellyfin` 0750で作る。
 attos-hoyo-dashboardの `timezoneOffset`（`+09:00`形式、local配置時必須）はdailyリセット時刻の固定UTC offsetで、`time.timeZone`から導出しない。DBはimageが作る`POSTGRES_USER`（superuser）で接続する。
 
