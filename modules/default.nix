@@ -6,7 +6,6 @@
     ./attos-hoyo-dashboard
     ./code-server
     ./skills
-    ./sunshine
     ./cloudflare-ddns
     ./cloudflare-public-cnames
     ./dns

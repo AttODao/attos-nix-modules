@@ -48,6 +48,11 @@ in
         default = [ ];
         description = "Explicit read-only host paths visible in both default-deny sandboxes; absent paths are ignored. Does not grant write access or bypass Unix permissions. Do not expose credentials or management sockets.";
       };
+      sandbox = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Run both units in the default-deny filesystem sandbox. Set false only when the whole OS is a dedicated trust boundary for Hermes (for example its own container): the units then see the whole filesystem, the hermes CLI is installed system-wide, and HERMES_HOME, HERMES_MANAGED and HERMES_MANAGED_DIR are exported to every PAM session so login shells and Hermes Desktop SSH connections (which start `hermes serve` over SSH) share the gateway's state and managed scope. readOnlyPaths must then stay empty.";
+      };
       user = account "account";
       group = account "group";
     }
@@ -65,9 +70,13 @@ in
         message = "hermes: backendUrl is required for ${entry.hostname}.";
       }
     ]) (ps.entries config "hermes")
-    ++ lib.optional selected.enabled {
+    ++ lib.optional (selected.enabled && selected.cfg.sandbox) {
       # A user manager would run cron workers outside the sandboxed units.
       assertion = !(config.users.users.${selected.cfg.user}.linger or false == true);
       message = "hermes: users.users.${selected.cfg.user}.linger must stay disabled; cron then runs inside the sandboxed gateway.";
+    }
+    ++ lib.optional (selected.enabled && !selected.cfg.sandbox) {
+      assertion = selected.cfg.readOnlyPaths == [ ];
+      message = "hermes: readOnlyPaths only applies to the sandbox; the unsandboxed units already see the whole filesystem.";
     };
 }

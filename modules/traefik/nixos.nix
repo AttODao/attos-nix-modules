@@ -181,8 +181,7 @@ let
             name = route.hostname;
             value.loadBalancer = {
               servers = [ { url = route.cfg.backendUrl; } ];
-            }
-            // lib.optionalAttrs (route.service == "sunshine") { serversTransport = route.hostname; };
+            };
           }) routes
         )
         // builtins.listToAttrs (
@@ -211,12 +210,6 @@ let
           name = privateMiddleware route;
           value.ipAllowList.sourceRange = cfg.privateNetworks ++ route.cfg.privateExtraNetworks;
         }) (lib.filter extraPrivate routes)
-      );
-      serversTransports = builtins.listToAttrs (
-        map (route: {
-          name = route.hostname;
-          value.insecureSkipVerify = true;
-        }) (lib.filter (route: route.service == "sunshine") routes)
       );
     };
     tcp = {

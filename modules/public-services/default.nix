@@ -99,7 +99,6 @@ in
             )
             [
               "code-server"
-              "sunshine"
             ]
         ++ map (route: {
           assertion = builtins.match "https?://[^[:space:]]+" route.cfg.backendUrl != null;

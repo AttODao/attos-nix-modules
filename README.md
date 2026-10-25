@@ -133,13 +133,13 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
 | zed | HM | 任意のcodex-acp npm policy、claude-code有効時はClaude AgentにNixのclaudeを使用 |
 | discord | HM | Fcitx5 |
-| hermes-desktop | HM | —（remote専用。接続先はHermes dashboard） |
+| hermes-desktop | HM | —（remote専用。dashboard URLまたはSSH接続先） |
 | foot | HM | Fonts |
 | yazi | HM | Foot（FootからFonts） |
 | ssh | NixOS + HM | client: —、`server.enable`: localhost限定OpenSSH |
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
 | ccpocket | HM | —（CC Pocket Bridgeのuser service。agentはユーザーprofileのclaude/codexとSDK同梱のClaude Code） |
-| hermes | NixOS | —（native systemd、sandbox。devenv・nixを同梱） |
+| hermes | NixOS | —（native systemd、sandboxは既定有効。devenv・nixを同梱） |
 | karakeep / attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
@@ -147,7 +147,6 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
-| sunshine | NixOS | Hyprland・Steam |
 | mcsmanager / mailserver / wireguard-server / code-server | NixOS | — |
 | public-services（公開サーバー） | NixOS、Paseo・CC PocketはHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | traefik | NixOS | —（native `services.traefik`） |
@@ -171,7 +170,7 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 `modules.public-services.<FQDN>.<service>` に指定する。
 独自入力は現行ホスト差と、秘密path・保存先・機器/ネットワーク・identity等のconsumer必須入力に限定し、固定値や標準optionの汎用passthroughは公開しない。
 
-- `hyprland.{settings,neowall.enable,lidSwitch.enable,headless}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する（`window_rule`はfullscreen idle inhibitへ追加し、Solaarのruleとも結合）。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
+- `hyprland.{settings,neowall.enable,lidSwitch.enable}`: 共通Lua設定・壁紙shader起動・蓋イベント。`settings`は共有既定値へ再帰的に上書きし、listは置換する（`window_rule`はfullscreen idle inhibitへ追加し、Solaarのruleとも結合）。全HMユーザーへ調整可能な既定値として適用し、ユーザー別の標準HM設定で上書きできる。monitor配置は`settings.monitor`へ書く。listは既定を置換するため、各monitorに`scale`も明示する。Moonlightの全画面HDR切替は`settings.window_rule = [ { match.class = "^com[.]moonlight_stream[.]Moonlight$"; no_auto_hdr = true; } ];`で抑止できる。詳細は[Hyprland](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-hyprland)。
 - `strata.{flavor,dataDir,models,context,apiKeyFile,user}`（公開`public-services.<FQDN>.strata`と共通）: DockerによるAPI専用機能。ローカル配置時はGPU flavor・保存先・root:root 0400の秘密file・既存accountが必須。単独時は127.0.0.1:8080。boot時には起動せず、`Strata (API only)`でモデルを選択する。greeter・GPU設定・電源キー用の`input` groupは利用側が用意する。containerは`user`の権限で動く。デスクトップの`strata-headless start [モデル名|番号]`でも起動でき、Servingまで待つ（`--no-wait`で即座に戻る）。startは設定userのlocalかつactiveなsessionだけ、stopはSSHからも許可する。`strata-headless status`はreadinessも表示する。デスクトップではcompositorやアプリとVRAMを共有する。Dockerのport publishはhost firewallを迂回するため到達性を別途制限する。詳細は[Strata](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-strata)。
 - `greeter.{cursor,output,defaultUser}`: cursor archiveは既定`desktop-theme.cursor`で、有効時に非null必須。theme名/sizeは`desktop-theme.{cursorName,cursorSize}`に従う。outputは既定null。`defaultUser`（既定null）はgreeterで事前選択するaccountで、nullならuser欄は空のまま。
 - `login-pin.{user,pinDatabaseFile}`: 有効時にどちらも必須。`user`はPINでログインできる唯一のaccount（他のuserはPIN promptを通らずpasswordで認証）。`pinDatabaseFile`はpam_userdbのDB（`.db`で終わる絶対runtime path）。`/etc/security/login-pin/pins.db`を指定した場合だけhost管理となり、`set-login-pin`コマンドを導入してrootがそこへ書く。別pathは復号済みsecretなど利用側が供給する読み取り専用DB。greetd/loginのPAMには`pam_faillock`（5回失敗で300秒lock、成功で解除）と`pam_faildelay`（3秒）を入れる。PIN ruleはNixOSが挿入する早期pam_unix（gnome-keyring・zfs・`failDelay`などが有効なときの`unix-early`）より前に置き、最初のpromptでPINかpasswordのどちらか1回の入力でログインできる（PINが一致すればそこで認証完了、不一致なら同じ入力をpasswordとしてpam_unixが再利用）。PINでログインしたときはgnome-keyringはpasswordで解錠されない。標準`failDelay`は使わない（同じ早期pam_unixを追加するだけで順序を制御できないため）。
@@ -199,7 +198,7 @@ archiveのURL/hash・licenseはconsumerに残す。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
 Hyprlandのスクリーンショット3種（領域・注釈・フォーカス中monitor全体）とAlt+TabはNoctaliaへ送る。保存先（Pictures配下のScreenshots）はNoctaliaが保存時に作成する（`.keep`不要）。全windowにfullscreen時のidle inhibit ruleを追加し、consumer・Solaarのruleと結合する。Noctaliaの壁紙はneowall・標準HM linux-wallpaperengine service・W Engineが有効なら既定で無効にし、background surfaceの二重描画を避ける。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
 AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.{goPackage,devenv.enable,nixDirenv.enable,projectGoPackage}`でtoolchain・devenv導入（既定true）・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
-`hermes-desktop.url`はHermes Desktopの初期接続先で、有効時必須。connection.jsonが無い場合だけ書き、sign-inはapp内で行う（認証・接続registryは管理しない）。
+`hermes-desktop.{url,ssh}`はHermes Desktopの初期接続先で、有効時はちょうど一方を指定する。`url`はdashboard URL、`ssh`は`user@host[:port]`で、ユーザーのSSH鍵を使い接続先でapp専用dashboardを起動する。connection.jsonが無い場合だけ書き、認証・既存接続registryは管理しない。
 `immich-client.watchDirectories`は起動時に再帰uploadし、以後監視するディレクトリで、既定nullは各ユーザーのXDG Pictures（`xdg.userDirs.pictures`）を使う。user serviceは`~/.config/immich/auth.yml`（`immich login <url> <api-key>`で作成）がある場合だけ起動し、認証情報は管理しない。
 `discord.{commandLineArgs,service.killMode}`、`zed.{installEditor,userSettings,codexAcp.npmPolicy}`、`vscode.userSettings`、`fcitx5.keyboardLayout`も公開入力を使う。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
 `pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable`（各既定true）で同梱extensionを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterはnpm packageをversion固定（`modules/pi/resources.nix`を参照）で導入し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
@@ -207,13 +206,13 @@ AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・C
 `skills.<name>.enable`（各既定true）でPi・Claude Code共通のskillを個別選択する。skillごとの取得元と対応agentは`modules/skills/catalog.nix`、取得repoの固定は`modules/skills/sources.nix`に置く。pi-mermaid-studio（Pi tool依存）・find-skills（npxでNix管理外へ追加）・ctx-upgrade（Nix管理installの書換え）はPiだけへ導入する。
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
 
-Noctaliaのsystemd launcher、Hyprlandのheadless bootstrap/input/seatd、PipeWire virtual sink、Sunshineのheadless依存は共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
+Noctaliaのsystemd launcher、PipeWire virtual sinkは共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
 [Wikiの公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。
 
 ### SSH client
 
 `modules.ssh.enable = true;` で、全HMユーザーへ共通接続先を設定する。
-`attofort` / `attobox` / `devcon` / `desktop` / `git` / `github` を利用でき、
+`attofort` / `attobox` / `git` / `github` を利用でき、
 Gitは `git.attodao.cc`、GitHubは `github.com` でも同じ設定を使う。
 接続先・ユーザー名は [modules/ssh/home.nix](modules/ssh/home.nix) を参照。
 鍵は各ユーザーの `~/.ssh/id_ed25519` を参照するだけで、配布・生成しない。
@@ -276,7 +275,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`,
-`paseo`, `ccpocket`, `ssh`, `code-server`, `sunshine`, `hermes`, `strata`。
+`paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
 HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
@@ -299,9 +298,9 @@ Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上�
 
 MCSManagerはnative web/daemonを別の非root accountで動かし、Docker socketを渡さない。`dataDir`、既存 `webUser` / `daemonUser` / `group`、runtime `daemonKeyFile` をconsumerが供給する。`generateDaemonKey=true`（既定false）は `dataDir/daemon-key` をroot 0600で初回のみatomic生成し、既存keyを置換しない。この場合 `daemonKeyFile` はnullまたは同pathに限る。管理 `backendUrl` / `daemonBackendUrl` は同じprivate HTTPS hostnameのwebと `/daemon/`（prefixをstripしない）へproxyする。`listenAddress` は既定loopback、management portは自動で開けない。`backendAddress` / `tcpPorts` / `udpPorts` は独立したゲーム公開で、privateはゲームを非公開にしない。初期管理者はprivate初期化UI、または任意のruntime `initialAdminFile`（userName/bcrypt passWord hash）で作成し、既存usersは保持する。
 
-Hermesはupstreamのrelease（`flake.nix`の`hermes-agent` tag、`flake.lock`を参照）のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl,readOnlyPaths}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
-両unitは既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`をread-write、明示した`hermes.readOnlyPaths`（絶対pathのlist、既定[]）をread-onlyでbindする（`bash -l`用の`/run/current-system`、glibcが`/var/run/nscd`で探すnscd、systemd-resolvedの`/run/systemd/resolve`はread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む（upstreamの実行時tool `nodejs`・`ripgrep`・`ffmpeg-headless`も入れる。terminalの`bash -l`がpackage wrapperのPATHを外すため）。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
-upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。両unitは`HERMES_MANAGED=false`とHermesのmanaged scope（`HERMES_MANAGED_DIR`）で、Nixが書くkeyだけを固定し、他のkeyはHermesが`hermes config set`で変更できる。unit外のshellは`.managed`により全keyが変更不可のまま。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/web-dashboard.md)。
+Hermesはupstreamのrelease（`flake.nix`の`hermes-agent` tag、`flake.lock`を参照）のNixOS module（`services.hermes-agent`、native systemd）で、gateway（cronを実行）の`hermes-agent`とdashboard（ブラウザChat/TUI）の`hermes-backend`を動かす。公開入力は `hermes.{dataDir,user,group,backendUrl,readOnlyPaths,sandbox}`（`dataDir`はlocal配置時必須、`user`/`group`は既定`hermes`の既存account、`backendUrl`は有効なrecordで必須）、公開recordは `private = true` 必須。`dataDir`がHOMEで、`HERMES_HOME`は`<dataDir>/.hermes`、作業directoryは`<dataDir>/workspace`。dashboardのbindは既定で単独時`127.0.0.1`、公開時`0.0.0.0`。`services.hermes-agent.backend.host`で変更する。`sandbox = true`（既定）では`users.users.<user>.linger`は禁止（user managerのcron workerがsandbox外で動くため。無効時cronはgateway内で動く）。
+両unitは`hermes.sandbox = true`（既定）で既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`をread-write、明示した`hermes.readOnlyPaths`（絶対pathのlist、既定[]）をread-onlyでbindする（`bash -l`用の`/run/current-system`、glibcが`/var/run/nscd`で探すnscd、systemd-resolvedの`/run/systemd/resolve`はread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む（upstreamの実行時tool `nodejs`・`ripgrep`・`ffmpeg-headless`も入れる。terminalの`bash -l`がpackage wrapperのPATHを外すため）。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
+upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。両unitは`HERMES_MANAGED=false`とHermesのmanaged scope（`HERMES_MANAGED_DIR`）で、Nixが書くkeyだけを固定し、他のkeyはHermesが`hermes config set`で変更できる。sandbox有効時のunit外のshellは`.managed`により全keyが変更不可のまま。`sandbox = false`はOS全体がHermes専用の信頼境界（専用container等）の場合だけ選ぶ。両unitから全filesystemが見えるため`readOnlyPaths`は空必須で、linger禁止も適用しない。CLIとpython3をsystem-wideに導入し、全PAM sessionへ`HERMES_HOME`・`HERMES_MANAGED=false`・unitと同じ`HERMES_MANAGED_DIR`をexportする。login shellとHermes DesktopのSSH接続（remoteで`hermes serve`を起動）がgatewayと同じstate・managed scopeを使う。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/web-dashboard.md)。
 
 ### 複数マシンへの配置
 
@@ -317,13 +316,12 @@ backendの到達性、firewall、ユーザー・secretsの供給はconsumerが�
 Traefikはgateway host上のnative serviceで、各 `backendUrl` へ直接接続する。Open WebUIはTerminalと同じhostのlocal Docker bridge `backend-open-terminal` で接続し、SearXNGへは有効なSearXNG recordの `<backendUrl>/search` で接続する（containerから届くaddressを選ぶ）。WebUIの `backend-ollama` bridgeはinterface名 `br-open-webui` 固定で、host Ollamaへの許可はconsumerのfirewallで行う。
 同一host上のlocal deploymentはサービス種別ごとに1件まで。Groupwareの暗黙Mailserver依存も同じhostを継承する。
 
-code-server / Sunshineも `enable = true; host = "<所有OS>";` でnative実体を有効にする。
-単独利用は同じtyped入力を`modules.code-server` / `modules.sunshine`へ指定する。
+code-serverも `enable = true; host = "<所有OS>";` でnative実体を有効にする。
+単独利用は同じtyped入力を`modules.code-server`へ指定する。
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
 `HASHED_PASSWORD`）。単独利用は127.0.0.1:4444、公開時は他のnative serviceと同じく `backendUrl` のaddress:portでlistenする（全interfaceへbindしない）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 Nerd Font組み込みpackage（`attopkgs.code-server { src = <固定したstandalone release>; }`）は、
 公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
-SunshineはHyprland・Steamも有効にする。公開 `sunshine.{settings,apps,waitForHeadlessOutput}`と`hyprland.headless` / `pipewire.virtualSinks`でheadless出力と音声を選択できる。headless待機とnative autoStartが有効なら、output再作成後にSunshineも起動する。pairing状態・device identity・streamingのfirewallはconsumerに残す。Web UIのproxy登録だけでstreaming portは開かない。
 
 OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Terminal・secret/path・HTTP proxy routeを作らない。WebUIは独立したrecordを持たず、container/unit名は`open-webui`を使う。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
 

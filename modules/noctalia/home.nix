@@ -62,10 +62,6 @@ in
           Requires = cfg.systemd.requires;
           After = cfg.systemd.after;
         };
-        # Restore the launcher when its required headless output is recreated.
-        Install.WantedBy = lib.mkIf (lib.elem "hyprland-headless-output.service" cfg.systemd.requires) [
-          "hyprland-headless-output.service"
-        ];
       };
     };
 
