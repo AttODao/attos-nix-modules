@@ -14,7 +14,24 @@ let
   src = hermes-agent-src;
   # Release tag of the hermes-agent flake input (packages/default.nix reads it from flake.lock).
   inherit (hermes-agent-src) version;
-  hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix; };
+  # Match upstream nix/packages.nix: pm/lock.json supplies the Node/npm toolchain.
+  pinnedPmPackages = lib.filterAttrs (_: lib.isDerivation) (
+    callPackage "${src}/nix/pm-packages.nix" { }
+  );
+  pmPackages = pinnedPmPackages // {
+    node = pinnedPmPackages.node.overrideAttrs (previous: {
+      # Sorting this upstream ELF's program headers makes glibc's loader segfault.
+      # Preserve their order while still patching the interpreter/RPATH for NixOS.
+      patchelfFlags = (previous.patchelfFlags or [ ]) ++ [ "--no-sort" ];
+      doInstallCheck = true;
+      installCheckPhase = ''
+        runHook preInstallCheck
+        "$out/bin/node" --version
+        runHook postInstallCheck
+      '';
+    });
+  };
+  hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix pmPackages; };
   # icon生成はPillowとresvg-pyだけを使う。
   generatedIcons = callPackage "${src}/nix/icons.nix" {
     venv = python3.withPackages (ps: [
