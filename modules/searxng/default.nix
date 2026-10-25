@@ -19,16 +19,44 @@ in
         default = true;
         description = "Enable the SearXNG rate limiter and bot protection with a local Valkey/Redis socket. Disabling it exposes the instance to scraping; standalone instances may keep it off because only loopback can reach them.";
       };
+      trustedProxies = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        description = "Reverse proxy addresses/CIDRs whose X-Forwarded-For/X-Real-IP the limiter trusts to find the client address (for example the gateway address the proxy connects from). Loopback stays trusted.";
+      };
+      passNetworks = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        description = "Client addresses/CIDRs exempt from the limiter and bot detection (for example a trusted automation host). Grants unlimited API access; keep it narrow.";
+      };
     }
   );
 
   config = lib.mkMerge [
     { assertions = s.assertions; }
     (lib.mkIf s.enabled {
+      assertions = [
+        {
+          assertion = s.cfg.limiter || (s.cfg.trustedProxies == [ ] && s.cfg.passNetworks == [ ]);
+          message = "searxng.trustedProxies and searxng.passNetworks require searxng.limiter to be enabled.";
+        }
+      ];
       services.searx = {
         enable = true;
         inherit environmentFile;
         redisCreateLocally = s.cfg.limiter;
+        limiterSettings = lib.mkIf (
+          s.cfg.limiter && (s.cfg.trustedProxies != [ ] || s.cfg.passNetworks != [ ])
+        ) (lib.mapAttrsRecursive (_: lib.mkDefault) {
+          # SearXNGは同梱のlimiter.tomlの既定値にこの設定をdeep mergeする。
+          botdetection = {
+            trusted_proxies = [
+              "127.0.0.0/8"
+              "::1"
+            ] ++ s.cfg.trustedProxies;
+            ip_lists.pass_ip = s.cfg.passNetworks;
+          };
+        });
         settings = lib.mapAttrsRecursive (_: lib.mkDefault) {
           # These default engines require Tor, which this deployment does not provide.
           use_default_settings.engines.remove = [
