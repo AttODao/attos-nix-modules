@@ -345,6 +345,19 @@ in
       wants = ps.afterNetworkOnline.wants ++ cfg.listenServices;
       after = ps.afterNetworkOnline.after ++ cfg.listenServices;
       serviceConfig = {
+        # network-online.target may be reached via another link (wait-online --any), so wait per address.
+        ExecStartPre = lib.mkIf (bound != [ ]) (
+          pkgs.writeShellScript "traefik-wait-addresses" ''
+            for address in ${lib.escapeShellArgs (lib.unique (map (entry: entry.listen) bound))}; do
+              for _ in $(seq 60); do
+                [ -n "$(${pkgs.iproute2}/bin/ip -o addr show to "$address")" ] && continue 2
+                sleep 1
+              done
+              echo "address $address was not configured within 60s" >&2
+              exit 1
+            done
+          ''
+        );
         EnvironmentFile = environmentFile;
         # The Cloudflare DNS-01 provider reads CF_DNS_API_TOKEN.
         ExecStart = lib.mkForce (
