@@ -59,6 +59,14 @@ let
     };
   };
 
+  # OS全体を境界にするときは、agentのtoolがgatewayの子としてsudo・system全体への
+  # 書込みを使えるようupstreamのhardeningも外す。/tmpはSSH sessionと共有する。
+  unsandboxed.serviceConfig = {
+    NoNewPrivileges = lib.mkForce false;
+    ProtectSystem = lib.mkForce false;
+    PrivateTmp = lib.mkForce false;
+  };
+
   # upstreamの全key固定ではなく、Nixが書くkeyだけを同じmanaged scopeで固定する。
   # sandbox無効時はPAM sessionにも渡し、login shell・Desktop SSHとstateを共有する。
   managedDir = pkgs.writeTextDir "config.yaml" (
@@ -94,9 +102,13 @@ in
           ];
         };
 
-        systemd.services.hermes-agent = lib.mkMerge ([ managedScope ] ++ lib.optional cfg.sandbox sandbox);
+        systemd.services.hermes-agent = lib.mkMerge (
+          [ managedScope ] ++ lib.optional cfg.sandbox sandbox ++ lib.optional (!cfg.sandbox) unsandboxed
+        );
         systemd.services.hermes-backend = lib.mkIf (native.backend.mode != "none") (
-          lib.mkMerge ([ managedScope ] ++ lib.optional cfg.sandbox sandbox)
+          lib.mkMerge (
+            [ managedScope ] ++ lib.optional cfg.sandbox sandbox ++ lib.optional (!cfg.sandbox) unsandboxed
+          )
         );
       }
       (lib.mkIf (!cfg.sandbox) {
