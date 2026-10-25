@@ -22,7 +22,6 @@ in
         }
       );
       consoleLogLevel = lib.mkIf cfg.quietBoot (lib.mkDefault 3);
-      initrd.verbose = lib.mkIf cfg.quietBoot (lib.mkDefault false);
       # Add to NixOS/Plymouth parameters rather than replacing their lists.
       kernelParams = lib.mkIf cfg.quietBoot [
         "quiet"

@@ -7,7 +7,7 @@
     quietBoot = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Add Plymouth and quiet console/initrd/kernel defaults; false leaves diagnostics at native NixOS defaults without adding quiet parameters.";
+      description = "Add Plymouth and quiet console/kernel defaults, including systemd initrd status control via kernel parameters; false leaves diagnostics at native NixOS defaults without adding quiet parameters.";
     };
     splashImage = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
