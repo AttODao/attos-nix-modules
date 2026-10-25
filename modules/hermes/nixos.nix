@@ -59,49 +59,56 @@ let
     };
   };
 
-  # Upstream's HERMES_MANAGED locks every config.yaml key. The units pin only the keys Nix
-  # writes (the same terminal.cwd default and settings as upstream's merge) through Hermes's
-  # managed scope, so Hermes can change the rest with `hermes config set`. Shells outside
-  # the units still see the .managed marker and stay locked.
+  # upstreamの全key固定ではなく、Nixが書くkeyだけを同じmanaged scopeで固定する。
+  # sandbox無効時はPAM sessionにも渡し、login shell・Desktop SSHとstateを共有する。
+  managedDir = pkgs.writeTextDir "config.yaml" (
+    builtins.toJSON (lib.recursiveUpdate { terminal.cwd = native.workingDirectory; } native.settings)
+  );
   managedScope.environment = {
     HERMES_MANAGED = lib.mkForce "false";
-    HERMES_MANAGED_DIR = "${pkgs.writeTextDir "config.yaml" (
-      builtins.toJSON (lib.recursiveUpdate { terminal.cwd = native.workingDirectory; } native.settings)
-    )}";
+    HERMES_MANAGED_DIR = "${managedDir}";
   };
 in
 {
-  config = lib.mkIf selected.enabled {
-    services.hermes-agent = {
-      enable = true;
-      createUser = false;
-      inherit (cfg) user group;
-      stateDir = dataDir;
-      backend = {
-        mode = lib.mkDefault "dashboard";
-        host = lib.mkDefault (if selected.standalone then "127.0.0.1" else "0.0.0.0");
-      };
-      # Hermes builds per-task environments itself, as an untrusted Nix user. The
-      # terminal's bash -l drops the package wrapper's PATH, so upstream's own
-      # runtime tools are repeated here.
-      extraPackages = [
-        pkgs.nix
-        pkgs.devenv
-        pkgs.nodejs
-        pkgs.ripgrep
-        pkgs.ffmpeg-headless
-      ];
-    };
+  config = lib.mkIf selected.enabled (
+    lib.mkMerge [
+      {
+        services.hermes-agent = {
+          enable = true;
+          createUser = false;
+          inherit (cfg) user group;
+          stateDir = dataDir;
+          backend = {
+            mode = lib.mkDefault "dashboard";
+            host = lib.mkDefault (if selected.standalone then "127.0.0.1" else "0.0.0.0");
+          };
+          # Hermes builds per-task environments itself, as an untrusted Nix user. The
+          # terminal's bash -l drops the package wrapper's PATH, so upstream's own
+          # runtime tools are repeated here.
+          extraPackages = [
+            pkgs.nix
+            pkgs.devenv
+            pkgs.nodejs
+            pkgs.ripgrep
+            pkgs.ffmpeg-headless
+          ];
+        };
 
-    systemd.services.hermes-agent = lib.mkMerge [
-      sandbox
-      managedScope
-    ];
-    systemd.services.hermes-backend = lib.mkIf (native.backend.mode != "none") (
-      lib.mkMerge [
-        sandbox
-        managedScope
-      ]
-    );
-  };
+        systemd.services.hermes-agent = lib.mkMerge ([ managedScope ] ++ lib.optional cfg.sandbox sandbox);
+        systemd.services.hermes-backend = lib.mkIf (native.backend.mode != "none") (
+          lib.mkMerge ([ managedScope ] ++ lib.optional cfg.sandbox sandbox)
+        );
+      }
+      (lib.mkIf (!cfg.sandbox) {
+        services.hermes-agent.addToSystemPackages = true;
+        environment.sessionVariables = {
+          HERMES_HOME = "${dataDir}/.hermes";
+          HERMES_MANAGED = "false";
+          HERMES_MANAGED_DIR = "${managedDir}";
+        };
+        # Hermes DesktopのSSH接続はremoteでpython3を実行する。
+        environment.systemPackages = [ pkgs.python3 ];
+      })
+    ]
+  );
 }

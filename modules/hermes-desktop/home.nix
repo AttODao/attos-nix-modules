@@ -6,14 +6,22 @@
 }:
 let
   cfg = osConfig.modules.hermes-desktop;
-  # 初回だけremote接続を書く。既存の接続設定・session・tokenはappの状態として保持する。
-  initialConnection = builtins.toJSON {
-    mode = "remote";
-    remote = {
-      inherit (cfg) url;
-      authMode = "oauth";
-    };
-  };
+  # 初回だけ接続を書く。既存の接続設定・session・tokenはappの状態として保持する。
+  initialConnection = builtins.toJSON (
+    if cfg.ssh != null then
+      {
+        mode = "ssh";
+        host = cfg.ssh;
+      }
+    else
+      {
+        mode = "remote";
+        remote = {
+          inherit (cfg) url;
+          authMode = "oauth";
+        };
+      }
+  );
 in
 {
   config = lib.mkIf cfg.enable {

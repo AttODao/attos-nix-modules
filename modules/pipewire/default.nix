@@ -23,7 +23,7 @@ in
           options = {
             name = mkOption {
               type = types.nonEmptyStr;
-              description = "PipeWire node.name, also usable as Sunshine audio_sink.";
+              description = "PipeWire node.name.";
             };
             description = mkOption {
               type = types.nonEmptyStr;

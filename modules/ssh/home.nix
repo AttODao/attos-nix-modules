@@ -11,7 +11,7 @@ let
     map (entry: {
       name = entry.hostname;
       # Specific registry hosts must precede legacy alias blocks matching the same FQDN.
-      value = lib.hm.dag.entryBefore [ "attobox" "attofort" "desktop" "devcon" "git" "github" ] (
+      value = lib.hm.dag.entryBefore [ "attobox" "attofort" "git" "github" ] (
         lib.mapAttrs (_: lib.mkDefault) (
           {
             HostName = entry.hostname;
@@ -53,16 +53,6 @@ in
           };
           attobox = lib.mapAttrs (_: lib.mkDefault) {
             HostName = "attobox.attodao.cc";
-            User = "attodao";
-            IdentityFile = "~/.ssh/id_ed25519";
-          };
-          devcon = lib.mapAttrs (_: lib.mkDefault) {
-            HostName = "dev.attodao.cc";
-            User = "dev";
-            IdentityFile = "~/.ssh/id_ed25519";
-          };
-          desktop = lib.mapAttrs (_: lib.mkDefault) {
-            HostName = "desk.attodao.cc";
             User = "attodao";
             IdentityFile = "~/.ssh/id_ed25519";
           };
