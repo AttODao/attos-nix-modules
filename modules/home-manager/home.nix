@@ -44,7 +44,7 @@ in
         home.activation."install-${name}-config" = lib.hm.dag.entryAfter [ "linkGeneration" ] script;
       };
 
-    # User service for a GUI application that lives in the graphical session.
+    # Requisite keeps restarts after logout from starting the app (and its fcitx5 dependency) outside a graphical session.
     graphicalAppService =
       {
         description,
@@ -57,6 +57,8 @@ in
       {
         Unit = {
           Description = description;
+          PartOf = [ "graphical-session.target" ];
+          Requisite = [ "graphical-session.target" ];
           Wants = lib.optional wantsFcitx "fcitx5-daemon.service";
           After = [ "graphical-session.target" ] ++ lib.optional wantsFcitx "fcitx5-daemon.service";
         };
