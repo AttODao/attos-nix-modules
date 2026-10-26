@@ -126,7 +126,7 @@ sync_strata_images() {
 }
 
 update_packages() {
-  local pkg version failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop ccpocket-bridge attos-mouse)
+  local pkg version failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop ccpocket-bridge attos-mouse attos-deck)
   local strata_before strata_after
   strata_before=$(strata_image_version)
   before=$(package_versions "${packages[@]}")
