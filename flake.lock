@@ -3,11 +3,11 @@
     "attos-mouse": {
       "flake": false,
       "locked": {
-        "lastModified": 1793004371,
-        "narHash": "sha256-n5JyJmWoqdJl/wRv3GaanNjZqJ6bZx2xBvZzbcZDmhI=",
+        "lastModified": 1793008469,
+        "narHash": "sha256-VEuYPYFvP++oXYPXs7ld5zyngADEhL+HRFysI3T8ckk=",
         "ref": "main",
-        "rev": "3a845c4228fe918e75224ac3b3f9cdec5cc5edf1",
-        "revCount": 23,
+        "rev": "b90f7e733f9b2cd9a3f0aa536d44baedc95ba414",
+        "revCount": 25,
         "type": "git",
         "url": "https://git.attodao.cc/AttODao/attos-mouse.git"
       },
