@@ -22,6 +22,7 @@ let
   lock = lib.importJSON ../flake.lock;
   lockedInput = name: lock.nodes.${lock.nodes.${lock.root}.inputs.${name}};
   external = self: {
+    attos-mouse = self.callPackage "${inputs.attos-mouse}/package.nix" { };
     claude-code = self.callPackage "${inputs.claude-code-nix}/package.nix" { };
     # flake inputのsource（outPath・rev・lastModified）と、flake.nixのrelease tag（lockのoriginal.ref）から取ったversion。
     hermes-agent-src = inputs.hermes-agent // {

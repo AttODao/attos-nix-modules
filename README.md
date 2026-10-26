@@ -120,6 +120,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | zsh | NixOS + HM | Starship同梱（gruvbox-rainbow presetはrepoへコピー済み。評価はpackageを読まない） |
 | hyprland | NixOS + HM | Noctalia・Fcitx5・Foot・Yazi・userDirs（FootからFonts）。sessionは`Hyprland (uwsm-managed)`のみ |
 | greeter | NixOS | Hyprland |
+| attos-mouse | NixOS + HM | Logitech hidraw uaccess（Solaarとは排他） |
 | solaar | NixOS + HM | Noctalia、HM側にKando同梱 |
 | pipeasio | NixOS + HM | PipeWire・Steam（`programs.steam.package`へWINEDLLPATH付きSteamを既定値として渡す） |
 | pipewire | NixOS | rtkit・ALSA・Pulse |
@@ -178,6 +179,7 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 - `floorp.{vaultwardenUrl,extensions}`: `vaultwardenUrl`（既定null）はBitwarden拡張のself-hosted server presetで、nullなら拡張の環境設定を出さない。`extensions`（拡張ID→install URL、既定は同梱の一覧）はpolicyで`normal_installed`として導入し、ユーザーは無効化できる。利用側の定義は既定一覧全体を置き換える。
 - `opencloud-client.serverUrl`: 有効時必須。clientのaccount wizardに事前入力するserver URL。
 - `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder,idle,headroom.enable,systemdUnits.enable,wallpaperEngine}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。`idle.{lockAfter,screenOffAfter,suspendAfter}`は各nullまたは正整数（秒）、既定nullはbehaviorを生成しない。Headroom・systemdUnits・wallpaperEngineは各既定無効。壁紙の割り当て・再生設定はW Engineのpanelがstate（`data.json`）として持ち、宣言しない。旧`modules.linux-wallpaperengine`とは同時有効化不可。community pluginの取得・手動更新はNoctaliaが行い、自動更新はofficialのみ。accountのpasswordはruntime `passwordFile` で渡す。launcherはfloating、polkit agent・blur付きlockscreen・MRU switcher・左上launcher hot corner・VPN labelを既定で有効にする。共通入力と共有の`programs.noctalia.settings`は各leafが`mkDefault`で、`home-manager.users.<name>`から`mkForce`なしに一部だけ上書きできる（listは置換）。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `attos-mouse.settings`: 既定 `{ }` のTOML設定。共有のuwsm wrapper・static CJK font・GTK icon theme・Everforest色へ再帰mergeし、listは置換する。device・menu定義は利用側が所有する。build時に`check-config`で検証し、daemonがinotifyで再読込する。`modules.solaar.enable`とは同じbuttonをdivertするため排他。Wayland/Hyprland・MX Master 4向け。
 - `solaar.deviceConfig`: 既定nullのpath。Solaarの`config.yaml`（デバイスserial・unit ID・設定値）を全HMユーザーの`~/.config/solaar/`へ未存在時だけ配置する。nullならSolaarが初回起動時に作る。rules.yamlも同じく未存在時だけ配置し、既存ファイルはSolaarの変更を保持する（共有既定を受け直すにはファイルを削除する）。デバイス識別子は利用側が持つ。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。Plymouth・quiet kernel/console設定と、kernel引数によるsystemd initrdの状態表示制御を追加する。falseではこれらを適用しない。kernel/GPUの選択はconsumer。

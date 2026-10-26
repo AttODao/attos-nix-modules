@@ -4,6 +4,7 @@
     ./home-manager
     ./public-services
     ./attos-hoyo-dashboard
+    ./attos-mouse
     ./code-server
     ./skills
     ./cloudflare-ddns

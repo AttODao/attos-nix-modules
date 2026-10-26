@@ -8,6 +8,10 @@
       url = "github:nix-community/home-manager/c216bf5a1f173b0481bd5c8c489ebe5595ecc68c";
       flake = false;
     };
+    attos-mouse = {
+      url = "git+https://git.attodao.cc/AttODao/attos-mouse.git?ref=main";
+      flake = false;
+    };
     claude-code-nix = {
       url = "github:sadjow/claude-code-nix";
       flake = false;

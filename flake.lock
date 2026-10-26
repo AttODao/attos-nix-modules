@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "attos-mouse": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793004371,
+        "narHash": "sha256-n5JyJmWoqdJl/wRv3GaanNjZqJ6bZx2xBvZzbcZDmhI=",
+        "ref": "main",
+        "rev": "3a845c4228fe918e75224ac3b3f9cdec5cc5edf1",
+        "revCount": 23,
+        "type": "git",
+        "url": "https://git.attodao.cc/AttODao/attos-mouse.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "https://git.attodao.cc/AttODao/attos-mouse.git"
+      }
+    },
     "claude-code-nix": {
       "flake": false,
       "locked": {
@@ -222,6 +239,7 @@
     },
     "root": {
       "inputs": {
+        "attos-mouse": "attos-mouse",
         "claude-code-nix": "claude-code-nix",
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager_2",
