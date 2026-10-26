@@ -295,7 +295,7 @@ Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff
 
 SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`trustedProxies`（文字列list、既定[]）はclient addressを判別するために `X-Forwarded-For` / `X-Real-IP` を信頼するreverse proxyのaddress/CIDRで、loopbackは引き続き信頼する。`passNetworks`（文字列list、既定[]）はlimiter・bot対策を除外して無制限のAPI利用を許すclient address/CIDRで、信頼する自動化hostなど最小範囲に絞る。どちらも `limiter = true` が必要。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
 OpenCloudの公開共有linkは既定でpasswordを必須にする（`OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD=true`）。Jellyfinの保存先は`jellyfin:jellyfin` 0750で作る。
-attos-hoyo-dashboardの `timezoneOffset`（`+09:00`形式、local配置時必須）はdailyリセット時刻の固定UTC offsetで、`time.timeZone`から導出しない。DBはimageが作る`POSTGRES_USER`（superuser）で接続する。
+attos-hoyo-dashboardの `timezoneOffset`（`+09:00`形式、local配置時必須）はdailyリセット時刻の固定UTC offsetで、`time.timeZone`から導出しない。DBはimageが作る`POSTGRES_USER`（superuser）で接続する。任意の `metricsEnvironmentFile` は `METRICS_TOKEN=…` を含むdotenvのruntime pathで、app containerだけに渡す。設定したときだけ `/metrics` がBearer token付きで公開される。
 
 OpenSSH serverの公開 `modules.openssh.passwordAuthentication` は既定false。trueならpassword/PAM keyboard-interactiveを許可し、falseと矛盾するnative認証上書きは拒否する。listener・firewall・AllowUsers・root login policyはconsumerが標準NixOS optionで設定する。
 Vaultwardenの公開 `signupsAllowed` は既定false。false時はそれを上書きするdomain whitelistも空にする。whitelistはSSOと共有され、SSOの実効domain制限への影響は別途確認する。設定はNixと `environmentFile` だけが正で、`CONFIG_FILE` を読み書きできないpathに向けるため既存 `dataDir/vw-data/config.json` は読まれず、adminパネルの設定保存は永続化しない。

@@ -6,11 +6,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "attos-deck";
-  version = "0.1.1";
+  version = "0.2.0";
 
   src = fetchurl {
     url = "https://git.attodao.cc/AttODao/attos-deck/releases/download/v${finalAttrs.version}/attos-deck-${finalAttrs.version}-x86_64-linux-musl.tar.gz";
-    hash = "sha256-sMk6uDaGVGEid1Nrc2celmIKEHtgJQoaDIsPM/e3n+Y=";
+    hash = "sha256-Yy/NARCJ7dV8dULEK5wR0hQ7xaG0qOdiA0nwVplJb5U=";
   };
 
   dontConfigure = true;

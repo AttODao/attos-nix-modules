@@ -15,6 +15,7 @@ in
     // {
       dataDir = ps.pathOption "Persistent root containing the PostgreSQL postgres/ directory.";
       environmentFile = ps.pathOption "Runtime environment file for the app and PostgreSQL: DB_PASSWORD and the same value as POSTGRES_PASSWORD, HOYOLAB_COOKIE_KEY and the first-start INITIAL_ADMIN_PASSWORD.";
+      metricsEnvironmentFile = ps.pathOption "Optional runtime dotenv file containing METRICS_TOKEN (16+ visible ASCII characters), added to the app container's environment files. AHD serves /metrics only when the token is set.";
       initialAdminUsername = lib.mkOption {
         type = lib.types.strMatching "[A-Za-z0-9._-]{1,64}";
         default = "admin";
