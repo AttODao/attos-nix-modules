@@ -6,11 +6,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "attos-mouse";
-  version = "0.2.0";
+  version = "0.2.1";
 
   src = fetchurl {
     url = "https://git.attodao.cc/AttODao/attos-mouse/releases/download/v${finalAttrs.version}/attos-mouse-${finalAttrs.version}-x86_64-linux-musl.tar.gz";
-    hash = "sha256-+qUorTOoxurBzJceOhJ0yoUSHVOjnM0EwENpCRTQHEE=";
+    hash = "sha256-C50UN21Jb2b8KlAbXUOYyOIKD2FARYoQZOE1j48b0K0=";
   };
 
   dontConfigure = true;
