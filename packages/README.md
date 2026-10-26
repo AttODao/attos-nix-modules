@@ -11,6 +11,7 @@
 
 実装済み:
 - `attos-mouse`: Forgejo releaseのx86_64 Linux向けstatic musl tarballをhash固定で取得し、`attopkgs.attos-mouse` として供給する。version・取得URL・hashは `by-name/at/attos-mouse/package.nix` に置き、`update-packages` の `nix-update` で更新する。binary・LICENSE・README・参考serviceを配置し、install checkで `--help` の起動を確認する。sourceのbuild・testsはattos-mouse repo自身のCIで実行する。
+- `attos-deck`: Forgejo releaseのx86_64 Linux向けstatic musl tarballをhash固定で取得し、`attopkgs.attos-deck` として供給する（`attos-deck`・`attos-deck-agent`）。version・取得URL・hashは `by-name/at/attos-deck/package.nix` に置き、`update-packages` の `nix-update` で更新する。binary・LICENSE・README・参考unitを配置し、install checkで両binaryの起動を確認する。sourceのbuild・testsはattos-deck repo自身のCIで実行する。
 - `build-go-program`: repo内script用のGo builder。`{ build-go-program }: build-go-program { pname = "<name>"; src = ./.; }` で、`src`直下の`.go`（単一 `package main`、標準libraryのみ、go.modなし）を1つの実行ファイル `bin/<pname>` にする。Goは利用ホストの `pkgs.go` をビルド時だけ使い、runtime closureへ入らない。buildで `go vet`、`*_test.go` があればcheckPhaseで `go test` を実行する。srcは`.go`だけをfilesetで取り込むため、package.nixや文書の変更では再ビルドしない。host設定はderivationへ含めず、JSON pathや引数を実行時に渡す。外部moduleが必要になったpackageはgo.mod + `buildGoModule` へ切り替える。
 - `attos-docker`: 共有Docker bridge networkの作成・検査（`network ensure`）を行う標準libraryのみのGo program。既存networkは再作成せず、不一致は失敗する。
 - `wireguard-runtime`: wireguard-server moduleのruntime client設定生成（`configs`）とQR表示（`qr`、`wg-qr` wrapper経由）を行うGo program。key fileはruntimeで検査し、file単位でatomic交換する。

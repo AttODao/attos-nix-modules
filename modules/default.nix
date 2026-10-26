@@ -3,6 +3,7 @@
   imports = [
     ./home-manager
     ./public-services
+    ./attos-deck
     ./attos-hoyo-dashboard
     ./attos-mouse
     ./code-server
