@@ -61,5 +61,7 @@ in
 
     # GUI restart replaces the main process; keep its replacement in the service.
     systemd.user.services.fcitx5-daemon.Service.ExitType = "cgroup";
+    # Dependents restarting after logout must not start Fcitx without a display.
+    systemd.user.services.fcitx5-daemon.Unit.Requisite = [ "graphical-session.target" ];
   };
 }

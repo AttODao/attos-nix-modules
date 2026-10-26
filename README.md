@@ -77,7 +77,7 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。
 - `attopkgs` は共有側で利用ホストの `pkgs` から構築し、NixOS / HMへ渡す。
 - 機能選択はNixOS側の `modules.*` に一本化し、`home.*` exportとstandalone HM経路は提供しない。
-- `modules/home-manager/home.nix` が全HMユーザーへ共通helperを `config.lib.attos.*` で供給する。`mutableXdgConfigFiles`はappが書き換える設定（Fcitx5の`config`/`profile`、Solaarの`rules.yaml`/`config.yaml`）をstore symlinkでなく未存在時だけ0600でcopyし、`graphicalAppService`はGUI常駐app（Discord・OpenCloud・Kando）の`graphical-session.target`配下user serviceを生成する。
+- `modules/home-manager/home.nix` が全HMユーザーへ共通helperを `config.lib.attos.*` で供給する。`mutableXdgConfigFiles`はappが書き換える設定（Fcitx5の`config`/`profile`、Solaarの`rules.yaml`/`config.yaml`）をstore symlinkでなく未存在時だけ0600でcopyし、`graphicalAppService`はGUI常駐app（Discord・OpenCloud・Kando）の`graphical-session.target`配下user serviceを生成する。生成するserviceと`fcitx5-daemon`に`Requisite=graphical-session.target`を設定し、ログアウト後の再起動でセッション外に起動しない。
 
 ユーザー一覧に複数名を指定すると、固定メールアカウント・デバイス設定なども含め、
 有効な機能の共通設定が全HMユーザーへ配布される。credential、secretの配置・権限は共有しない。
