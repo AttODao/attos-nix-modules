@@ -6,6 +6,7 @@
 `nix flake check --no-build` で評価できないpackageは `passthru.skipFlakeCheck = true` を宣言する（`flake.nix` が `packages` 出力から除外し、`legacyPackages` と `attopkgs` には残る）。
 
 外部inputから供給:
+- `attos-mouse`: `flake.nix` の `attos-mouse`（`flake = false`）root直下の `package.nix` を利用ホストのpkgsで `callPackage` する。source revisionは共有 `flake.lock`、versionはupstream Cargo manifestに従い、build時にtestsを実行する。moduleには `attopkgs.attos-mouse` として供給する。
 - `claude-code`: `flake.nix` の `claude-code-nix`（github:sadjow/claude-code-nix、`flake = false`）root直下の `package.nix` を利用ホストのpkgsで `callPackage` する。versionは共有flake.lockで固定し、`nix flake update claude-code-nix` で更新する。
 - `hermes-desktop`: `flake.nix` の `hermes-agent`（github:NousResearch/hermes-agent、release tag固定。hermes moduleのupstream NixOS moduleと共用）の `nix/desktop.nix` を利用ホストのpkgsで呼ぶremote専用build。scopeの `hermes-agent-src` でsourceと、`default.nix` が `flake.lock` の `original.ref`（release tag）から取った `version` を受け取り（packageにversionを書かない）、install stampを `payload = "light"` にして、agent（Python venv）の代わりに失敗するだけのstubを渡し、起動時に `HERMES_DESKTOP_HERMES` を外す。upstreamの `nix/lib.nix` が使う `pmPackages.node` に利用ホストの `nodejs_26` を渡し、npmはupstreamのpinを使う。pm由来のprebuilt Nodeをpatchelf 0.19.xで加工するとsegfaultするため、`nix/pm-packages.nix` は呼ばない。`extraRun`（既定[]）は起動前に実行するshell行。
 
