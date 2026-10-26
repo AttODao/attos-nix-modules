@@ -6,11 +6,11 @@
 `nix flake check --no-build` で評価できないpackageは `passthru.skipFlakeCheck = true` を宣言する（`flake.nix` が `packages` 出力から除外し、`legacyPackages` と `attopkgs` には残る）。
 
 外部inputから供給:
-- `attos-mouse`: `flake.nix` の `attos-mouse`（`flake = false`）root直下の `package.nix` を利用ホストのpkgsで `callPackage` する。source revisionは共有 `flake.lock`、versionはupstream Cargo manifestに従い、build時にtestsを実行する。moduleには `attopkgs.attos-mouse` として供給する。
 - `claude-code`: `flake.nix` の `claude-code-nix`（github:sadjow/claude-code-nix、`flake = false`）root直下の `package.nix` を利用ホストのpkgsで `callPackage` する。versionは共有flake.lockで固定し、`nix flake update claude-code-nix` で更新する。
 - `hermes-desktop`: `flake.nix` の `hermes-agent`（github:NousResearch/hermes-agent、release tag固定。hermes moduleのupstream NixOS moduleと共用）の `nix/desktop.nix` を利用ホストのpkgsで呼ぶremote専用build。scopeの `hermes-agent-src` でsourceと、`default.nix` が `flake.lock` の `original.ref`（release tag）から取った `version` を受け取り（packageにversionを書かない）、install stampを `payload = "light"` にして、agent（Python venv）の代わりに失敗するだけのstubを渡し、起動時に `HERMES_DESKTOP_HERMES` を外す。upstreamの `nix/lib.nix` が使う `pmPackages.node` に利用ホストの `nodejs_26` を渡し、npmはupstreamのpinを使う。pm由来のprebuilt Nodeをpatchelf 0.19.xで加工するとsegfaultするため、`nix/pm-packages.nix` は呼ばない。`extraRun`（既定[]）は起動前に実行するshell行。
 
 実装済み:
+- `attos-mouse`: Forgejo releaseのx86_64 Linux向けstatic musl tarballをhash固定で取得し、`attopkgs.attos-mouse` として供給する。version・取得URL・hashは `by-name/at/attos-mouse/package.nix` に置き、`update-packages` の `nix-update` で更新する。binary・LICENSE・README・参考serviceを配置し、install checkで `--help` の起動を確認する。sourceのbuild・testsはattos-mouse repo自身のCIで実行する。
 - `build-go-program`: repo内script用のGo builder。`{ build-go-program }: build-go-program { pname = "<name>"; src = ./.; }` で、`src`直下の`.go`（単一 `package main`、標準libraryのみ、go.modなし）を1つの実行ファイル `bin/<pname>` にする。Goは利用ホストの `pkgs.go` をビルド時だけ使い、runtime closureへ入らない。buildで `go vet`、`*_test.go` があればcheckPhaseで `go test` を実行する。srcは`.go`だけをfilesetで取り込むため、package.nixや文書の変更では再ビルドしない。host設定はderivationへ含めず、JSON pathや引数を実行時に渡す。外部moduleが必要になったpackageはgo.mod + `buildGoModule` へ切り替える。
 - `attos-docker`: 共有Docker bridge networkの作成・検査（`network ensure`）を行う標準libraryのみのGo program。既存networkは再作成せず、不一致は失敗する。
 - `wireguard-runtime`: wireguard-server moduleのruntime client設定生成（`configs`）とQR表示（`qr`、`wg-qr` wrapper経由）を行うGo program。key fileはruntimeで検査し、file単位でatomic交換する。
