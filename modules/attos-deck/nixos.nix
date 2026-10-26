@@ -75,10 +75,11 @@ in
 {
   config = lib.mkMerge [
     (lib.mkIf cfg.enable {
-      users.groups.attos-deck = { };
       # Stream Deck MK.2 only; the service reaches it through the group, not uaccess (no seat on servers).
+      # Not named attos-deck: DynamicUser allocates that user and group itself and refuses a static one.
+      users.groups.attos-deck-hid = { };
       services.udev.extraRules = ''
-        SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", ATTRS{idProduct}=="0080", GROUP="attos-deck", MODE="0660"
+        SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0fd9", ATTRS{idProduct}=="0080", GROUP="attos-deck-hid", MODE="0660"
       '';
       environment.systemPackages = [ pkg ];
       systemd.services.attos-deck = {
@@ -92,7 +93,7 @@ in
           ExecStart = "${pkg}/bin/attos-deck daemon --config ${deckConfig}";
           DynamicUser = true;
           SupplementaryGroups = [
-            "attos-deck"
+            "attos-deck-hid"
           ]
           ++ lib.optional (cfg.agent.enable && cfg.agent.socketGroup != null) cfg.agent.socketGroup;
           StateDirectory = "attos-deck";
