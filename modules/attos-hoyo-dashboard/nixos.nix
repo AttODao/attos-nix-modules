@@ -64,7 +64,10 @@ in
           # Update version and registry index digest together after release review.
           image = lib.mkDefault "git.attodao.cc/attodao/attoshoyodashboard:1.2.2@sha256:280e239699fdc20c3c07dc51aac6175ad6c77921282cc0c2e99b782ba9dadab8";
           ports = lib.mkDefault (ps.publish s 8082 8080);
-          environmentFiles = lib.mkDefault [ environmentFile ];
+          environmentFiles = lib.mkDefault (
+            [ environmentFile ]
+            ++ lib.optional (s.cfg.metricsEnvironmentFile != null) s.cfg.metricsEnvironmentFile
+          );
           environment = lib.mapAttrs (_: lib.mkDefault) (
             database
             // {
