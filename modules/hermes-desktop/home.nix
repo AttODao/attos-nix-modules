@@ -11,7 +11,11 @@ let
     if cfg.ssh != null then
       {
         mode = "ssh";
-        host = cfg.ssh;
+        # Desktopはremote.hostだけを読む（user@host[:port]を解釈する）。
+        remote = {
+          mode = "ssh";
+          host = cfg.ssh;
+        };
       }
     else
       {
