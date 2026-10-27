@@ -12,7 +12,14 @@ in
   config = lib.mkIf cfg.enable {
     programs.floorp = {
       enable = true;
-      package = pkgs.floorp-bin;
+      # Floorp の policy が拒否する設定は autoconfig の既定値で渡す。
+      package = pkgs.floorp-bin.override {
+        extraPrefs = lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (
+            name: value: "defaultPref(${builtins.toJSON name}, ${builtins.toJSON value});"
+          ) cfg.defaultPreferences
+        );
+      };
 
       policies = {
         DisableFirefoxAccounts = false;
@@ -26,76 +33,13 @@ in
           PreventInstalls = false;
         };
 
-        Sync = {
-          Enabled = true;
-          Addons = true;
-          Bookmarks = true;
-          History = true;
-          OpenTabs = true;
-          Settings = true;
-          Passwords = false;
-          Addresses = false;
-          PaymentMethods = false;
-          Locked = false;
-        };
-
         Preferences = {
-          "identity.fxaccounts.enabled" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "services.sync.engine.addons" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "services.sync.engine.bookmarks" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "services.sync.engine.history" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "services.sync.engine.prefs" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "services.sync.engine.tabs" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "services.sync.engine.passwords" = {
-            Value = false;
-            Status = "default";
-          };
-
-          "services.sync.engine.addresses" = {
-            Value = false;
-            Status = "default";
-          };
-
-          "services.sync.engine.creditcards" = {
-            Value = false;
-            Status = "default";
-          };
-
           "sidebar.revamp" = {
             Value = true;
             Status = "default";
           };
 
           "sidebar.verticalTabs" = {
-            Value = true;
-            Status = "default";
-          };
-
-          "floorp.mousegesture.enabled" = {
             Value = true;
             Status = "default";
           };
