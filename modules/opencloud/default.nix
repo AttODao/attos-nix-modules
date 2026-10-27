@@ -1,7 +1,7 @@
 {
+  attopkgs,
   config,
   lib,
-  pkgs,
   ps,
   ...
 }:
@@ -26,8 +26,8 @@ in
     (lib.mkIf s.enabled {
       services.opencloud = {
         enable = true;
-        # The image is the rolling release; production would be a downgrade.
-        package = lib.mkDefault pkgs.opencloud;
+        # Rolling release; production would be a downgrade. attopkgs supplies 9.x until nixpkgs does.
+        package = lib.mkDefault attopkgs.opencloud;
         address = listen.address;
         port = listen.port;
         url = ps.url s 9200;
