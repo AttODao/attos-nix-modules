@@ -2,6 +2,20 @@
 {
   options.modules.floorp = {
     enable = lib.mkEnableOption "shared Floorp configuration";
+    defaultPreferences = lib.mkOption {
+      type =
+        with lib.types;
+        attrsOf (oneOf [
+          bool
+          int
+          str
+        ]);
+      default = {
+        "services.sync.engine.passwords" = false;
+        "floorp.mousegesture.enabled" = true;
+      };
+      description = "Preferences the enterprise policy cannot set, applied as defaultPref through autoconfig; users may change them. A consumer definition replaces the whole default set.";
+    };
     vaultwardenUrl = lib.mkOption {
       type = lib.types.nullOr lib.types.nonEmptyStr;
       default = null;
