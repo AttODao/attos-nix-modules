@@ -58,6 +58,7 @@ in
         default = true;
         description = "Run both units in the default-deny filesystem sandbox. Set false only when the whole OS is a dedicated trust boundary for Hermes (for example its own container): the units then see the whole filesystem, the hermes CLI is installed system-wide, and HERMES_HOME, HERMES_MANAGED and HERMES_MANAGED_DIR are exported to every PAM session so login shells and Hermes Desktop SSH connections (which start `hermes serve` over SSH) share the gateway's state and managed scope. This also disables upstream NoNewPrivileges, ProtectSystem and PrivateTmp so tools can use consumer-granted sudo and write across the system, with /tmp shared with SSH sessions. readOnlyPaths must then stay empty.";
       };
+      botDesktop = lib.mkEnableOption "Hermes Bot Screen (TigerVNC Xvnc + Xfce core, streamed to Hermes Desktop) and the computer_use driver (cua-driver) for the gateway, dashboard backend and SSH/Desktop sessions; requires sandbox = false";
       user = account "account";
       group = account "group";
     }
