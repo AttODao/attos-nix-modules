@@ -14,6 +14,7 @@ let
   supported = options.services ? forgejo-runner;
 in
 {
+  # jobはこのhostで動く。このhostを信頼して任せられるworkflowのownerだけにForgejoでrunnerを登録する。
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
@@ -26,10 +27,6 @@ in
             assertion = cfg.uuid != null && cfg.tokenFile != null;
             message = "modules.forgejo-actions-runner.uuid and tokenFile must be supplied when enabled.";
           }
-          {
-            assertion = !config.boot.isContainer && config.virtualisation.incus.agent.enable;
-            message = "Forgejo runner must run inside an Incus virtual-machine guest (boot.isContainer=false and virtualisation.incus.agent.enable=true), never on the physical host or in a container.";
-          }
         ];
       }
       (lib.optionalAttrs supported {
@@ -38,7 +35,9 @@ in
           settings = {
             server.connections.default = {
               url = lib.mkDefault (
-                if localForgejo.standalone then
+                if cfg.url != null then
+                  cfg.url
+                else if localForgejo.standalone then
                   ps.url localForgejo 3000
                 else if builtins.length forgejo == 1 then
                   "https://${(builtins.head forgejo).hostname}"
@@ -48,6 +47,7 @@ in
               inherit (cfg) uuid;
             };
             runner = {
+              fetch_interval = lib.mkIf (cfg.fetchInterval != null) cfg.fetchInterval;
               name = lib.mkDefault config.networking.hostName;
               labels = lib.mkIf cfg.docker (
                 lib.mkDefault [
@@ -57,9 +57,22 @@ in
               );
             };
             # Jobs get the host Docker socket only when the consumer opts in via dockerHost.
-            container.docker_host = lib.mkIf cfg.docker (
-              lib.mkDefault (if cfg.dockerHost == null then "-" else cfg.dockerHost)
-            );
+            container = {
+              docker_host = lib.mkIf cfg.docker (
+                lib.mkDefault (if cfg.dockerHost == null then "-" else cfg.dockerHost)
+              );
+              options = lib.mkIf (cfg.docker && (cfg.jobLimits.cpus != null || cfg.jobLimits.memory != null)) (
+                lib.mkDefault (
+                  lib.concatStringsSep " " (
+                    lib.optional (cfg.jobLimits.cpus != null) "--cpus=${toString cfg.jobLimits.cpus}"
+                    ++ lib.optionals (cfg.jobLimits.memory != null) [
+                      "--memory=${cfg.jobLimits.memory}"
+                      "--memory-swap=${cfg.jobLimits.memory}"
+                    ]
+                  )
+                )
+              );
+            };
           };
           secrets.server.connections.default.token_url = cfg.tokenFile;
         };
