@@ -8,6 +8,9 @@
 let
   cfg = osConfig.modules.hyprland;
   mod = "SUPER";
+  # scrolling layout専用のキー割当は、layoutにscrollingを選んだときだけ入れる。
+  scrolling = (cfg.settings.config.general.layout or null) == "scrolling";
+  layoutBind = key: message: modBind key "hl.dsp.layout(${builtins.toJSON message})";
   systemctl = "${pkgs.systemd}/bin/systemctl";
   noctalia = cmd: "noctalia msg ${cmd}";
   powerButtonCommand = "${noctalia "session lock"} && sleep 1 && ${noctalia "monitors off"}";
@@ -19,11 +22,27 @@ let
     lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault) (
       lib.recursiveUpdate defaults cfg.settings
       // {
-        # Controller input is not Wayland activity. Keep this additive with consumer rules.
+        # 共有既定ruleはconsumerのruleへ加算する（controller入力もfullscreen中はidleを抑止）。
         window_rule = [
           {
             match.class = ".*";
             idle_inhibit = "fullscreen";
+          }
+          # フォーカス中のwindowだけ枠線を2倍（general.border_sizeの2px→4px）にする。
+          {
+            match.focus = true;
+            border_size = 4;
+          }
+          # 設定ダイアログ・portalのファイル選択はtileせず浮かせる。
+          {
+            match.class = "^(org[.]pulseaudio[.]pavucontrol|blueman-manager|nm-connection-editor|xdg-desktop-portal-gtk)$";
+            float = true;
+          }
+          # ブラウザのピクチャーインピクチャーは浮かせて全workspaceに固定する。
+          {
+            match.title = "^(Picture-in-Picture|ピクチャーインピクチャー)$";
+            float = true;
+            pin = true;
           }
         ]
         ++ (cfg.settings.window_rule or [ ]);
@@ -95,17 +114,20 @@ in
 
         config = {
           animations.enabled = true;
+          binds.workspace_back_and_forth = true;
 
           cursor = {
             enable_hyprcursor = true;
             no_hardware_cursors = true;
+            hide_on_key_press = true;
+            inactive_timeout = 3;
           };
 
           decoration = {
             rounding = 10;
             rounding_power = 2;
             active_opacity = 1.0;
-            inactive_opacity = 0.96;
+            inactive_opacity = 1.0;
             fullscreen_opacity = 1.0;
 
             shadow = {
@@ -169,8 +191,16 @@ in
           };
         };
 
-        gesture = {
-          fingers = 3;
+        # scrollingではテープを3本指で動かす。workspace切替は4本指。
+        gesture = [
+          {
+            fingers = 3;
+            direction = "horizontal";
+            action = if scrolling then "scroll_move" else "workspace";
+          }
+        ]
+        ++ lib.optional scrolling {
+          fingers = 4;
           direction = "horizontal";
           action = "workspace";
         };
@@ -284,6 +314,20 @@ in
             bezier = "easeOutQuint";
             style = "slide";
           }
+          {
+            leaf = "layers";
+            enabled = true;
+            speed = 4;
+            bezier = "easeOutQuint";
+            style = "fade";
+          }
+          {
+            leaf = "specialWorkspace";
+            enabled = true;
+            speed = 4;
+            bezier = "easeOutQuint";
+            style = "slidevert";
+          }
         ];
 
         bind = [
@@ -308,11 +352,21 @@ in
           (modBind "Q" "hl.dsp.window.close()")
           (modBind "F" ''hl.dsp.window.fullscreen({ mode = "maximized" })'')
           (modBind "SHIFT + F" ''hl.dsp.window.fullscreen({ mode = "fullscreen" })'')
-          (modBind "C" "hl.dsp.window.center()")
+          (if scrolling then layoutBind "C" "center" else modBind "C" "hl.dsp.window.center()")
           (modBind "R" ''hl.dsp.window.float({ action = "toggle" })'')
 
-          (modBind "Left" ''hl.dsp.focus({ direction = "left" })'')
-          (modBind "Right" ''hl.dsp.focus({ direction = "right" })'')
+          (
+            if scrolling then
+              layoutBind "Left" "focus l"
+            else
+              modBind "Left" ''hl.dsp.focus({ direction = "left" })''
+          )
+          (
+            if scrolling then
+              layoutBind "Right" "focus r"
+            else
+              modBind "Right" ''hl.dsp.focus({ direction = "right" })''
+          )
           (modBind "Up" ''hl.dsp.focus({ direction = "up" })'')
           (modBind "Down" ''hl.dsp.focus({ direction = "down" })'')
 
@@ -321,8 +375,19 @@ in
           (modBind "SHIFT + Up" ''hl.dsp.window.move({ direction = "up" })'')
           (modBind "SHIFT + Down" ''hl.dsp.window.move({ direction = "down" })'')
 
+          (modBind "grave" ''hl.dsp.workspace.toggle_special("scratch")'')
+          (modBind "SHIFT + grave" ''hl.dsp.window.move({ workspace = "special:scratch" })'')
+
           (modBind "mouse_down" ''hl.dsp.focus({ workspace = "r+1" })'')
           (modBind "mouse_up" ''hl.dsp.focus({ workspace = "r-1" })'')
+        ]
+        ++ lib.optionals scrolling [
+          (layoutBind "minus" "colresize -conf")
+          (layoutBind "equal" "colresize +conf")
+          (layoutBind "CTRL + Left" "swapcol l")
+          (layoutBind "CTRL + Right" "swapcol r")
+          (layoutBind "bracketleft" "consume_or_expel prev")
+          (layoutBind "bracketright" "consume_or_expel next")
         ]
         ++ workspaceBinds
         ++ [
