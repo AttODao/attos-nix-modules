@@ -13,6 +13,10 @@ let
   mails = ps.entries config "mailserver";
   game = if games == [ ] then null else builtins.head games;
   mail = if mails == [ ] then null else builtins.head mails;
+  # Dashboardと同じhostnameの/api-server/でHermes API serverへ中継し、prefixを外す。
+  hermesApis = lib.filter (
+    route: route.service == "hermes" && route.cfg.apiServerBackendUrl or null != null
+  ) routes;
   tcp =
     (lib.optionals (game != null) (
       map (port: {
@@ -174,6 +178,21 @@ let
               # Preserve the native Socket.IO/upload/download prefix (no strip middleware).
             };
           }) games
+        )
+        // builtins.listToAttrs (
+          map (route: {
+            name = "${route.hostname}-api-server";
+            value = {
+              entryPoints = [ "websecure" ];
+              rule = "Host(`${route.hostname}`) && PathPrefix(`/api-server/`)";
+              service = "${route.hostname}-api-server";
+              middlewares = httpMiddlewares [
+                (privateMiddleware route)
+                "api-server-strip"
+              ];
+              inherit tls;
+            };
+          }) hermesApis
         );
       services =
         builtins.listToAttrs (
@@ -193,6 +212,12 @@ let
               }
             ];
           }) games
+        )
+        // builtins.listToAttrs (
+          map (route: {
+            name = "${route.hostname}-api-server";
+            value.loadBalancer.servers = [ { url = route.cfg.apiServerBackendUrl; } ];
+          }) hermesApis
         );
       middlewares = {
         # HSTS and nosniff for every HTTPS route; frame/CSP policies stay with the applications.
@@ -210,7 +235,10 @@ let
           name = privateMiddleware route;
           value.ipAllowList.sourceRange = cfg.privateNetworks ++ route.cfg.privateExtraNetworks;
         }) (lib.filter extraPrivate routes)
-      );
+      )
+      // lib.optionalAttrs (hermesApis != [ ]) {
+        api-server-strip.stripPrefix.prefixes = [ "/api-server" ];
+      };
     };
     tcp = {
       routers = byName tcp (entry: {
