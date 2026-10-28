@@ -30,6 +30,11 @@ in
         default = null;
         description = "HTTP upstream of the dashboard reachable by the gateway; required for every enabled record.";
       };
+      apiServerBackendUrl = lib.mkOption {
+        type = lib.types.nullOr lib.types.nonEmptyStr;
+        default = null;
+        description = "Optional HTTP upstream of the gateway's OpenAI-compatible API server (API_SERVER_*, default port 8642) reachable by the gateway. When set, the same hostname routes /api-server/ to it with the prefix stripped, behind the same private allowlist, for mobile clients that need the dashboard and the API server on one origin. Does not enable or bind the API server.";
+      };
       dataDir = ps.pathOption "Writable state directory (HOME): HERMES_HOME is <dataDir>/.hermes and the workspace <dataDir>/workspace. The only writable host path; additional read-only paths require explicit readOnlyPaths.";
       readOnlyPaths = lib.mkOption {
         type = lib.types.listOf (
