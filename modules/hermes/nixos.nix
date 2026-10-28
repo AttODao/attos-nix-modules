@@ -145,7 +145,11 @@ in
         environment.systemPackages = botDesktopPackages;
         # Desktop SSHのhermes serveにもNix管理のdriverを使わせる。
         environment.sessionVariables.HERMES_CUA_DRIVER_CMD = lib.getExe attopkgs.cua-driver;
-        fonts.packages = [ pkgs.dejavu_fonts ];
+        # Bot ScreenのXfce・appが日本語localeで豆腐にならないように。
+        fonts.packages = [
+          pkgs.dejavu_fonts
+          pkgs.noto-fonts-cjk-sans
+        ];
       })
       (lib.mkIf (!cfg.sandbox) {
         services.hermes-agent.addToSystemPackages = true;
