@@ -12,12 +12,12 @@ on:
         description: "Consumer hosts to evaluate (owner/repo:host,host ...)"
         type: string
         required: false
-        default: "AttODao/server-nix:attofort,attobox,development,desktop,forgejo-runner AttODao/personal-nix:attodesk,attolap"
+        default: "AttODao/server-nix:attofort,attobox,hermes AttODao/personal-nix:attodesk,attolap"
 
 env:
   NIX_CONFIG: "experimental-features = nix-command flakes"
   # Consumer hosts evaluated against each update; scheduled runs use the dispatch default.
-  CONSUMERS: ${{ inputs.consumers || 'AttODao/server-nix:attofort,attobox,development,desktop,forgejo-runner AttODao/personal-nix:attodesk,attolap' }}
+  CONSUMERS: ${{ inputs.consumers || 'AttODao/server-nix:attofort,attobox,hermes AttODao/personal-nix:attodesk,attolap' }}
 
 jobs:
   flake-inputs:
