@@ -5,7 +5,7 @@
     # packages出力専用。moduleのattopkgsは利用ホストのpkgsで構築する。
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager = {
-      url = "github:nix-community/home-manager/c216bf5a1f173b0481bd5c8c489ebe5595ecc68c";
+      url = "github:nix-community/home-manager/095fef2f265c3c0da4fe315efba8f8a04495ab34";
       flake = false;
     };
     claude-code-nix = {
