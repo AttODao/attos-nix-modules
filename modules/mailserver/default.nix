@@ -35,6 +35,11 @@ in
         ];
         description = "Mail protocol ports forwarded by Traefik; align with any standard mailserver protocol overrides.";
       };
+      smtpProxyProtocol = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Have the shared Traefik send PROXY protocol v2 to the backend SMTP port 25 and make Postfix require it there, so SPF and rspamd see the real client address. Enable only when every connection to the backend port 25 comes through that Traefik.";
+      };
       # Use the upstream account schema, including aliases and runtime hashedPasswordFile.
       accounts =
         nullable (options.mailserver.accounts.type or lib.types.attrs)

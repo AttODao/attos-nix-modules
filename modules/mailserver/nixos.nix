@@ -104,6 +104,11 @@ in
               nameserver = [ "127.0.0.1:53" ];
             }
           '';
+          # Traefik relays port 25 over TCP, so without PROXY protocol every client appears as the gateway.
+          services.postfix.settings.master.smtp_inet.args = lib.mkIf cfg.smtpProxyProtocol [
+            "-o"
+            "smtpd_upstream_proxy_protocol=haproxy"
+          ];
           services.postfix.settings.main.inet_interfaces = lib.mkIf selected.standalone (
             lib.mkDefault [ "loopback-only" ]
           );
