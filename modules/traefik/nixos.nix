@@ -32,6 +32,7 @@ let
         inherit port;
         address = "${ps.require "mailserver" "backendAddress" mail.cfg.backendAddress}:${toString port}";
         private = mail.cfg.private;
+        proxyProtocol = mail.cfg.smtpProxyProtocol && port == 25;
       }) mail.cfg.tcpPorts
     ))
     # Forgejo publishes SSH on its backendUrl address; listen only on the selected gateway addresses.
@@ -248,8 +249,16 @@ let
         middlewares = lib.optionals entry.private [ "private" ];
       });
       services = byName tcp (entry: {
-        loadBalancer.servers = [ { inherit (entry) address; } ];
+        loadBalancer = {
+          servers = [ { inherit (entry) address; } ];
+        }
+        // lib.optionalAttrs (entry.proxyProtocol or false) {
+          serversTransport = "proxy-protocol-v2";
+        };
       });
+      serversTransports = lib.optionalAttrs (lib.any (entry: entry.proxyProtocol or false) tcp) {
+        proxy-protocol-v2.proxyProtocol.version = 2;
+      };
       middlewares = lib.optionalAttrs privateEnabled {
         private.ipAllowList.sourceRange = cfg.privateNetworks;
       };
