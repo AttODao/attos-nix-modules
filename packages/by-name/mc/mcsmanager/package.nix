@@ -8,10 +8,10 @@
 }:
 stdenvNoCC.mkDerivation rec {
   pname = "mcsmanager";
-  version = "10.21.2";
+  version = "10.22.0";
   src = fetchurl {
     url = "https://github.com/MCSManager/MCSManager/releases/download/v${version}/mcsmanager_linux_release.tar.gz";
-    hash = "sha256-TBmmTGjWNcxuPC6ZJw+/53+Txiiyu1U7Y2Iq1aJDVsY=";
+    hash = "sha256-gCPeaLb00OKohW/tkfMppd/u/wctoL9yE3HY4NHuYFI=";
   };
   # The official release app.js bundles dependencies and languages; install.sh
   # explicitly requires no npm installation. No mutable npm downloads are needed.
