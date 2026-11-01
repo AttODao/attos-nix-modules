@@ -40,6 +40,10 @@ in
         ];
         # Stage large downloads on the data disk, not the runtime tmpfs; one directory per instance.
         config.configuration.working_directory = lib.mkForce "${root}/.ytdl-sub-working-directory/${name}";
+        # ytdl-sub truncates names to file_name_max_bytes, then copies to "<name>-ytdl-sub-incomplete"
+        # (20 bytes more) before the final move; at the 255-byte default, long multibyte titles fail
+        # with ENAMETOOLONG. Reserve that suffix.
+        config.configuration.file_name_max_bytes = 235;
         inherit subscriptions;
       }) cfg.subscriptions;
     };
