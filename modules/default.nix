@@ -51,6 +51,7 @@
     ./login-pin
     ./limine
     ./noctalia
+    ./amazon-music
     ./open-deck-desktop
     ./opencloud-client
     ./pandora-launcher

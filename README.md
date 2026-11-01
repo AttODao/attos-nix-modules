@@ -156,6 +156,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | ytdl-sub | NixOS | —（native `services.ytdl-sub.instances`）。HMユーザーなしでも利用可能 |
 | open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM | `screenRecorder.enable`かつ`source != "portal"`のとき`programs.gpu-screen-recorder`（既定値）。任意のHeadroom・systemd unit launcher・W Engine。W Engineはlinux-wallpaperengine・util-linux・procpsを同梱 |
+| amazon-music | HM | —（Wine。Windows版をユーザーごとのWine prefixへ初回起動時に導入） |
 | open-deck-desktop | HM（`binfmt`時NixOS） | —（`binfmt`時のみAppImage binfmt） |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | —（pcmanfmの`inode/directory`既定はyazi無効時のみ。両方有効ならYaziが既定） |
 | pi | HM + `systemWide`時NixOS | skills |
