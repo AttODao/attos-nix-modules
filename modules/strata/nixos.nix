@@ -13,6 +13,25 @@ in
   config = lib.mkIf s.enabled (
     let
       cfg = s.cfg;
+      wake = cfg.wake.enable;
+      controlEndpoint = builtins.match "http://([^/:]+):([0-9]+)/?" (
+        ps.require "strata" "wake.controlUrl" cfg.wake.controlUrl
+      );
+      controlConfig = pkgs.writeText "strata-wake-control.json" (
+        builtins.toJSON {
+          listen = "${builtins.head controlEndpoint}:${builtins.elemAt controlEndpoint 1}";
+          units = map (model: {
+            inherit model;
+            unit = "${name model}.service";
+          }) cfg.models;
+          healthUrl = "http://${healthAddress}:${toString endpoint.port}/health";
+          systemctl = "${pkgs.systemd}/bin/systemctl";
+          loginctl = "${pkgs.systemd}/bin/loginctl";
+          # Checked before a power-off: a running Docker container or heavy job postpones it.
+          cgroupRoot = "/sys/fs/cgroup";
+          heavyLock = lib.optionalString (config.modules.heavy.enable or false) "/run/heavy/lock";
+        }
+      );
       user = ps.require "strata" "user" cfg.user;
       group = config.users.users.${user}.group;
       root = ps.require "strata" "dataDir" cfg.dataDir;
@@ -126,7 +145,35 @@ in
           message = "strata: official GPU images support x86_64-linux only.";
         }
       ];
-      systemd.services = lib.listToAttrs services;
+      systemd.services =
+        lib.listToAttrs services
+        // lib.optionalAttrs wake {
+          # The gateway's strata-wake gate calls this API to start/stop the units and to see
+          # whether the desktop is in use; firewalling the port to the gateway is the consumer's.
+          strata-wake-control = lib.mkMerge [
+            ps.afterNetworkOnline
+            {
+              description = "Strata on-demand control API";
+              wantedBy = [ "multi-user.target" ];
+              serviceConfig = {
+                User = "strata-control";
+                Group = "strata-control";
+                ExecStart = "${lib.getExe attopkgs.strata-wake} control --config ${controlConfig}";
+                Restart = "on-failure";
+                RestartSec = 5;
+                NoNewPrivileges = true;
+                ProtectSystem = "strict";
+                ProtectHome = true;
+                PrivateTmp = true;
+              };
+            }
+          ];
+        };
+      users.users.strata-control = lib.mkIf wake {
+        isSystemUser = true;
+        group = "strata-control";
+      };
+      users.groups.strata-control = lib.mkIf wake { };
       systemd.tmpfiles.settings."10-strata".${root}.d = {
         mode = lib.mkDefault "0750";
         user = lib.mkDefault user;
@@ -145,6 +192,31 @@ in
             if (verb === "stop" || (verb === "start" && subject.local && subject.active)) {
               return polkit.Result.YES;
             }
+          }
+        });
+      ''
+      + lib.optionalString wake ''
+        // strata-wake-control (the gateway's on-demand start) may start/stop the same units.
+        polkit.addRule(function(action, subject) {
+          var units = ${builtins.toJSON units};
+          if (action.id === "org.freedesktop.systemd1.manage-units" &&
+              subject.user === "strata-control" &&
+              units.indexOf(action.lookup("unit")) !== -1) {
+            var verb = action.lookup("verb");
+            if (verb === "start" || verb === "stop") {
+              return polkit.Result.YES;
+            }
+          }
+        });
+      ''
+      + lib.optionalString (wake && cfg.wake.powerOff) ''
+        // strata-wake-control powers off an owner the gateway woke, after its own checks
+        // (no local login, SSH session, Docker container or heavy job).
+        polkit.addRule(function(action, subject) {
+          if (subject.user === "strata-control" &&
+              (action.id === "org.freedesktop.login1.power-off" ||
+               action.id === "org.freedesktop.login1.power-off-multiple-sessions")) {
+            return polkit.Result.YES;
           }
         });
       '';

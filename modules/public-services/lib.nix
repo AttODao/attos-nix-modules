@@ -14,7 +14,13 @@ let
     "searxng"
     "strata"
   ];
-  upstream = _: cfg: cfg.backendUrl or null;
+  # A strata entry with wake enabled routes through the gateway-side strata-wake proxy instead.
+  upstream =
+    service: cfg:
+    if service == "strata" && (cfg.wake.enable or false) then
+      "http://${cfg.wake.gatewayListen}"
+    else
+      cfg.backendUrl or null;
 in
 rec {
   absolutePath = types.addCheck types.str (
