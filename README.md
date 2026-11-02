@@ -153,6 +153,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | public-services（公開サーバー） | NixOS、Paseo・CC PocketはHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | traefik | NixOS | —（native `services.traefik`） |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
+| heavy | NixOS | —（`heavy run -- <command>`: host単位の直列化・MemoryHigh/MemoryMax付きscope・oom_score_adj 1000。`remotes`の最初に届くhostへ作業dirを写して実行。独自option `memoryHigh`・`memoryMax`・`remotes`。remote側にもmoduleが要る） |
 | ytdl-sub | NixOS | —（native `services.ytdl-sub.instances`）。HMユーザーなしでも利用可能 |
 | open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM | `screenRecorder.enable`かつ`source != "portal"`のとき`programs.gpu-screen-recorder`（既定値）。任意のHeadroom・systemd unit launcher・W Engine。W Engineはlinux-wallpaperengine・util-linux・procpsを同梱 |

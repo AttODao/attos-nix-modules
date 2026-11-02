@@ -16,6 +16,7 @@
     ./forgejo-actions-runner
     ./groupware
     ./hermes
+    ./heavy
     ./host-report
     ./immich
     ./incus
