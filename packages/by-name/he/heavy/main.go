@@ -18,9 +18,10 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 const defaultConfigPath = "/etc/heavy/config.json"
 
@@ -341,9 +342,12 @@ func runRemote(c config, r remote, o runOptions) int {
 	return code
 }
 
+// isTerminal reports whether f is a terminal (TCGETS succeeds). A character
+// device is not enough: /dev/null is one too, and ssh -t then warns.
 func isTerminal(f *os.File) bool {
-	st, err := f.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
+	var t syscall.Termios
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TCGETS, uintptr(unsafe.Pointer(&t)))
+	return errno == 0
 }
 
 type owner struct {

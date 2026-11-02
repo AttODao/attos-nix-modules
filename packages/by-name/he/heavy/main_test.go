@@ -156,3 +156,19 @@ func TestExitCode(t *testing.T) {
 		t.Error("plain error")
 	}
 }
+
+func TestIsTerminal(t *testing.T) {
+	null, err := os.Open("/dev/null")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer null.Close()
+	if isTerminal(null) {
+		t.Error("/dev/null is a character device but not a terminal")
+	}
+	f, _ := os.CreateTemp(t.TempDir(), "x")
+	defer f.Close()
+	if isTerminal(f) {
+		t.Error("regular file reported as a terminal")
+	}
+}
