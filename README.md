@@ -145,7 +145,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | karakeep / attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
-| strata | NixOS | Docker（digest固定のAMD image、greeter sessionまたはデスクトップの`strata-headless start`でon-demand起動するAPI・モデル別unit・polkit） |
+| strata | NixOS | Docker（digest固定のAMD image、greeter sessionまたはデスクトップの`strata-headless start`でon-demand起動するAPI・モデル別unit・polkit）。`wake.enable`でgateway（Traefik host）に`strata-wake-gate`、ownerに`strata-wake-control`を置き、POSTで起動（WoL）・自動起動分のidle停止 |
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
