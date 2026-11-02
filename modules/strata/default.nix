@@ -74,6 +74,7 @@ in
           default = "255.255.255.255:9";
           description = "Broadcast address:port for the magic packet.";
         };
+        powerOff = lib.mkEnableOption "powering the owner off after an idle stop when the gateway had woken it with Wake-on-LAN; the owner refuses while a local login exists (then stays on), and postpones while an SSH session, a Docker container (CI job) or a heavy job runs";
         idleMinutes = lib.mkOption {
           type = lib.types.ints.positive;
           default = 30;

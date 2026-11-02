@@ -28,6 +28,7 @@ let
             inherit (w) broadcast;
           };
       idleTimeoutSec = w.idleMinutes * 60;
+      powerOff = w.powerOff && w.macAddress != null;
       wakeTimeoutSec = 300;
       startTimeoutSec = 900;
       stateFile = "/var/lib/strata-wake/state.json";

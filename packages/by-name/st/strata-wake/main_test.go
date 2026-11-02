@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -23,6 +25,10 @@ type fakeOwner struct {
 	busy    bool
 	starts  atomic.Int32
 	stops   atomic.Int32
+	offs    atomic.Int32
+	// offReply is the /v1/poweroff answer: "" accepts, otherwise a 409 reason.
+	offReply string
+	offHuman bool
 	// startedBy reports the code for /v1/start when a unit runs already.
 	control, backend *httptest.Server
 	sse              chan struct{}
@@ -68,6 +74,16 @@ func newFakeOwner(t *testing.T) *fakeOwner {
 		o.stops.Add(1)
 		o.unit, o.healthy = "", false
 		writeJSON(w, 202, map[string]any{"stopped": true})
+	})
+	cm.HandleFunc("POST /v1/poweroff", func(w http.ResponseWriter, r *http.Request) {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		o.offs.Add(1)
+		if o.offReply != "" {
+			writeJSON(w, 409, map[string]any{"error": "busy", "reason": o.offReply, "human": o.offHuman})
+			return
+		}
+		writeJSON(w, 202, map[string]any{"poweroff": true})
 	})
 	o.control = httptest.NewServer(cm)
 	bm := http.NewServeMux()
@@ -125,6 +141,20 @@ func newTestGate(t *testing.T, o *fakeOwner) (*gate, *httptest.Server) {
 	srv := httptest.NewServer(g)
 	t.Cleanup(srv.Close)
 	return g, srv
+}
+
+// settle waits until the gate has finished its in-flight bookkeeping; the
+// client can see the response before the handler's deferred end() runs.
+func settle(g *gate) {
+	for i := 0; i < 1000; i++ {
+		g.mu.Lock()
+		n := g.inflight
+		g.mu.Unlock()
+		if n == 0 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func post(t *testing.T, url string) (int, string) {
@@ -233,6 +263,7 @@ func TestIdleStopsOnlyAutoStarted(t *testing.T) {
 	// Manually started: never stopped by the gate.
 	o.set("strata-headless-iq3-s.service", true, false)
 	post(t, srv.URL+"/v1/chat/completions")
+	settle(g)
 	c.add(time.Hour)
 	g.idleCheck()
 	if o.stops.Load() != 0 {
@@ -242,6 +273,7 @@ func TestIdleStopsOnlyAutoStarted(t *testing.T) {
 	o.set("", false, false)
 	g.lastHealthy = time.Time{}
 	post(t, srv.URL+"/v1/chat/completions")
+	settle(g)
 	c.add(29 * time.Minute)
 	g.idleCheck()
 	if o.stops.Load() != 0 {
@@ -258,6 +290,7 @@ func TestDesktopUseStopsAutoStarted(t *testing.T) {
 	o := newFakeOwner(t)
 	g, srv := newTestGate(t, o)
 	post(t, srv.URL+"/v1/chat/completions")
+	settle(g)
 	o.mu.Lock()
 	o.busy = true
 	o.mu.Unlock()
@@ -418,4 +451,152 @@ func TestMagicPacket(t *testing.T) {
 	if _, err := magicPacket("nope"); err == nil {
 		t.Fatal("invalid MAC accepted")
 	}
+}
+
+// wokenIdleGate returns a gate that woke the owner, started Strata and has
+// been idle past the timeout.
+func wokenIdleGate(t *testing.T, o *fakeOwner, powerOff bool) (*gate, *clock) {
+	g, srv := newTestGate(t, o)
+	g.cfg.PowerOff = powerOff
+	c := &clock{t: time.Unix(1000, 0)}
+	g.now = c.now
+	post(t, srv.URL+"/v1/chat/completions")
+	settle(g)
+	g.mu.Lock()
+	g.wokeByGate = true
+	g.mu.Unlock()
+	c.add(31 * time.Minute)
+	return g, c
+}
+
+func TestPowerOffAfterIdleWhenWoken(t *testing.T) {
+	o := newFakeOwner(t)
+	g, _ := wokenIdleGate(t, o, true)
+	g.idleCheck()
+	if o.stops.Load() != 1 || o.offs.Load() != 1 || g.wokeByGate || g.powerOffPending {
+		t.Fatalf("stops=%d offs=%d woke=%v pending=%v", o.stops.Load(), o.offs.Load(), g.wokeByGate, g.powerOffPending)
+	}
+}
+
+func TestNoPowerOffWhenDisabledOrNotWoken(t *testing.T) {
+	o := newFakeOwner(t)
+	g, _ := wokenIdleGate(t, o, false)
+	g.idleCheck()
+	if o.stops.Load() != 1 || o.offs.Load() != 0 {
+		t.Fatalf("disabled: stops=%d offs=%d", o.stops.Load(), o.offs.Load())
+	}
+	o2 := newFakeOwner(t)
+	g2, _ := wokenIdleGate(t, o2, true)
+	g2.wokeByGate = false
+	g2.idleCheck()
+	if o2.stops.Load() != 1 || o2.offs.Load() != 0 {
+		t.Fatalf("not woken: stops=%d offs=%d", o2.stops.Load(), o2.offs.Load())
+	}
+}
+
+func TestPowerOffRetriesWhileBusyAndGivesUpForPeople(t *testing.T) {
+	o := newFakeOwner(t)
+	o.offReply = "1 Docker container(s) running"
+	g, _ := wokenIdleGate(t, o, true)
+	g.idleCheck()
+	if o.offs.Load() != 1 || !g.powerOffPending {
+		t.Fatalf("offs=%d pending=%v", o.offs.Load(), g.powerOffPending)
+	}
+	g.idleCheck()
+	if o.offs.Load() != 2 || !g.powerOffPending {
+		t.Fatalf("retry: offs=%d pending=%v", o.offs.Load(), g.powerOffPending)
+	}
+	o.mu.Lock()
+	o.offReply, o.offHuman = "session 3 of attodao (wayland)", true
+	o.mu.Unlock()
+	g.idleCheck()
+	if g.powerOffPending || g.wokeByGate {
+		t.Fatal("kept trying although a person logged in")
+	}
+	g.idleCheck()
+	if o.offs.Load() != 3 {
+		t.Fatalf("offs=%d", o.offs.Load())
+	}
+}
+
+func TestDesktopUseCancelsPowerOff(t *testing.T) {
+	o := newFakeOwner(t)
+	g, c := wokenIdleGate(t, o, true)
+	c.add(-30 * time.Minute) // not idle yet
+	o.mu.Lock()
+	o.busy = true
+	o.mu.Unlock()
+	g.idleCheck()
+	if o.stops.Load() != 1 || o.offs.Load() != 0 || g.wokeByGate {
+		t.Fatalf("stops=%d offs=%d woke=%v", o.stops.Load(), o.offs.Load(), g.wokeByGate)
+	}
+}
+
+func TestNewRequestCancelsPendingPowerOff(t *testing.T) {
+	o := newFakeOwner(t)
+	o.offReply = "a heavy job is running"
+	g, _ := wokenIdleGate(t, o, true)
+	g.idleCheck()
+	if !g.powerOffPending {
+		t.Fatal("no pending power-off")
+	}
+	if e := g.bringUp(); e != nil {
+		t.Fatal(e)
+	}
+	if g.powerOffPending || !g.wokeByGate || g.autoUnit == "" {
+		t.Fatalf("pending=%v woke=%v auto=%q", g.powerOffPending, g.wokeByGate, g.autoUnit)
+	}
+}
+
+func TestPowerOffBlocker(t *testing.T) {
+	root := t.TempDir()
+	lock := root + "/heavy.lock"
+	os.WriteFile(lock, nil, 0o666)
+	os.MkdirAll(root+"/system.slice", 0o755)
+	sessions := ""
+	unit := "inactive"
+	c := newControl(controlConfig{Units: []unitConfig{{"A", "a.service"}}, Systemctl: "systemctl", Loginctl: "loginctl",
+		HeavyLock: lock, CgroupRoot: root})
+	c.run = func(name string, args ...string) (string, error) {
+		switch {
+		case name == "systemctl":
+			return unit + "\n", nil
+		case args[0] == "list-sessions":
+			return sessions, nil
+		default:
+			if args[1] == "5" {
+				return "Class=user\nName=hermes\nRemote=yes\nType=tty\n", nil
+			}
+			if args[1] == "3" {
+				return "Class=user\nName=attodao\nRemote=no\nType=wayland\n", nil
+			}
+			return "Class=greeter\nName=greeter\nRemote=no\nType=wayland\n", nil
+		}
+	}
+	check := func(want string, human bool) {
+		t.Helper()
+		got, h := c.powerOffBlocker()
+		if !strings.Contains(got, want) || (want == "" && got != "") || h != human {
+			t.Fatalf("got %q %v, want %q %v", got, h, want, human)
+		}
+	}
+	check("", false)
+	sessions = " 1 975 greeter seat0 1 greeter tty1 no -\n"
+	check("", false) // the greeter alone is nobody
+	unit = "active"
+	check("a.service is active", false)
+	unit = "inactive"
+	sessions += " 5 1001 hermes - 6417 user - no -\n"
+	check("session 5 of hermes", false) // SSH only postpones
+	sessions += " 3 1000 attodao seat0 2063 user tty1 no -\n"
+	check("session 3 of attodao", true)
+	sessions = ""
+	os.MkdirAll(root+"/system.slice/docker-abc.scope", 0o755)
+	check("1 Docker container", false)
+	os.Remove(root + "/system.slice/docker-abc.scope")
+	f, _ := os.Open(lock)
+	syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	check("heavy job", false)
+	f.Close()
+	check("", false)
 }

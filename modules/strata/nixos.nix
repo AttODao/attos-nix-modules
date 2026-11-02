@@ -27,6 +27,9 @@ in
           healthUrl = "http://${healthAddress}:${toString endpoint.port}/health";
           systemctl = "${pkgs.systemd}/bin/systemctl";
           loginctl = "${pkgs.systemd}/bin/loginctl";
+          # Checked before a power-off: a running Docker container or heavy job postpones it.
+          cgroupRoot = "/sys/fs/cgroup";
+          heavyLock = lib.optionalString (config.modules.heavy.enable or false) "/run/heavy/lock";
         }
       );
       user = ps.require "strata" "user" cfg.user;
@@ -203,6 +206,17 @@ in
             if (verb === "start" || verb === "stop") {
               return polkit.Result.YES;
             }
+          }
+        });
+      ''
+      + lib.optionalString (wake && cfg.wake.powerOff) ''
+        // strata-wake-control powers off an owner the gateway woke, after its own checks
+        // (no local login, SSH session, Docker container or heavy job).
+        polkit.addRule(function(action, subject) {
+          if (subject.user === "strata-control" &&
+              (action.id === "org.freedesktop.login1.power-off" ||
+               action.id === "org.freedesktop.login1.power-off-multiple-sessions")) {
+            return polkit.Result.YES;
           }
         });
       '';

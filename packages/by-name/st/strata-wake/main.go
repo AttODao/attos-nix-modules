@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -34,11 +35,15 @@ type unitConfig struct {
 }
 
 type controlConfig struct {
-	Listen    string       `json:"listen"`
-	Units     []unitConfig `json:"units"`
-	HealthURL string       `json:"healthUrl"`
-	Systemctl string       `json:"systemctl"`
-	Loginctl  string       `json:"loginctl"`
+	Listen string `json:"listen"`
+	// HeavyLock and CgroupRoot are checked before powering off: a held heavy
+	// lock or a running Docker container (CI job) postpones it.
+	HeavyLock  string       `json:"heavyLock"`
+	CgroupRoot string       `json:"cgroupRoot"`
+	Units      []unitConfig `json:"units"`
+	HealthURL  string       `json:"healthUrl"`
+	Systemctl  string       `json:"systemctl"`
+	Loginctl   string       `json:"loginctl"`
 }
 
 // controlStatus is the /v1/status body shared by control and gate.
@@ -239,7 +244,74 @@ func (c *control) handler() http.Handler {
 		log.Printf("stopped %s", body.Unit)
 		writeJSON(w, http.StatusAccepted, map[string]any{"stopped": true, "unit": body.Unit})
 	})
+	mux.HandleFunc("POST /v1/poweroff", func(w http.ResponseWriter, r *http.Request) {
+		reason, human := c.powerOffBlocker()
+		if reason != "" {
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "busy", "reason": reason, "human": human})
+			return
+		}
+		log.Printf("powering off on request of the gateway")
+		writeJSON(w, http.StatusAccepted, map[string]any{"poweroff": true})
+		go func() {
+			time.Sleep(time.Second)
+			if _, err := c.run(c.cfg.Systemctl, "poweroff", "--no-block"); err != nil {
+				log.Printf("poweroff: %v", err)
+			}
+		}()
+	})
 	return mux
+}
+
+// powerOffBlocker returns why the owner must stay on ("" when it may power
+// off) and whether the reason is a person at the machine (a local session).
+func (c *control) powerOffBlocker() (string, bool) {
+	for _, u := range c.cfg.Units {
+		if st := c.unitState(u.Unit); st == "active" || st == "activating" {
+			return u.Unit + " is " + st, false
+		}
+	}
+	out, err := c.run(c.cfg.Loginctl, "list-sessions", "--no-legend")
+	if err != nil {
+		return "cannot list sessions", false
+	}
+	remote := ""
+	for _, id := range sessionIDs(out) {
+		props, err := c.run(c.cfg.Loginctl, "show-session", id, "-p", "Class", "-p", "Name", "-p", "Remote", "-p", "Type")
+		if err != nil {
+			continue
+		}
+		p := parseProps(props)
+		if p["Class"] != "user" {
+			continue
+		}
+		reason := fmt.Sprintf("session %s of %s (%s)", id, p["Name"], p["Type"])
+		// A local login means a person took the machine over; a remote
+		// (SSH) session only postpones the power-off.
+		if p["Remote"] != "yes" {
+			return reason, true
+		}
+		if remote == "" {
+			remote = reason
+		}
+	}
+	if remote != "" {
+		return remote, false
+	}
+	if c.cfg.CgroupRoot != "" {
+		if m, _ := filepath.Glob(filepath.Join(c.cfg.CgroupRoot, "system.slice", "docker-*.scope")); len(m) > 0 {
+			return fmt.Sprintf("%d Docker container(s) running", len(m)), false
+		}
+	}
+	if c.cfg.HeavyLock != "" {
+		if f, err := os.Open(c.cfg.HeavyLock); err == nil {
+			defer f.Close()
+			if syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB) != nil {
+				return "a heavy job is running", false
+			}
+			syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		}
+	}
+	return "", false
 }
 
 // ---------------------------------------------------------------- gate
@@ -259,6 +331,8 @@ type gateConfig struct {
 	WakeTimeoutSec  int        `json:"wakeTimeoutSec"`
 	StartTimeoutSec int        `json:"startTimeoutSec"`
 	StateFile       string     `json:"stateFile"`
+	// PowerOff powers the owner off after an idle stop when the gate woke it.
+	PowerOff bool `json:"powerOff"`
 }
 
 // apiError is returned to API clients in the OpenAI error shape.
@@ -307,6 +381,10 @@ type gate struct {
 	lastHealthy  time.Time
 	lastError    string
 	pending      *startCall
+	// wokeByGate: the owner was off and the gate woke it; powerOffPending: an
+	// idle stop happened on such an owner and the power-off is still to be done.
+	wokeByGate      bool
+	powerOffPending bool
 }
 
 func newGate(cfg gateConfig) (*gate, error) {
@@ -368,22 +446,34 @@ func (g *gate) loadState() {
 	if err != nil {
 		return
 	}
-	var st struct {
-		AutoStartedUnit string `json:"autoStartedUnit"`
-	}
-	if json.Unmarshal(data, &st) == nil && st.AutoStartedUnit != "" {
-		g.autoUnit = st.AutoStartedUnit
-		log.Printf("restored auto-started unit %s", st.AutoStartedUnit)
+	var st gateState
+	if json.Unmarshal(data, &st) == nil {
+		g.autoUnit, g.wokeByGate, g.powerOffPending = st.AutoStartedUnit, st.WokeByGate, st.PowerOffPending
+		if st.AutoStartedUnit != "" || st.WokeByGate {
+			log.Printf("restored state: auto-started unit %q, woken by gate %v, power-off pending %v",
+				st.AutoStartedUnit, st.WokeByGate, st.PowerOffPending)
+		}
 	}
 }
 
-// setAuto records (or clears with "") the unit the gate started. Call with mu held.
+type gateState struct {
+	AutoStartedUnit string `json:"autoStartedUnit"`
+	WokeByGate      bool   `json:"wokeByGate"`
+	PowerOffPending bool   `json:"powerOffPending"`
+}
+
+// setAutoLocked records (or clears with "") the unit the gate started. Call with mu held.
 func (g *gate) setAutoLocked(unit string) {
 	g.autoUnit = unit
+	g.saveStateLocked()
+}
+
+// saveStateLocked persists the gate's ownership state. Call with mu held.
+func (g *gate) saveStateLocked() {
 	if g.cfg.StateFile == "" {
 		return
 	}
-	data, _ := json.Marshal(map[string]string{"autoStartedUnit": unit})
+	data, _ := json.Marshal(gateState{g.autoUnit, g.wokeByGate, g.powerOffPending})
 	tmp := g.cfg.StateFile + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err == nil {
 		err = os.Rename(tmp, g.cfg.StateFile)
@@ -448,6 +538,12 @@ func (g *gate) fail(e *apiError) *apiError {
 
 // bringUp wakes the owner if needed, starts Strata and waits until healthy.
 func (g *gate) bringUp() *apiError {
+	g.mu.Lock()
+	if g.powerOffPending {
+		g.powerOffPending = false
+		g.saveStateLocked()
+	}
+	g.mu.Unlock()
 	st, err := g.controlStatus()
 	if err != nil {
 		if g.cfg.WOL == nil {
@@ -471,6 +567,11 @@ func (g *gate) bringUp() *apiError {
 			time.Sleep(g.pollEvery)
 			st, err = g.controlStatus()
 		}
+		g.mu.Lock()
+		g.wokeByGate = true
+		g.saveStateLocked()
+		g.mu.Unlock()
+		log.Printf("owner woke up")
 	}
 	if st.Healthy && g.checkHealth(context.Background()) {
 		g.setState("ready")
@@ -556,6 +657,7 @@ func (g *gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body := map[string]any{
 			"state": g.state, "autoStartedUnit": g.autoUnit, "inflight": g.inflight,
 			"lastActivity": g.lastActivity.Format(time.RFC3339), "lastError": g.lastError,
+			"wokeByGate": g.wokeByGate, "powerOffPending": g.powerOffPending,
 		}
 		g.mu.Unlock()
 		writeJSON(w, http.StatusOK, body)
@@ -582,16 +684,31 @@ func (g *gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // idleCheck stops the unit the gate started when it has been idle long enough
-// or the owner's desktop came into use, and forgets units that went away.
+// or the owner's desktop came into use, forgets units that went away, and
+// powers off an owner the gate woke once it is idle again.
 func (g *gate) idleCheck() {
 	g.mu.Lock()
-	unit, inflight, last := g.autoUnit, g.inflight, g.lastActivity
+	unit, inflight, last, pendingOff := g.autoUnit, g.inflight, g.lastActivity, g.powerOffPending
 	g.mu.Unlock()
-	if unit == "" {
+	if unit == "" && !pendingOff {
 		return
 	}
 	st, err := g.controlStatus()
 	if err != nil {
+		if pendingOff {
+			// Unreachable: already off (or gone); nothing left to do.
+			g.mu.Lock()
+			g.wokeByGate, g.powerOffPending = false, false
+			g.saveStateLocked()
+			g.mu.Unlock()
+		}
+		return
+	}
+	if inflight > 0 {
+		return
+	}
+	if unit == "" {
+		g.tryPowerOff()
 		return
 	}
 	if st.Unit == nil || *st.Unit != unit {
@@ -599,9 +716,6 @@ func (g *gate) idleCheck() {
 		g.setAutoLocked("")
 		g.mu.Unlock()
 		log.Printf("%s is no longer running; forgetting it", unit)
-		return
-	}
-	if inflight > 0 {
 		return
 	}
 	reason := ""
@@ -619,11 +733,53 @@ func (g *gate) idleCheck() {
 		return
 	}
 	g.mu.Lock()
-	g.setAutoLocked("")
+	g.autoUnit = ""
 	g.lastHealthy = time.Time{}
+	switch {
+	case !g.wokeByGate || !g.cfg.PowerOff:
+	case reason == "idle":
+		g.powerOffPending = true
+	default:
+		// Someone uses the desktop: the machine is theirs now.
+		g.wokeByGate = false
+	}
+	g.saveStateLocked()
+	pendingOff = g.powerOffPending
 	g.mu.Unlock()
 	g.setState("stopped")
 	log.Printf("stopped %s (%s)", unit, reason)
+	if pendingOff {
+		g.tryPowerOff()
+	}
+}
+
+// tryPowerOff asks the owner to power off. The owner refuses while anyone is
+// logged in (then the gate gives up: a person took over) or while other work
+// runs (then the gate retries on the next check).
+func (g *gate) tryPowerOff() {
+	code, out, err := g.controlPost("/v1/poweroff", map[string]string{})
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	switch {
+	case err != nil:
+		return
+	case code == http.StatusAccepted:
+		log.Printf("powering off the owner (woken by the gate, idle)")
+		g.wokeByGate, g.powerOffPending = false, false
+		g.saveStateLocked()
+	case code == http.StatusConflict:
+		reason, _ := out["reason"].(string)
+		if human, _ := out["human"].(bool); human {
+			log.Printf("not powering off: %s; leaving the owner on", reason)
+			g.wokeByGate, g.powerOffPending = false, false
+			g.saveStateLocked()
+		} else if g.lastError != "poweroff: "+reason {
+			log.Printf("power-off postponed: %s", reason)
+			g.lastError = "poweroff: " + reason
+		}
+	default:
+		log.Printf("power-off request failed: %d", code)
+	}
 }
 
 func (g *gate) idleLoop(ctx context.Context) {
