@@ -50,6 +50,17 @@ in
     services.meilisearch.masterKeyFile = meiliKey;
     fonts.packages = [ pkgs.noto-fonts-cjk-sans ];
 
+    # The upstream units read /var/lib/karakeep/settings.env as an EnvironmentFile in the host
+    # namespace, so the data must appear at the state directory itself, not only inside the units.
+    fileSystems.${stateDir} = {
+      device = "${dataDir}/data";
+      fsType = "none";
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=${dataDir}"
+      ];
+    };
+
     systemd.tmpfiles.settings."10-karakeep" = {
       ${dataDir}.d = {
         mode = lib.mkDefault "0755";
@@ -71,8 +82,7 @@ in
 
     systemd.services = lib.mkMerge [
       (lib.genAttrs units (_: {
-        unitConfig.RequiresMountsFor = [ dataDir ];
-        serviceConfig.BindPaths = [ "${dataDir}/data:${stateDir}" ];
+        unitConfig.RequiresMountsFor = [ stateDir ];
       }))
       {
         karakeep-web = { inherit (ps.afterNetworkOnline) wants after; };
