@@ -143,7 +143,8 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | ccpocket | HM | —（CC Pocket Bridgeのuser service。agentはユーザーprofileのclaude/codexとSDK同梱のClaude Code） |
 | hermes | NixOS | —（native systemd、sandboxは既定有効。devenv・nixを同梱） |
 | bot-screen-host | NixOS | —（Hermes Bot Screenをssh terminal backendで受けるhost用のpackage・font。`hermes.botDesktop`も同じlistを使う） |
-| karakeep / attos-hoyo-dashboard | NixOS | Docker |
+| karakeep | NixOS | —（native services.karakeep・Meilisearch・Chromium） |
+| attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
 | strata | NixOS | Docker（digest固定のAMD image、greeter sessionまたはデスクトップの`strata-headless start`でon-demand起動するAPI・モデル別unit・polkit）。`wake.enable`でgateway（Traefik host）に`strata-wake-gate`、ownerに`strata-wake-control`を置き、POSTで起動（WoL）・自動起動分のidle停止。`POST /_strata-wake/wake` でStrataを起動せずownerだけを起こし、最後の呼び出しから`idleMinutes`の間は電源を切らない（他のclient、Hermes Bot Screen用）。 |
@@ -289,7 +290,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 `paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
+HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG・Karakeep）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
 通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
 
 `public-services.<FQDN>.<service>.privateExtraNetworks`（非空文字列のlist、既定`[]`）は、そのprivate HTTP routeだけに`modules.traefik.privateNetworks`からの追加許可を与える。非空なら`private = true`必須。TCP/UDPやstandaloneには適用せず、firewall・routing・認証も変更しない。
@@ -358,7 +359,7 @@ native serviceは127.0.0.1でlistenし、OCI frontendはloopbackだけへportを
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、Vaultwardenの`extraHosts`（hostの`networking.hosts`へ追加）、Karakeepの非秘密environmentも公開service recordへ指定する。
 Incusの公開 `guests.<name>.{type,launchConfig,managedDeviceNames}`（`type` は `virtual-machine` / `container`）はhost activationでは適用せず、`guest <name> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足guestだけ `rebuild.flake`（registry別名やgit URLなどのflake参照。毎回最新を取得し、`rebuild ACTION FLAKE` か `--flake` で上書き可能）の標準NixOS metadataとVMならqcow2、containerならsquashfsをbuild・importして作成し、作成用imageを削除する。同名の別type instanceは削除/変換せず拒否する。consumer guestは標準 `incus-virtual-machine-image.nix` / `incus-container-image.nix` とroot password lockを明示する。初期login password/private fileの再供給は `guest <name> passwd <user>` / `guest <name> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerは有効化したhostで動き、jobはDocker containerで実行する。Forgejoのuser/org runnerとしての登録scopeが信頼境界になるため、hostを信頼して任せられるownerだけに登録する。nixpkgs標準 `services.forgejo-runner` を使い、Forgejoの「新しいランナーを作成」で得た `uuid` と、対になるtokenだけを含む `tokenFile` が必要（廃止された登録トークンには非対応）。`docker=false` はhost実行専用runner用。`url`（既定null）は接続先Forgejo URLで、nullならstandalone instanceまたはpublic-servicesに登録した単一hostnameから導出する。`fetchInterval`（既定null）は `runner.fetch_interval` で、nullはrunner既定の2秒を使う。同じlabelの別runnerより長くすると、そのrunnerが停止中・busyのときにjobを拾いやすくなる。`jobLimits.cpus` と `jobLimits.memory`（ともに既定null）はjob containerのDocker `--cpus` と `--memory` で、nullは無制限。memory指定時は同値の `--memory-swap` も設定しswapを使わせない。`dockerHost`（既定null）は `container.docker_host` で、nullは `-`（socketを渡さない）。`"automount"` はhostのDocker socketを全jobへmountし、workflowにrunner hostのrootを与えるため明示opt-inに限る。Incus guestへのfile配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。値はsource pathの文字列
-Karakeep/ChromeのOCI version/index digestとPaseo 0.12.0を固定し、runtime latest取得をしない。Forgejo（LTSでなく`forgejo`）・Immich・Vaultwarden・Jellyfin・SearXNG・ytdl-subは利用ホストのnixpkgsのpackageを使う。OpenCloud（rolling）は利用ホストのnixpkgsのgeneric.nixで9.0.0を組む`attopkgs.opencloud`を使い、nixpkgsが9.0.0以上になったらそちらに切り替わる。既存dataを作ったversionより古いpackageへ戻さない（Karakeep・Open WebUIはnixpkgs版がimageより古いためDockerのまま）。
+Paseo 0.12.0を固定し、runtime latest取得をしない。Forgejo（LTSでなく`forgejo`）・Immich・Vaultwarden・Jellyfin・SearXNG・ytdl-sub・Karakeepは利用ホストのnixpkgsのpackageを使う。OpenCloud（rolling）は利用ホストのnixpkgsのgeneric.nixで9.0.0を組む`attopkgs.opencloud`を使い、nixpkgsが9.0.0以上になったらそちらに切り替わる。既存dataを作ったversionより古いpackageへ戻さない（Open WebUIはnixpkgs版がimageより古いためDockerのまま）。
 localサービスの必須値、Docker依存、既存stateの扱いは[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の各moduleページを参照。
 
 ## ホスト側に残すもの
