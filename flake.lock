@@ -226,7 +226,25 @@
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager_2",
         "nixos-mailserver": "nixos-mailserver",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_2",
+        "scarlett-driver": "scarlett-driver"
+      }
+    },
+    "scarlett-driver": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793742225,
+        "narHash": "sha256-OGvjWlC3UIo0VmNDa7OqzFVxMO7Br5MLYEGkkXNYMvc=",
+        "ref": "refs/tags/v0.1.1",
+        "rev": "1c8ff71f43dc9bfd026cc638d2020d0791bce82f",
+        "revCount": 2,
+        "type": "git",
+        "url": "https://git.attodao.cc/AttODao/scaelett-driver"
+      },
+      "original": {
+        "ref": "refs/tags/v0.1.1",
+        "type": "git",
+        "url": "https://git.attodao.cc/AttODao/scaelett-driver"
       }
     },
     "uv2nix": {

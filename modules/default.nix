@@ -63,6 +63,7 @@
     ./pi
     ./pipeasio
     ./pipewire
+    ./scarlett-driver
     ./solaar
     ./ssh
     ./steam
