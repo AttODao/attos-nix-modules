@@ -73,24 +73,6 @@ let
   managedDir = pkgs.writeTextDir "config.yaml" (
     builtins.toJSON (lib.recursiveUpdate { terminal.cwd = native.workingDirectory; } native.settings)
   );
-  # Bot ScreenのlauncherはgatewayのPATHとSSHのlogin shellの両方でこれらを使う。
-  botDesktopPackages = with pkgs; [
-    tigervnc
-    xfwm4
-    xfce4-panel
-    xfdesktop
-    xfce4-settings
-    xfce4-terminal
-    dbus
-    xauth
-    xdpyinfo
-    setxkbmap
-    xprop
-    xsetroot
-    xset
-    at-spi2-core
-    attopkgs.cua-driver
-  ];
   managedScope.environment = {
     HERMES_MANAGED = lib.mkForce "false";
     HERMES_MANAGED_DIR = "${managedDir}";
@@ -141,15 +123,10 @@ in
             message = "hermes: botDesktop requires sandbox = false; the default-deny sandbox hides /tmp/.X11-unix and other desktop resources.";
           }
         ];
-        services.hermes-agent.extraPackages = botDesktopPackages;
-        environment.systemPackages = botDesktopPackages;
+        services.hermes-agent.extraPackages = config.modules.bot-screen-host.packages;
+        modules.bot-screen-host.enable = true;
         # Desktop SSHのhermes serveにもNix管理のdriverを使わせる。
         environment.sessionVariables.HERMES_CUA_DRIVER_CMD = lib.getExe attopkgs.cua-driver;
-        # Bot ScreenのXfce・appが日本語localeで豆腐にならないように。
-        fonts.packages = [
-          pkgs.dejavu_fonts
-          pkgs.noto-fonts-cjk-sans
-        ];
       })
       (lib.mkIf (!cfg.sandbox) {
         services.hermes-agent.addToSystemPackages = true;

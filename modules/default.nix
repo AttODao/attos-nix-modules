@@ -6,6 +6,7 @@
     ./attos-deck
     ./attos-hoyo-dashboard
     ./attos-mouse
+    ./bot-screen-host
     ./code-server
     ./skills
     ./cloudflare-ddns

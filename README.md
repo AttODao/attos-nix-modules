@@ -142,6 +142,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | paseo | HM | Pi（claude-code有効時はClaude provider） |
 | ccpocket | HM | —（CC Pocket Bridgeのuser service。agentはユーザーprofileのclaude/codexとSDK同梱のClaude Code） |
 | hermes | NixOS | —（native systemd、sandboxは既定有効。devenv・nixを同梱） |
+| bot-screen-host | NixOS | —（Hermes Bot Screenをssh terminal backendで受けるhost用のpackage・font。`hermes.botDesktop`も同じlistを使う） |
 | karakeep / attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
@@ -197,6 +198,7 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 - `ccpocket.{port,allowClaudeOAuth,environmentFile}`（公開 `public-services.<FQDN>.ccpocket` と共通）: 単独利用は127.0.0.1、公開時は同じhostnameの`ssh.address`でlistenし、起動時のURL・QRに`ws://<FQDN>:<port>`を出す。bridgeはTLSなしの平文ws://で話すため、listen addressと登録hostnameはprivate DNS/VPN network内からだけ到達できるものに限る。公開recordは同じhostnameのssh登録が必須（local DNSはssh.addressを返す）で、`private`は既定true。portは既定8765（firewallはconsumerが開ける）。`allowClaudeOAuth`（既定false）はAPI keyの代わりにClaude Codeのログインを使う`BRIDGE_ALLOW_CLAUDE_OAUTH=1`を設定する（upstreamが規約上の不確実性を明記した明示opt-in）。environmentFile未指定は各ユーザーの `~/.ccpocket/bridge.env`。fileが無ければ起動せず、`BRIDGE_API_KEY`が空なら起動を拒否する。`ANTHROPIC_API_KEY`もこのfileへ書く。API keyをjournalへ出さないためQR・deep linkにtokenを含めない（appでAPI keyを入力する）。固定portのため複数HMユーザーは拒否する。
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: opt-inで残す旧user service。monitor / wallpaperのリスト、scalingの既定はfill。Noctaliaから操作する場合は`noctalia.wallpaperEngine`を選び、両moduleは同時有効化しない。assetsやユーザーごとの調整は利用側で管理する。
+- `bot-screen-host.enable`: SSH terminal backendの受け側でBot Screen用package（TigerVNC・Xfce core・cua-driver・VirtualGL）とDejaVu・Noto CJK fontを導入する。既定false。
 - `wireguard-client.tunnels`: interface名からtunnel定義（`privateKeyFile`・`addresses`・`dns`・`peers`）へのattrset、既定 `{}`。標準`networking.networkmanager.ensureProfiles`で`autoconnect`（既定false）に従うruntime profileを作り、秘密鍵は`NetworkManager-ensure-profiles.service`がruntime fileから読んでroot専用profileへ書く（NetworkManagerは利用者uidのsecret agentにしか問い合わせないため、root agent方式では手動接続できない）。秘密の取得・復号・権限・rotationはconsumerが管理し、rotation後は同serviceを再起動する。
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
@@ -309,6 +311,7 @@ Hermesはupstreamのrelease（`flake.nix`の`hermes-agent` tag、`flake.lock`を
 両unitは`hermes.sandbox = true`（既定）で既定拒否のsandboxで動く。`/mnt` `/media` `/srv` `/opt` `/var` `/run`をtmpfsで空にし、`ProtectHome = "tmpfs"`で`/home` `/root`を隠し、`dataDir`をread-write、明示した`hermes.readOnlyPaths`（絶対pathのlist、既定[]）をread-onlyでbindする（`bash -l`用の`/run/current-system`、glibcが`/var/run/nscd`で探すnscd、systemd-resolvedの`/run/systemd/resolve`はread-only）。`ProtectSystem=strict`、`NoNewPrivileges`、capabilityなし、`PrivateDevices`、`ProtectProc=invisible`。Hermesはsudo・`trusted-users`を持たず、`nix shell nixpkgs#...`と、`extraPackages`の`nix`・`devenv`で作業ごとの環境を宣言的に組む（upstreamの実行時tool `nodejs`・`ripgrep`・`ffmpeg-headless`も入れる。terminalの`bash -l`がpackage wrapperのPATHを外すため）。宛先の制限（private network・localhost）はhost固有値なので利用側のfirewallで行う。
 upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal.cwd`のみ）をdeep mergeし、`.managed`を置く。他のkey、`.env`、認証・履歴は変更しない。両unitは`HERMES_MANAGED=false`とHermesのmanaged scope（`HERMES_MANAGED_DIR`）で、Nixが書くkeyだけを固定し、他のkeyはHermesが`hermes config set`で変更できる。sandbox有効時のunit外のshellは`.managed`により全keyが変更不可のまま。`sandbox = false`はOS全体がHermes専用の信頼境界（専用container等）の場合だけ選ぶ。両unitから全filesystemが見えるため`readOnlyPaths`は空必須で、linger禁止も適用しない。upstreamの`NoNewPrivileges`・`ProtectSystem`・`PrivateTmp`も無効にし、gatewayの子として動くagentのtoolが利用側で許可されたsudo・system全体への書込みを使えるようにする。`/tmp`はSSH sessionと共有する。CLIとpython3をsystem-wideに導入し、全PAM sessionへ`HERMES_HOME`・`HERMES_MANAGED=false`・unitと同じ`HERMES_MANAGED_DIR`をexportする。login shellとHermes DesktopのSSH接続（remoteで`hermes serve`を起動）がgatewayと同じstate・managed scopeを使う。provider/model、内蔵password認証、`dashboard.public_url` / `trusted_proxies` はoperatorがruntimeでbootstrapし、その後dashboardから編集する。内蔵password認証はVPN/trusted network専用。proxyの実IPをtrustする。詳細は[公式dashboard](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/web-dashboard.md)。
 
+`hermes.botDesktop`のpackage・fontは`modules.bot-screen-host`を有効にして入れる。
 `hermes.botDesktop`（既定false）はBot Screen（TigerVNC Xvnc + Xfce core）・DejaVuとNoto CJK font・computer_use用の`attopkgs.cua-driver`をgateway・dashboard backend・SSH/Desktop sessionへ供給する。`sandbox = false`が必須で、X11 socketをsession間で共有する。driverはNixの絶対pathを`HERMES_CUA_DRIVER_CMD`で指定し、PMによる個別install・repairを避ける。toolsetの有効化と`bot_desktop.*`は`hermes config set`でNixの外で管理する。
 
 ### 複数マシンへの配置
