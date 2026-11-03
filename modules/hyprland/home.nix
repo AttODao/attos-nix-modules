@@ -28,11 +28,6 @@ let
             match.class = ".*";
             idle_inhibit = "fullscreen";
           }
-          # フォーカス中のwindowだけ枠線を2倍（general.border_sizeの2px→4px）にする。
-          {
-            match.focus = true;
-            border_size = 4;
-          }
           # 設定ダイアログ・portalのファイル選択はtileせず浮かせる。
           {
             match.class = "^(org[.]pulseaudio[.]pavucontrol|blueman-manager|nm-connection-editor|xdg-desktop-portal-gtk)$";
@@ -160,7 +155,8 @@ in
           general = {
             gaps_in = 4;
             gaps_out = 8;
-            border_size = 2;
+            # フォーカスで太さを変えるとwindowの中身が縮んで要素が動くので、全windowで同じ太さにし、フォーカスは色で示す。
+            border_size = 4;
             col = {
               active_border = {
                 colors = [
