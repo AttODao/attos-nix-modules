@@ -3,6 +3,7 @@
 // starting Strata for POST requests, and stopping what it started after
 // idleness. `control` runs on the owner and starts/stops the Strata units and
 // reports whether its desktop is in use.
+// POST /_strata-wake/wake wakes the owner without starting Strata and keeps it on for idleTimeoutSec after the last call.
 package main
 
 import (
@@ -25,7 +26,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 // ---------------------------------------------------------------- control
 
@@ -381,6 +382,8 @@ type gate struct {
 	lastHealthy  time.Time
 	lastError    string
 	pending      *startCall
+	pendingWake  *startCall
+	holdUntil    time.Time
 	// wokeByGate: the owner was off and the gate woke it; powerOffPending: an
 	// idle stop happened on such an owner and the power-off is still to be done.
 	wokeByGate      bool
@@ -449,7 +452,8 @@ func (g *gate) loadState() {
 	var st gateState
 	if json.Unmarshal(data, &st) == nil {
 		g.autoUnit, g.wokeByGate, g.powerOffPending = st.AutoStartedUnit, st.WokeByGate, st.PowerOffPending
-		if st.AutoStartedUnit != "" || st.WokeByGate {
+		g.holdUntil = st.HoldUntil
+		if st.AutoStartedUnit != "" || st.WokeByGate || !st.HoldUntil.IsZero() {
 			log.Printf("restored state: auto-started unit %q, woken by gate %v, power-off pending %v",
 				st.AutoStartedUnit, st.WokeByGate, st.PowerOffPending)
 		}
@@ -457,9 +461,10 @@ func (g *gate) loadState() {
 }
 
 type gateState struct {
-	AutoStartedUnit string `json:"autoStartedUnit"`
-	WokeByGate      bool   `json:"wokeByGate"`
-	PowerOffPending bool   `json:"powerOffPending"`
+	HoldUntil       time.Time `json:"holdUntil"`
+	AutoStartedUnit string    `json:"autoStartedUnit"`
+	WokeByGate      bool      `json:"wokeByGate"`
+	PowerOffPending bool      `json:"powerOffPending"`
 }
 
 // setAutoLocked records (or clears with "") the unit the gate started. Call with mu held.
@@ -473,7 +478,7 @@ func (g *gate) saveStateLocked() {
 	if g.cfg.StateFile == "" {
 		return
 	}
-	data, _ := json.Marshal(gateState{g.autoUnit, g.wokeByGate, g.powerOffPending})
+	data, _ := json.Marshal(gateState{HoldUntil: g.holdUntil, AutoStartedUnit: g.autoUnit, WokeByGate: g.wokeByGate, PowerOffPending: g.powerOffPending})
 	tmp := g.cfg.StateFile + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err == nil {
 		err = os.Rename(tmp, g.cfg.StateFile)
@@ -536,6 +541,39 @@ func (g *gate) fail(e *apiError) *apiError {
 	return e
 }
 
+func (g *gate) wakeOwner() *apiError {
+	if _, err := g.controlStatus(); err == nil {
+		return nil
+	}
+	if g.cfg.WOL == nil {
+		return unavailable("attodesk control API is unreachable and Wake-on-LAN is not configured")
+	}
+	deadline := g.now().Add(g.wakeTimeout)
+	var lastWOL time.Time
+	for {
+		if g.now().Sub(lastWOL) >= g.wolEvery {
+			if err := g.sendWOL(g.cfg.WOL.MAC, g.cfg.WOL.Broadcast); err != nil {
+				log.Printf("wake-on-lan: %v", err)
+			} else {
+				log.Printf("sent wake-on-lan to %s", g.cfg.WOL.MAC)
+			}
+			lastWOL = g.now()
+		}
+		if !g.now().Before(deadline) {
+			return unavailable("attodesk did not wake up")
+		}
+		time.Sleep(g.pollEvery)
+		if _, err := g.controlStatus(); err == nil {
+			g.mu.Lock()
+			g.wokeByGate = true
+			g.saveStateLocked()
+			g.mu.Unlock()
+			log.Printf("owner woke up")
+			return nil
+		}
+	}
+}
+
 // bringUp wakes the owner if needed, starts Strata and waits until healthy.
 func (g *gate) bringUp() *apiError {
 	g.mu.Lock()
@@ -546,32 +584,14 @@ func (g *gate) bringUp() *apiError {
 	g.mu.Unlock()
 	st, err := g.controlStatus()
 	if err != nil {
-		if g.cfg.WOL == nil {
-			return g.fail(unavailable("attodesk control API is unreachable and Wake-on-LAN is not configured"))
-		}
 		g.setState("waking")
-		deadline := g.now().Add(g.wakeTimeout)
-		var lastWOL time.Time
-		for err != nil {
-			if g.now().Sub(lastWOL) >= g.wolEvery {
-				if werr := g.sendWOL(g.cfg.WOL.MAC, g.cfg.WOL.Broadcast); werr != nil {
-					log.Printf("wake-on-lan: %v", werr)
-				} else {
-					log.Printf("sent wake-on-lan to %s", g.cfg.WOL.MAC)
-				}
-				lastWOL = g.now()
-			}
-			if !g.now().Before(deadline) {
-				return g.fail(unavailable("attodesk did not wake up"))
-			}
-			time.Sleep(g.pollEvery)
-			st, err = g.controlStatus()
+		if e := g.wakeOwner(); e != nil {
+			return g.fail(e)
 		}
-		g.mu.Lock()
-		g.wokeByGate = true
-		g.saveStateLocked()
-		g.mu.Unlock()
-		log.Printf("owner woke up")
+		st, err = g.controlStatus()
+		if err != nil {
+			return g.fail(unavailable("attodesk control API is unreachable"))
+		}
 	}
 	if st.Healthy && g.checkHealth(context.Background()) {
 		g.setState("ready")
@@ -637,6 +657,31 @@ func (g *gate) ensureUp(ctx context.Context) *apiError {
 	}
 }
 
+// ensureAwake shares one wake-up among concurrent requests. A cancelled client
+// stops waiting but the wake-up continues.
+func (g *gate) ensureAwake(ctx context.Context) *apiError {
+	g.mu.Lock()
+	if g.pendingWake == nil {
+		c := &startCall{done: make(chan struct{})}
+		g.pendingWake = c
+		go func() {
+			c.err = g.wakeOwner()
+			g.mu.Lock()
+			g.pendingWake = nil
+			g.mu.Unlock()
+			close(c.done)
+		}()
+	}
+	c := g.pendingWake
+	g.mu.Unlock()
+	select {
+	case <-c.done:
+		return c.err
+	case <-ctx.Done():
+		return &apiError{code: 499, message: "client went away"}
+	}
+}
+
 func (g *gate) begin() {
 	g.mu.Lock()
 	g.inflight++
@@ -657,10 +702,33 @@ func (g *gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body := map[string]any{
 			"state": g.state, "autoStartedUnit": g.autoUnit, "inflight": g.inflight,
 			"lastActivity": g.lastActivity.Format(time.RFC3339), "lastError": g.lastError,
+			"holdUntil":  g.holdUntil.Format(time.RFC3339),
 			"wokeByGate": g.wokeByGate, "powerOffPending": g.powerOffPending,
 		}
 		g.mu.Unlock()
 		writeJSON(w, http.StatusOK, body)
+		return
+	}
+	if r.URL.Path == "/_strata-wake/wake" {
+		if r.Method != http.MethodPost {
+			writeJSON(w, 405, map[string]string{"error": "use POST"})
+			return
+		}
+		g.mu.Lock()
+		g.holdUntil = g.now().Add(g.idleTimeout)
+		g.powerOffPending = false
+		g.saveStateLocked()
+		g.mu.Unlock()
+		if e := g.ensureAwake(r.Context()); e != nil {
+			if e.code != 499 {
+				writeAPIError(w, e)
+			}
+			return
+		}
+		g.mu.Lock()
+		hold := g.holdUntil.Format(time.RFC3339)
+		g.mu.Unlock()
+		writeJSON(w, 200, map[string]any{"awake": true, "holdUntil": hold})
 		return
 	}
 	g.begin()
@@ -689,9 +757,19 @@ func (g *gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (g *gate) idleCheck() {
 	g.mu.Lock()
 	unit, inflight, last, pendingOff := g.autoUnit, g.inflight, g.lastActivity, g.powerOffPending
+	woke, hold := g.wokeByGate, g.holdUntil
 	g.mu.Unlock()
+	held := g.now().Before(hold)
 	if unit == "" && !pendingOff {
-		return
+		if !(woke && g.cfg.PowerOff) || held {
+			return
+		}
+		g.mu.Lock()
+		g.powerOffPending = true
+		g.saveStateLocked()
+		g.mu.Unlock()
+		pendingOff = true
+		log.Printf("wake hold expired; powering off the owner the gate woke")
 	}
 	st, err := g.controlStatus()
 	if err != nil {
@@ -738,7 +816,7 @@ func (g *gate) idleCheck() {
 	switch {
 	case !g.wokeByGate || !g.cfg.PowerOff:
 	case reason == "idle":
-		g.powerOffPending = true
+		g.powerOffPending = !g.now().Before(g.holdUntil)
 	default:
 		// Someone uses the desktop: the machine is theirs now.
 		g.wokeByGate = false
@@ -871,6 +949,8 @@ usage:
   strata-wake status  --control-url URL
   strata-wake wol     --mac MAC --broadcast ADDR:PORT
   strata-wake --version
+
+  gate: POST /_strata-wake/wake wakes the owner without starting Strata and keeps it on for idleTimeoutSec after the last call
 `
 
 func main() {
