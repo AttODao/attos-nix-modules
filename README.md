@@ -125,6 +125,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | solaar | NixOS + HM | Noctalia、HM側にKando同梱 |
 | pipeasio | NixOS + HM | PipeWire・Steam（`programs.steam.package`へWINEDLLPATH付きSteamを既定値として渡す） |
 | pipewire | NixOS | rtkit・ALSA・Pulse |
+| scarlett-driver | NixOS + HM | PipeWire（Scarlett Solo 4th GenのCLI・GUIとgraphical session上の状態保存daemon） |
 | opencloud-client | NixOS + HM | — |
 | immich-client | HM | —（`immich upload --watch`のuser service。認証は`immich login`で行う） |
 | login-pin | NixOS | — |
@@ -189,6 +190,7 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 - `attos-mouse.settings`: 既定 `{ }` のTOML設定。共有のuwsm wrapper・static CJK font・GTK icon theme・Everforest色へ再帰mergeし、listは置換する。device・menu定義は利用側が所有する。build時に`check-config`で検証し、daemonがinotifyで再読込する。`modules.solaar.enable`とは同じbuttonをdivertするため排他。Wayland/Hyprland・MX Master 4向け。
 - `attos-deck.{settings,credentials,agent}`: `settings`（既定`{ }`）はattos-deckの`config.toml`。共有既定（`time.timeZone`のtimezone、state `/var/lib/attos-deck`、ssh client・鍵、static CJK font）へ再帰mergeし、listは置換する。host・agent・取得元・home keyは利用側が所有し、build時に`check-config`で検証する。`credentials`（名前→runtime path、既定`{ }`）は`LoadCredential`で渡し、settingsからは`/run/credentials/attos-deck.service/<名前>`で参照する。serviceは`DynamicUser`で、Stream Deck（`0fd9:0080`）のhidrawをudevで`attos-deck-hid` groupへ渡す。SSH鍵は初回起動時にstateへ生成し、公開鍵をjournalへ出す。`agent.{enable,socketGroup,settings}`は許可したsystemctl操作だけを行うroot agent（`/run/attos-deck-agent.sock`、`Accept=yes`）。`socketGroup`は利用側の既存groupで有効時必須、同じhostのdeckは自動で参加する。遠隔のdeckは利用側が作るSSH account（このgroup所属、鍵は`restrict,command="/run/current-system/sw/bin/attos-deck-agent ssh"`）経由で使う。`agent.settings`の既定は`restart_failed = true`・`deny = ["sshd.service" "attos-deck-agent.socket"]`で、`units.<unit>.allow`に許可する操作を書く。詳細は[attos-deck](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-attos-deck)。
 - `solaar.deviceConfig`: 既定nullのpath。Solaarの`config.yaml`（デバイスserial・unit ID・設定値）を全HMユーザーの`~/.config/solaar/`へ未存在時だけ配置する。nullならSolaarが初回起動時に作る。rules.yamlも同じく未存在時だけ配置し、既存ファイルはSolaarの変更を保持する（共有既定を受け直すにはファイルを削除する）。デバイス識別子は利用側が持つ。
+- `scarlett-driver.settings`: 既定 `{ }` のdaemon `config.toml`（`apply_on_connect`・`apply_phantom`・`autosave`・`card`・`[pipewire]`・`[filter]`）。空ならdaemonの既定値を使う。build時に`check-config`で検証し、変更時はdaemonを再起動する。daemonは接続時に保存済みの機器状態を戻し、変更を自動保存する。機器のserial・入力node名など機器固有の値は利用側が持つ。firmware fileは同梱しない。詳細は[scarlett-driver](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-scarlett-driver)。
 - `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。Plymouth・quiet kernel/console設定と、kernel引数によるsystemd initrdの状態表示制御を追加する。falseではこれらを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。

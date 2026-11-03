@@ -23,6 +23,7 @@ let
   lockedInput = name: lock.nodes.${lock.nodes.${lock.root}.inputs.${name}};
   external = self: {
     claude-code = self.callPackage "${inputs.claude-code-nix}/package.nix" { };
+    scarlett-driver = self.callPackage "${inputs.scarlett-driver}/package.nix" { };
     # flake inputのsource（outPath・rev・lastModified）と、flake.nixのrelease tag（lockのoriginal.ref）から取ったversion。
     hermes-agent-src = inputs.hermes-agent // {
       version = lib.removePrefix "v" (lockedInput "hermes-agent").original.ref;
