@@ -16,6 +16,11 @@ let
   };
 in
 {
+  # Replace Home Manager's input-method module with a copy that does not build the GTK 2
+  # immodule cache (gtk2 is broken in nixpkgs); see ./input-method.nix.
+  disabledModules = [ "i18n/input-method/default.nix" ];
+  imports = [ ./input-method.nix ];
+
   config = lib.mkIf osConfig.modules.fcitx5.enable {
     i18n.inputMethod = {
       enable = true;
