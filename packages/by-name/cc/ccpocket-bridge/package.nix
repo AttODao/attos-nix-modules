@@ -9,14 +9,14 @@
 
 buildNpmPackage (finalAttrs: {
   pname = "ccpocket-bridge";
-  version = "1.93.0";
+  version = "1.97.0";
 
   # The monorepo tags each app separately; the bridge releases are bridge/v<version>.
   src = fetchFromGitHub {
     owner = "K9i-0";
     repo = "ccpocket";
     tag = "bridge/v${finalAttrs.version}";
-    hash = "sha256-M19cjf1Vgg+9sOuHSYSiFHr9xElbwGoo3CQGwUkxUmI=";
+    hash = "sha256-iwkqGGGWojcQB+KgROBjzSdRTj6GGdXHHYvRQePhtdw=";
   };
 
   nodejs = nodejs_22;
