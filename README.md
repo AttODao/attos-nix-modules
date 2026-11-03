@@ -155,6 +155,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | traefik | NixOS | —（native `services.traefik`） |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
 | heavy | NixOS | —（`heavy run -- <command>`: host単位の直列化・MemoryHigh/MemoryMax付きscope・oom_score_adj 1000。`remotes`の最初に届くhostへ作業dirを写して実行。独自option `memoryHigh`・`memoryMax`・`remotes`。remote側にもmoduleが要る） |
+| shutdown-hold | NixOS | — |
 | ytdl-sub | NixOS | —（native `services.ytdl-sub.instances`）。HMユーザーなしでも利用可能 |
 | open-terminal / forgejo-actions-runner / incus | NixOS | サービス別。HMユーザーなしでも利用可能 |
 | noctalia | HM | `screenRecorder.enable`かつ`source != "portal"`のとき`programs.gpu-screen-recorder`（既定値）。任意のHeadroom・systemd unit launcher・W Engine。W Engineはlinux-wallpaperengine・util-linux・procpsを同梱 |
@@ -199,6 +200,7 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 - `userDirs.dataDirectory`: 既定nullで各ユーザーのHOMEへ追従する。指定時は `"/mnt/data"` のような引用符付きの絶対パス文字列を使う。実データをstoreへ取り込まないようNixのパスリテラルは拒否する。
 - `linux-wallpaperengine.wallpapers`: opt-inで残す旧user service。monitor / wallpaperのリスト、scalingの既定はfill。Noctaliaから操作する場合は`noctalia.wallpaperEngine`を選び、両moduleは同時有効化しない。assetsやユーザーごとの調整は利用側で管理する。
 - `bot-screen-host.enable`: SSH terminal backendの受け側でBot Screen用package（TigerVNC・Xfce core・cua-driver・VirtualGL）とDejaVu・Noto CJK fontを導入する。既定false。
+- `shutdown-hold.{enable,maxDelay}`: 既定false・`"12h"`。remote user sessionがある間だけlogindのdelay inhibitorを取り、shutdown要求後はlocal sessionを終了してdesktopを開いたままにしない。`maxDelay`は`InhibitDelayMaxSec`で、sleep前のscreen locker等ほかのdelay inhibitorにも効く。reboot・`systemctl poweroff`等logind経由すべてが対象で、`--force`等logindを通さない操作は対象外。
 - `wireguard-client.tunnels`: interface名からtunnel定義（`privateKeyFile`・`addresses`・`dns`・`peers`）へのattrset、既定 `{}`。標準`networking.networkmanager.ensureProfiles`で`autoconnect`（既定false）に従うruntime profileを作り、秘密鍵は`NetworkManager-ensure-profiles.service`がruntime fileから読んでroot専用profileへ書く（NetworkManagerは利用者uidのsecret agentにしか問い合わせないため、root agent方式では手動接続できない）。秘密の取得・復号・権限・rotationはconsumerが管理し、rotation後は同serviceを再起動する。
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。

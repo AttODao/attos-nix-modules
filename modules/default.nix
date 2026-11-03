@@ -30,6 +30,7 @@
     ./opencloud
     ./openssh
     ./searxng
+    ./shutdown-hold
     ./strata
     ./traefik
     ./vaultwarden
