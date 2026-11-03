@@ -30,7 +30,7 @@ let
         id = id name;
         type = "wireguard";
         interface-name = name;
-        autoconnect = false;
+        autoconnect = tunnel.autoconnect;
       };
       # Substituted by envsubst in NetworkManager-ensure-profiles. Agent-owned keys fail for
       # user-initiated activation: NetworkManager only asks agents owned by the requesting uid.
