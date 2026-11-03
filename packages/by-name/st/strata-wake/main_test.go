@@ -347,6 +347,129 @@ func TestStateFileRestore(t *testing.T) {
 	}
 }
 
+func TestWakeAwakeOwnerWithoutStartingStrata(t *testing.T) {
+	o := newFakeOwner(t)
+	g, srv := newTestGate(t, o)
+	c := &clock{t: time.Unix(1000, 0)}
+	g.now = c.now
+	var wol atomic.Int32
+	g.sendWOL = func(string, string) error { wol.Add(1); return nil }
+	last := g.lastActivity
+	code, body := post(t, srv.URL+"/_strata-wake/wake")
+	var reply struct {
+		Awake     bool      `json:"awake"`
+		HoldUntil time.Time `json:"holdUntil"`
+	}
+	if err := json.Unmarshal([]byte(body), &reply); err != nil {
+		t.Fatal(err)
+	}
+	if code != 200 || !reply.Awake || !reply.HoldUntil.Equal(c.now().Add(g.idleTimeout)) || wol.Load() != 0 || o.starts.Load() != 0 {
+		t.Fatalf("code=%d body=%s wol=%d starts=%d", code, body, wol.Load(), o.starts.Load())
+	}
+	if g.inflight != 0 || !g.lastActivity.Equal(last) {
+		t.Fatal("wake changed Strata activity")
+	}
+	resp, err := http.Get(srv.URL + "/_strata-wake/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var status map[string]any
+	json.NewDecoder(resp.Body).Decode(&status)
+	if status["holdUntil"] != reply.HoldUntil.Format(time.RFC3339) {
+		t.Fatalf("status=%v", status)
+	}
+}
+
+func TestWakeUnreachableOwner(t *testing.T) {
+	o := newFakeOwner(t)
+	g, srv := newTestGate(t, o)
+	var polls, wol atomic.Int32
+	handler := o.control.Config.Handler
+	control := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/status" && polls.Add(1) <= 3 {
+			w.WriteHeader(503)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	defer control.Close()
+	g.cfg.ControlURL = control.URL
+	g.cfg.WOL = &wolConfig{MAC: "a8:a1:59:d6:46:8e", Broadcast: "unused"}
+	g.sendWOL = func(string, string) error { wol.Add(1); return nil }
+	code, body := post(t, srv.URL+"/_strata-wake/wake")
+	if code != 200 || wol.Load() == 0 || !g.wokeByGate || o.starts.Load() != 0 {
+		t.Fatalf("code=%d body=%s wol=%d woke=%v", code, body, wol.Load(), g.wokeByGate)
+	}
+}
+
+func TestWakeRequiresPost(t *testing.T) {
+	o := newFakeOwner(t)
+	g, srv := newTestGate(t, o)
+	resp, err := http.Get(srv.URL + "/_strata-wake/wake")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 405 || !g.holdUntil.IsZero() {
+		t.Fatalf("code=%d hold=%v", resp.StatusCode, g.holdUntil)
+	}
+}
+
+func TestWakeHoldWithoutUnit(t *testing.T) {
+	o := newFakeOwner(t)
+	g, _ := newTestGate(t, o)
+	c := &clock{t: time.Unix(1000, 0)}
+	g.now = c.now
+	g.cfg.PowerOff = true
+	g.wokeByGate = true
+	g.holdUntil = c.now().Add(g.idleTimeout)
+	g.idleCheck()
+	if o.offs.Load() != 0 {
+		t.Fatal("powered off during hold")
+	}
+	c.add(g.idleTimeout + time.Second)
+	g.idleCheck()
+	if o.offs.Load() != 1 {
+		t.Fatal("did not power off after hold")
+	}
+}
+
+func TestWakeHoldAfterIdleStop(t *testing.T) {
+	o := newFakeOwner(t)
+	g, c := wokenIdleGate(t, o, true)
+	g.holdUntil = c.now().Add(g.idleTimeout)
+	g.idleCheck()
+	if o.stops.Load() != 1 || o.offs.Load() != 0 || !g.wokeByGate {
+		t.Fatal("idle stop did not preserve wake hold")
+	}
+	c.add(g.idleTimeout + time.Second)
+	g.idleCheck()
+	if o.offs.Load() != 1 {
+		t.Fatal("did not power off after idle stop and hold expiry")
+	}
+}
+
+func TestWakeHoldStateRestore(t *testing.T) {
+	o := newFakeOwner(t)
+	cfg := gateConfig{BackendURL: o.backend.URL, ControlURL: o.control.URL, StateFile: t.TempDir() + "/state.json"}
+	g, err := newGate(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.holdUntil = time.Unix(2000, 0)
+	g.mu.Lock()
+	g.saveStateLocked()
+	g.mu.Unlock()
+	g2, err := newGate(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !g2.holdUntil.Equal(g.holdUntil) {
+		t.Fatalf("restored=%v want=%v", g2.holdUntil, g.holdUntil)
+	}
+}
+
 func TestSessionBusy(t *testing.T) {
 	cases := []struct {
 		props string

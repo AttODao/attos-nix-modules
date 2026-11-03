@@ -6,6 +6,7 @@
     ./attos-deck
     ./attos-hoyo-dashboard
     ./attos-mouse
+    ./bot-screen-host
     ./code-server
     ./skills
     ./cloudflare-ddns
@@ -29,6 +30,7 @@
     ./opencloud
     ./openssh
     ./searxng
+    ./shutdown-hold
     ./strata
     ./traefik
     ./vaultwarden

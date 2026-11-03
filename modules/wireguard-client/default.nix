@@ -31,6 +31,11 @@ let
   };
   tunnelType = types.submodule {
     options = {
+      autoconnect = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Activate the profile automatically whenever NetworkManager can (at boot, before any login). Off by default: a full-tunnel profile then carries all traffic of the machine.";
+      };
       privateKeyFile = mkOption {
         type = ps.absolutePath;
         description = "Quoted absolute runtime path of the decrypted client private key, read by NetworkManager-ensure-profiles.service. Nix path literals and store paths are rejected.";
@@ -65,7 +70,7 @@ in
       description = ''
         Tunnels keyed by interface name (1–15 letters, numbers, _, =, +, ., -; not . or ..).
         Each becomes a runtime NetworkManager profile "WireGuard: <interface>" with autoconnect
-        disabled. Private keys are read from their runtime files when
+        following each tunnel's autoconnect option (false by default). Private keys are read from their runtime files when
         NetworkManager-ensure-profiles.service runs and written into the root-only profile under
         /run/NetworkManager/system-connections, never into the Nix store. Decryption,
         permissions and rotation belong to the consumer; restart that service after rotation.
