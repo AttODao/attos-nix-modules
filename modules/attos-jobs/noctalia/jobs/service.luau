@@ -4,9 +4,15 @@
 local lib = require("./lib.luau")
 
 local shown = false
+-- Right after a login the shutdown-hold service may still be cancelling the shutdown that
+-- waited for remote work; do not pop the panel up for that.
+local startedAt = os.time()
 
 function update()
   noctalia.setUpdateInterval(2000)
+  if os.time() - startedAt < 20 then
+    return
+  end
   local doc = lib.read()
   local waiting = doc ~= nil and doc.preparingForShutdown and #doc.items > 0
   if waiting and not shown then
