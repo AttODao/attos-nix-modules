@@ -47,6 +47,8 @@ in
     environment.etc."heavy/config.json".text = builtins.toJSON {
       lockFile = "/run/heavy/lock";
       ownerFile = "/run/heavy/owner";
+      # Written by attos-jobs pause; while it exists this host refuses heavy jobs.
+      pauseFile = "/run/heavy/paused";
       inherit (cfg) memoryHigh memoryMax;
       remotes = map (r: { inherit (r) name ssh; }) cfg.remotes;
       oomScoreAdjust = 1000;

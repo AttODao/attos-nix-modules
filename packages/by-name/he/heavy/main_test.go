@@ -172,3 +172,31 @@ func TestIsTerminal(t *testing.T) {
 		t.Error("regular file reported as a terminal")
 	}
 }
+
+func TestPause(t *testing.T) {
+	dir := t.TempDir()
+	c := defaultConfig()
+	c.LockFile = filepath.Join(dir, "lock")
+	c.OwnerFile = filepath.Join(dir, "owner")
+	if pausedReason(c) != "" {
+		t.Fatal("no pause file configured but paused")
+	}
+	c.PauseFile = filepath.Join(dir, "paused")
+	if pausedReason(c) != "" {
+		t.Fatal("missing pause file but paused")
+	}
+	os.WriteFile(c.PauseFile, nil, 0o644)
+	if pausedReason(c) != "paused" {
+		t.Fatalf("empty pause file: %q", pausedReason(c))
+	}
+	os.WriteFile(c.PauseFile, []byte("attos-jobs pause by attodao\n"), 0o644)
+	if got := pausedReason(c); got != "attos-jobs pause by attodao" {
+		t.Fatalf("reason: %q", got)
+	}
+	if code := runLocal(c, runOptions{command: []string{"true"}}); code != exitBusy {
+		t.Fatalf("paused host ran a job: exit %d", code)
+	}
+	if s := localStatus(c); s.Paused == "" || !strings.Contains(s.line(), "paused") {
+		t.Fatalf("status does not report the pause: %+v", s)
+	}
+}

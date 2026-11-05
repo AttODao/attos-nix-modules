@@ -16,6 +16,12 @@ in
       example = "infinity";
       description = "Upper bound of the wait, written to logind's InhibitDelayMaxSec (which also bounds every other delay inhibitor, such as screen lockers before sleep).";
     };
+    localSessionGrace = lib.mkOption {
+      type = lib.types.ints.unsigned;
+      default = 0;
+      example = 120;
+      description = "Seconds the local sessions stay open after a shutdown request before they are ended, so the user can still stop the remote work (e.g. from the attos-jobs panel). 0 ends them at once.";
+    };
   };
   config = lib.mkIf cfg.enable {
     services.logind.settings.Login.InhibitDelayMaxSec = cfg.maxDelay;
@@ -40,6 +46,7 @@ in
         set -u
         lock_pid=""
         terminated=0
+        requested_at=""
         release() {
           if [ -n "$lock_pid" ]; then
             # Ending systemd-inhibit's child makes it exit and drop the delay lock.
@@ -71,11 +78,16 @@ in
             fi
             if [ "$terminated" = 0 ] && [ "$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
               org.freedesktop.login1.Manager PreparingForShutdown 2>/dev/null)" = "b true" ]; then
-              # Shutdown was requested: end local sessions so the desktop is not left open while waiting.
-              for id in "''${local_sessions[@]}"; do
-                loginctl terminate-session "$id" || true
-              done
-              terminated=1
+              now=$(date +%s)
+              requested_at=''${requested_at:-$now}
+              # Shutdown was requested: after the grace period, end local sessions so the desktop
+              # is not left open while waiting.
+              if [ $((now - requested_at)) -ge ${toString cfg.localSessionGrace} ]; then
+                for id in "''${local_sessions[@]}"; do
+                  loginctl terminate-session "$id" || true
+                done
+                terminated=1
+              fi
             fi
           else
             release

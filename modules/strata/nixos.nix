@@ -131,6 +131,8 @@ in
       ) cfg.models;
     in
     {
+      # attos-jobs lists a running model (often started by the gateway's wake) as stoppable remote work.
+      modules.attos-jobs.units = units;
       assertions = [
         {
           assertion = builtins.length names == builtins.length (lib.unique names);

@@ -37,6 +37,8 @@ let
         enabled = true;
       };
     };
+  jobs = osConfig.modules.attos-jobs;
+  jobsPlugin = jobs.enable && jobs.noctalia.enable;
   # Every leaf (lists included) becomes a default so users can override parts without mkForce.
   sharedSettings = lib.mapAttrsRecursiveCond (value: !(value ? _type)) (_: lib.mkDefault);
 in
@@ -91,6 +93,30 @@ in
           widget.wallpaper_engine.type = "tadomika_ari/w-engine:w-engine-widget";
           plugin_settings."tadomika_ari/w-engine".sync_colors = false;
         }))
+        (lib.mkIf jobsPlugin (sharedSettings {
+          # An explicit source list replaces Noctalia's built-in one, so the defaults are repeated.
+          plugins.source = [
+            {
+              name = "official";
+              kind = "git";
+              location = "https://github.com/noctalia-dev/official-plugins";
+              enabled = true;
+            }
+            {
+              name = "community";
+              kind = "git";
+              location = "https://github.com/noctalia-dev/community-plugins";
+              enabled = true;
+            }
+            {
+              name = "attos";
+              kind = "path";
+              location = "${jobs.noctalia.plugin}";
+              enabled = true;
+            }
+          ];
+          widget.attos_jobs.type = "attos/jobs:status";
+        }))
         (lib.mkIf (idleBehaviors != { }) (sharedSettings {
           idle.behavior = idleBehaviors;
         }))
@@ -101,7 +127,8 @@ in
               lib.optional cfg.screenRecorder.enable "noctalia/screen_recorder"
               ++ lib.optional cfg.headroom.enable "ayagmar/headroom"
               ++ lib.optional cfg.systemdUnits.enable "srounce/systemd"
-              ++ lib.optional cfg.wallpaperEngine.enable "tadomika_ari/w-engine";
+              ++ lib.optional cfg.wallpaperEngine.enable "tadomika_ari/w-engine"
+              ++ lib.optional jobsPlugin "attos/jobs";
           };
           wallpaper.enabled = !externalWallpaper;
           lockscreen.blurred_desktop = true;
@@ -137,23 +164,25 @@ in
               center = [
                 "workspaces"
               ];
-              end = [
-                "media"
-              ]
-              ++ lib.optional cfg.screenRecorder.enable "screen_recorder"
-              ++ lib.optional cfg.wallpaperEngine.enable "wallpaper_engine"
-              ++ [
-                "tray"
-                "notifications"
-                "clipboard"
-                "network"
-                "bluetooth"
-                "volume"
-                "brightness"
-                "battery"
-                "control-center"
-                "session"
-              ];
+              end =
+                lib.optional jobsPlugin "attos_jobs"
+                ++ [
+                  "media"
+                ]
+                ++ lib.optional cfg.screenRecorder.enable "screen_recorder"
+                ++ lib.optional cfg.wallpaperEngine.enable "wallpaper_engine"
+                ++ [
+                  "tray"
+                  "notifications"
+                  "clipboard"
+                  "network"
+                  "bluetooth"
+                  "volume"
+                  "brightness"
+                  "battery"
+                  "control-center"
+                  "session"
+                ];
             };
           };
 
