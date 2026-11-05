@@ -1,0 +1,22 @@
+id          = "attos/jobs"
+name        = "attos-jobs"
+version     = "0.1.0"
+plugin_api  = 24
+author      = "attos"
+license     = "MIT"
+icon        = "server-bolt"
+description = "Work that other hosts run on this machine (heavy jobs, CI, remote sessions), with stop, pause and shutdown controls."
+
+[[widget]]
+id    = "status"
+entry = "widget.luau"
+
+[[panel]]
+id     = "panel"
+entry  = "panel.luau"
+width  = 600
+height = 460
+
+[[service]]
+id    = "shutdown"
+entry = "service.luau"

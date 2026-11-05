@@ -21,14 +21,14 @@ import (
 	"unsafe"
 )
 
-const version = "0.1.1"
+const version = "0.2.0"
 
 const defaultConfigPath = "/etc/heavy/config.json"
 
 // Exit codes besides the command's own.
 const (
 	exitUsage    = 2
-	exitBusy     = 75 // EX_TEMPFAIL: --no-wait and the lock is held
+	exitBusy     = 75 // EX_TEMPFAIL: --no-wait and the lock is held, or the host is paused
 	exitSSHError = 255
 )
 
@@ -40,6 +40,7 @@ type remote struct {
 type config struct {
 	LockFile       string   `json:"lockFile"`
 	OwnerFile      string   `json:"ownerFile"`
+	PauseFile      string   `json:"pauseFile"`
 	MemoryHigh     string   `json:"memoryHigh"`
 	MemoryMax      string   `json:"memoryMax"`
 	OOMScoreAdjust int      `json:"oomScoreAdjust"`
@@ -429,12 +430,37 @@ var systemdRunPrefix = func(high, max string) []string {
 	return args
 }
 
+// pausedReason returns the contents of the pause file (or a placeholder) when
+// this host refuses new jobs, and "" when it accepts them.
+func pausedReason(c config) string {
+	if c.PauseFile == "" {
+		return ""
+	}
+	data, err := os.ReadFile(c.PauseFile)
+	if err != nil {
+		return ""
+	}
+	if r := strings.TrimSpace(string(data)); r != "" {
+		return r
+	}
+	return "paused"
+}
+
 func runLocal(c config, o runOptions) int {
+	if r := pausedReason(c); r != "" {
+		logf("this host does not accept jobs now (%s)", r)
+		return exitBusy
+	}
 	lock, code := acquire(c, o.noWait)
 	if lock == nil {
 		return code
 	}
 	defer lock.Close()
+	// The host may have been paused while this job waited for the lock.
+	if r := pausedReason(c); r != "" {
+		logf("this host does not accept jobs now (%s)", r)
+		return exitBusy
+	}
 	writeOwner(c, o.command)
 	defer clearOwner(c)
 
@@ -515,6 +541,7 @@ type status struct {
 	SwapFree     uint64 `json:"swapFree"`
 	Load1        string `json:"load1"`
 	Busy         bool   `json:"busy"`
+	Paused       string `json:"paused,omitempty"`
 	Owner        *owner `json:"owner"`
 }
 
@@ -538,7 +565,7 @@ func readMeminfo(r io.Reader) map[string]uint64 {
 
 func localStatus(c config) status {
 	host, _ := os.Hostname()
-	s := status{Host: host}
+	s := status{Host: host, Paused: pausedReason(c)}
 	if f, err := os.Open("/proc/meminfo"); err == nil {
 		m := readMeminfo(f)
 		f.Close()
@@ -570,10 +597,16 @@ func gib(b uint64) string { return fmt.Sprintf("%.1fGiB", float64(b)/(1<<30)) }
 
 func (s status) line() string {
 	state := "idle"
+	if s.Paused != "" {
+		state = "paused (" + s.Paused + ")"
+	}
 	if s.Busy {
 		state = "busy"
 		if s.Owner != nil {
 			state = fmt.Sprintf("busy: %s pid %d (%s) since %s", s.Owner.User, s.Owner.PID, s.Owner.Command, s.Owner.Since)
+		}
+		if s.Paused != "" {
+			state += ", paused (" + s.Paused + ")"
 		}
 	}
 	return fmt.Sprintf("%s: mem %s/%s available, swap %s/%s free, load %s, %s",
@@ -584,6 +617,10 @@ func cmdStatus(c config, args []string) int {
 	s := localStatus(c)
 	if len(args) == 1 && args[0] == "--json" {
 		json.NewEncoder(os.Stdout).Encode(s)
+		// A paused host fails the probe so `run --auto` moves on to the next one.
+		if s.Paused != "" {
+			return exitBusy
+		}
 		return 0
 	}
 	if len(args) > 0 {
@@ -598,9 +635,9 @@ func cmdHosts(c config) int {
 	fmt.Println("local " + localStatus(c).line())
 	for _, r := range c.Remotes {
 		cmd := exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", r.SSH, "heavy", "status", "--json")
-		out, err := cmd.Output()
+		out, _ := cmd.Output()
 		var s status
-		if err != nil || json.Unmarshal(out, &s) != nil {
+		if json.Unmarshal(out, &s) != nil {
 			fmt.Printf("%s unreachable\n", r.Name)
 			continue
 		}
@@ -630,7 +667,10 @@ HEAVY_HOST=local or HEAVY_HOST=NAME selects the mode when no flag is given.
 Remote runs suit checks, evaluations and tests; build outputs stay on the remote.
 Use --local when the command must produce files here.
 
-exit codes: the command's own; 2 usage error; 75 busy with --no-wait; 255 SSH failure.
+A host refuses jobs while its pause file exists (see attos-jobs pause); run --auto then
+skips it, and status --json exits 75.
+
+exit codes: the command's own; 2 usage error; 75 busy with --no-wait or host paused; 255 SSH failure.
 configuration: /etc/heavy/config.json (or --config FILE before the subcommand).
 `
 

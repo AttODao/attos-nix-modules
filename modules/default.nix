@@ -18,6 +18,7 @@
     ./groupware
     ./hermes
     ./heavy
+    ./attos-jobs
     ./host-report
     ./immich
     ./incus
