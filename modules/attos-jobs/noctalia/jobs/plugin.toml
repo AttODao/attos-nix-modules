@@ -1,6 +1,6 @@
 id          = "attos/jobs"
 name        = "attos-jobs"
-version     = "0.1.0"
+version     = "0.1.1"
 plugin_api  = 24
 author      = "attos"
 license     = "MIT"
