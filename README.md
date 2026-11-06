@@ -131,7 +131,6 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | login-pin | NixOS | — |
 | desktop-theme | HM | Fcitx5・標準HM Qt/qt6ct設定 |
 | steam | NixOS + HM | Yazi（FootからFonts） |
-| wireguard-client | NixOS | NetworkManager |
 | limine | NixOS | — |
 | atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
 | zed | HM | 任意のcodex-acp npm policy、claude-code有効時はClaude AgentにNixのclaudeを使用 |
@@ -152,7 +151,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
-| mcsmanager / mailserver / wireguard-server / headscale / code-server | NixOS | —（headscaleはnative `services.headscale`） |
+| mcsmanager / mailserver / headscale / code-server | NixOS | —（headscaleはnative `services.headscale`） |
 | public-services（公開サーバー） | NixOS、Paseo・CC PocketはHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | traefik | NixOS | —（native `services.traefik`） |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
@@ -206,7 +205,6 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 - `bot-screen-host.enable`: SSH terminal backendの受け側でBot Screen用package（TigerVNC・Xfce core・cua-driver・VirtualGL）とDejaVu・Noto CJK fontを導入する。既定false。
 - `shutdown-hold.{enable,maxDelay}`: 既定false・`"12h"`。remote user sessionがある間だけlogindのdelay inhibitorを取り、shutdown要求後はlocal sessionを終了してdesktopを開いたままにしない。`localSessionGrace`（既定0秒）はshutdown要求からlocal sessionを終了するまでの猶予で、その間にattos-jobsのpanelで作業を止めるか待つかを選べる。`cancelOnLocalLogin`（既定true）は、待っている間に新しいlocal sessionが始まったら（終了させた後の再ログイン等）、待っているshutdownを取り消す（logindに直接の取り消しが無いため、dry-runのscheduled shutdownを予約してすぐ`CancelScheduledShutdown`し、保留中の操作ごと消す）。`maxDelay`は`InhibitDelayMaxSec`で、sleep前のscreen locker等ほかのdelay inhibitorにも効く。reboot・`systemctl poweroff`等logind経由すべてが対象で、`--force`等logindを通さない操作は対象外。
 - `attos-jobs.{enable,socketGroup,units,pauseUnits,originNames,noctalia.enable}`: 他hostがこのhostで動かしている作業（heavy job・Forgejo ActionsのjobのDocker container・remote login session・`units`のうち稼働中のもの）をroot agent（`attos-jobs-agent.service`）が5秒ごとに集め、誰でも読める`/run/attos-jobs/status.json`へ書く。`attos-jobs list`で一覧、`stop ID…`/`stop --all`で停止（heavyはjobのscopeへSIGTERM→10秒後にcgroup.kill、CIは`docker stop`でrunnerはjobを失敗として報告、sessionは`loginctl terminate-session`、unitは`systemctl stop`）、`pause`/`resume`で受付停止（heavyの`/run/heavy/paused`を置いて新しいjobを断り、`pauseUnits`（既定はForgejo runnerが有効なら`forgejo-runner-default.service`。止めると実行中のCI jobは中断され、新しいjobは別のrunnerが拾う）を止める。rebootで解除）、`leave`でshutdown待ちの間にlocal sessionを先に終える。`socketGroup`は利用側の既存groupで有効時必須、停止・受付停止はそのmemberだけができる。`units`（既定`[]`）はstrata moduleがmodel unitを足す。`originNames`（既定`{}`）はremote addressの表示名。`noctalia.enable`（既定false、modules.noctaliaが必要）はNoctaliaのpath source `attos`にplugin `attos/jobs`を置き、barの右端に常にglyph（作業が無ければ薄く、あれば件数）、panelに一覧・停止・受付停止を出し、shutdownがremote作業を待ち始めたらpanelを開く。Noctaliaの既定plugin source（official・community）も明示的に並べる。詳細は[attos-jobs](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-attos-jobs)。
-- `wireguard-client.tunnels`: interface名からtunnel定義（`privateKeyFile`・`addresses`・`dns`・`peers`）へのattrset、既定 `{}`。標準`networking.networkmanager.ensureProfiles`で`autoconnect`（既定false）に従うruntime profileを作り、秘密鍵は`NetworkManager-ensure-profiles.service`がruntime fileから読んでroot専用profileへ書く（NetworkManagerは利用者uidのsecret agentにしか問い合わせないため、root agent方式では手動接続できない）。秘密の取得・復号・権限・rotationはconsumerが管理し、rotation後は同serviceを再起動する。
 
 `desktop-theme.cursor` がnullの場合は各HMユーザーの標準 `home.pointerCursor.package` が必須。
 archiveのURL/hash・licenseはconsumerに残す。
@@ -290,7 +288,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 ```
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
-`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`, `headscale`,
+`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `headscale`,
 `paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
@@ -303,7 +301,7 @@ Forgejoは同じhostnameでWebとSSHを提供する。公開時、所有OSはFor
 
 Traefikの`accessLog.enable`（既定false）は`/var/log/traefik/access.log`へ最小JSONログを記録する（header・queryは保存しない、日次rotation、`accessLog.rotate`は既定7世代＋現行）。`fail2ban.enable`（既定false、access log必須）は公開registryのForgejo・Immich・Jellyfin・AttOsHoYoDashboardの検証済みログイン失敗だけをhostname・method・path・statusで絞り、gatewayの`traefik-auth` jailで全port・protocolを遮断する。既定は10分10回・1時間（反復時延長、最大1日）で、調整は標準`services.fail2ban.jails.traefik-auth.settings`、信頼IPはconsumerの`services.fail2ban.ignoreIP`を使う。Vaultwardenの400は正常な2FA要求とも重なるため数えない。その他の未対応サービス・メール/Forgejo SSHのTCP認証失敗は検出しない。根拠・制約は[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-traefik)を参照。
 
-Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（WireGuard等）で、Traefikのwants/afterへ追加する。
+Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（dummy interface等）で、Traefikのwants/afterへ追加する。
 
 SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`trustedProxies`（文字列list、既定[]）はclient addressを判別するために `X-Forwarded-For` / `X-Real-IP` を信頼するreverse proxyのaddress/CIDRで、loopbackは引き続き信頼する。`passNetworks`（文字列list、既定[]）はlimiter・bot対策を除外して無制限のAPI利用を許すclient address/CIDRで、信頼する自動化hostなど最小範囲に絞る。どちらも `limiter = true` が必要。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
 OpenCloudの公開共有linkは既定でpasswordを必須にする（`OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD=true`）。Jellyfinの保存先は`jellyfin:jellyfin` 0750で作る。
@@ -357,11 +355,11 @@ modules.vaultwarden = {
 };
 ```
 
-native serviceは127.0.0.1でlistenし、OCI frontendはloopbackだけへportをpublishして通常Docker bridgeを使う（Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
-保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
+native serviceは127.0.0.1でlistenし、OCI frontendはloopbackだけへportをpublishして通常Docker bridgeを使う（Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。
+保存先・秘密・公開hostname・subscriptions・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flake}`。
 Headscale（Tailscaleの制御サーバー）は`backendUrl`でlistenし、`server_url`は`https://<FQDN>`、中継はTailscale社の公開DERP、addressは100.64.0.0/10・fd7a:115c:a1e0::/48から登録順に割り当てる。`baseDomain`（有効時必須、FQDNを含まない）はMagicDNSのnode名の親domain。`nameservers`（既定`[]`）を指定すると、公開registryの他の全hostnameをsplit DNSでそのresolverへ問い合わせさせる（`override_local_dns = false`。それ以外の名前は端末自身のDNS）。resolverのaddressをtailnetへ届ける（subnet route等）のはconsumer。clientは制御サーバーへtunnelの外から接続するため、Headscale自身のhostnameはsplit DNSから外し、local DNSは`dns.headscaleAddress`（登録時必須）の1つだけを返す。`policy`（既定null＝policyなしで全通信許可・routeは手動承認）はHeadscaleのpolicy（ACL・`autoApprovers`）をJSONで渡す。metricsは127.0.0.1:9098。userの作成・端末の登録（事前認証キー）とTailscale client（標準`services.tailscale`）・firewall・port転送はconsumerが行う。
-WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、Vaultwardenの`extraHosts`（hostの`networking.hosts`へ追加）、Karakeepの非秘密environmentも公開service recordへ指定する。
+MailserverのsystemName/ACME、GroupwareのproductName、Vaultwardenの`extraHosts`（hostの`networking.hosts`へ追加）、Karakeepの非秘密environmentも公開service recordへ指定する。
 Incusの公開 `guests.<name>.{type,launchConfig,managedDeviceNames}`（`type` は `virtual-machine` / `container`）はhost activationでは適用せず、`guest <name> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足guestだけ `rebuild.flake`（registry別名やgit URLなどのflake参照。毎回最新を取得し、`rebuild ACTION FLAKE` か `--flake` で上書き可能）の標準NixOS metadataとVMならqcow2、containerならsquashfsをbuild・importして作成し、作成用imageを削除する。同名の別type instanceは削除/変換せず拒否する。consumer guestは標準 `incus-virtual-machine-image.nix` / `incus-container-image.nix` とroot password lockを明示する。初期login password/private fileの再供給は `guest <name> passwd <user>` / `guest <name> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerは有効化したhostで動き、jobはDocker containerで実行する。Forgejoのuser/org runnerとしての登録scopeが信頼境界になるため、hostを信頼して任せられるownerだけに登録する。nixpkgs標準 `services.forgejo-runner` を使い、Forgejoの「新しいランナーを作成」で得た `uuid` と、対になるtokenだけを含む `tokenFile` が必要（廃止された登録トークンには非対応）。`docker=false` はhost実行専用runner用。`url`（既定null）は接続先Forgejo URLで、nullならstandalone instanceまたはpublic-servicesに登録した単一hostnameから導出する。`fetchInterval`（既定null）は `runner.fetch_interval` で、nullはrunner既定の2秒を使う。同じlabelの別runnerより長くすると、そのrunnerが停止中・busyのときにjobを拾いやすくなる。`jobLimits.cpus` と `jobLimits.memory`（ともに既定null）はjob containerのDocker `--cpus` と `--memory` で、nullは無制限。memory指定時は同値の `--memory-swap` も設定しswapを使わせない。`dockerHost`（既定null）は `container.docker_host` で、nullは `-`（socketを渡さない）。`"automount"` はhostのDocker socketを全jobへmountし、workflowにrunner hostのrootを与えるため明示opt-inに限る。Incus guestへのfile配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。値はsource pathの文字列
 Paseo 0.12.0を固定し、runtime latest取得をしない。Forgejo（LTSでなく`forgejo`）・Immich・Vaultwarden・Jellyfin・SearXNG・ytdl-sub・Karakeepは利用ホストのnixpkgsのpackageを使う。OpenCloud（rolling）は利用ホストのnixpkgsのgeneric.nixで9.0.0を組む`attopkgs.opencloud`を使い、nixpkgsが9.0.0以上になったらそちらに切り替わる。既存dataを作ったversionより古いpackageへ戻さない（Open WebUIはnixpkgs版がimageより古いためDockerのまま）。

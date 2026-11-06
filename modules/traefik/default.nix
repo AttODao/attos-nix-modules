@@ -47,7 +47,7 @@ in
     listenServices = mkOption {
       type = types.listOf (types.strMatching "[^[:space:]/]+\\.service");
       default = [ ];
-      example = [ "wireguard-wg0.service" ];
+      example = [ "systemd-networkd.service" ];
       description = "Network setup services pulled in and ordered before Traefik, for listeners bound to addresses those services create.";
     };
   };

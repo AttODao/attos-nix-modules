@@ -36,7 +36,6 @@
     ./strata
     ./traefik
     ./vaultwarden
-    ./wireguard-server
     ./ytdl-sub
     ./zed
     ./atcoder-go
@@ -72,7 +71,6 @@
     ./thunderbird
     ./userDirs
     ./vscode
-    ./wireguard-client
     ./yazi
     ./zsh
   ];
