@@ -152,7 +152,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
 | groupware | NixOS | 同じhostのMailserver |
-| mcsmanager / mailserver / wireguard-server / code-server | NixOS | — |
+| mcsmanager / mailserver / wireguard-server / headscale / code-server | NixOS | —（headscaleはnative `services.headscale`） |
 | public-services（公開サーバー） | NixOS、Paseo・CC PocketはHM | サービス別。下記と[公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照 |
 | traefik | NixOS | —（native `services.traefik`） |
 | docker / dns / cloudflare-ddns / cloudflare-public-cnames / openssh | NixOS | — |
@@ -290,7 +290,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 ```
 
 対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
-`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`,
+`jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `wireguard-server`, `headscale`,
 `paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
@@ -360,6 +360,7 @@ modules.vaultwarden = {
 native serviceは127.0.0.1でlistenし、OCI frontendはloopbackだけへportをpublishして通常Docker bridgeを使う（Open WebUIだけはhost networkで127.0.0.1へbind）。data/credential等の既存必須入力はcallerが供給する。対応port・native mail TLS・WebUIの任意連携・SSH scopeは[public-services Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)を参照。Paseoは既存`modules.paseo`（hostname既定localhost）、SSH serverは`modules.ssh.server.enable`（`modules.ssh.enable`はclient）。WireGuardのinterface/address/keyとfirewall policyはnative入力としてcallerが保持する。
 保存先・秘密・公開hostname・subscriptions・WireGuard clients・Incus instance定義はconsumerが所有する。
 サーバーの追加入力は`dns.listenAddresses`、公開`ollama.{package,home,modelsDir,listenAddress,port,loadModels,environmentVariables,webui}`（`host`は所有OS、`listenAddress`はbind）、`incus.{package,preseed,initrdKernelModules,preseedKernelModules,rebuild.flake}`。
+Headscale（Tailscaleの制御サーバー）は`backendUrl`でlistenし、`server_url`は`https://<FQDN>`、中継はTailscale社の公開DERP、addressは100.64.0.0/10・fd7a:115c:a1e0::/48から登録順に割り当てる。`baseDomain`（有効時必須、FQDNを含まない）はMagicDNSのnode名の親domain。`nameservers`（既定`[]`）を指定すると、公開registryの他の全hostnameをsplit DNSでそのresolverへ問い合わせさせる（`override_local_dns = false`。それ以外の名前は端末自身のDNS）。resolverのaddressをtailnetへ届ける（subnet route等）のはconsumer。clientは制御サーバーへtunnelの外から接続するため、Headscale自身のhostnameはsplit DNSから外し、local DNSは`dns.headscaleAddress`（登録時必須）の1つだけを返す。`policy`（既定null＝policyなしで全通信許可・routeは手動承認）はHeadscaleのpolicy（ACL・`autoApprovers`）をJSONで渡す。metricsは127.0.0.1:9098。userの作成・端末の登録（事前認証キー）とTailscale client（標準`services.tailscale`）・firewall・port転送はconsumerが行う。
 WireGuardのsync identity/group/runtime modeとIPv4 forwarding、MailserverのsystemName/ACME、GroupwareのproductName、Vaultwardenの`extraHosts`（hostの`networking.hosts`へ追加）、Karakeepの非秘密environmentも公開service recordへ指定する。
 Incusの公開 `guests.<name>.{type,launchConfig,managedDeviceNames}`（`type` は `virtual-machine` / `container`）はhost activationでは適用せず、`guest <name> boot|stop|delete|rebuild [action]` で明示的に操作する。`boot` は不足guestだけ `rebuild.flake`（registry別名やgit URLなどのflake参照。毎回最新を取得し、`rebuild ACTION FLAKE` か `--flake` で上書き可能）の標準NixOS metadataとVMならqcow2、containerならsquashfsをbuild・importして作成し、作成用imageを削除する。同名の別type instanceは削除/変換せず拒否する。consumer guestは標準 `incus-virtual-machine-image.nix` / `incus-container-image.nix` とroot password lockを明示する。初期login password/private fileの再供給は `guest <name> passwd <user>` / `guest <name> push-file <user> <source> <home-relative-path>`。bootstrapは既存認証を上書きせず、file配送はuser権限で行う。storage wipeはactivationとは別工程。
 Forgejo runnerは有効化したhostで動き、jobはDocker containerで実行する。Forgejoのuser/org runnerとしての登録scopeが信頼境界になるため、hostを信頼して任せられるownerだけに登録する。nixpkgs標準 `services.forgejo-runner` を使い、Forgejoの「新しいランナーを作成」で得た `uuid` と、対になるtokenだけを含む `tokenFile` が必要（廃止された登録トークンには非対応）。`docker=false` はhost実行専用runner用。`url`（既定null）は接続先Forgejo URLで、nullならstandalone instanceまたはpublic-servicesに登録した単一hostnameから導出する。`fetchInterval`（既定null）は `runner.fetch_interval` で、nullはrunner既定の2秒を使う。同じlabelの別runnerより長くすると、そのrunnerが停止中・busyのときにjobを拾いやすくなる。`jobLimits.cpus` と `jobLimits.memory`（ともに既定null）はjob containerのDocker `--cpus` と `--memory` で、nullは無制限。memory指定時は同値の `--memory-swap` も設定しswapを使わせない。`dockerHost`（既定null）は `container.docker_host` で、nullは `-`（socketを渡さない）。`"automount"` はhostのDocker socketを全jobへmountし、workflowにrunner hostのrootを与えるため明示opt-inに限る。Incus guestへのfile配送は `incus.guests.<name>.credentialFiles`（既定{}）のguest絶対destination→host runtime sourceを使う。値はsource pathの文字列

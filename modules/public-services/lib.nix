@@ -4,6 +4,7 @@ let
   # Services whose HTTP upstream the consumer supplies as backendUrl; the owner publishes it there.
   httpServices = [
     "forgejo"
+    "headscale"
     "immich"
     "attos-hoyo-dashboard"
     "karakeep"
