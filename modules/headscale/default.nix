@@ -14,9 +14,21 @@ let
   # Tailnet clients resolve every other registered hostname through the consumer's resolver. The control
   # hostname stays on the client's own DNS: the client dials it outside the tunnel, so a tailnet-only
   # answer would be unreachable.
-  splitHostnames = lib.filter (hostname: hostname != s.hostname) (
-    builtins.attrNames (ps.hosts config)
-  );
+  others = lib.filterAttrs (hostname: _: hostname != s.hostname) (ps.hosts config);
+  splitHostnames = builtins.attrNames others;
+  # Answered by the client itself (MagicDNS), so the result does not depend on how a forwarded query
+  # reaches the resolver (dnsmasq localise-queries chooses by the arrival interface, not the address).
+  extraRecords = lib.mapAttrsToList (
+    hostname: services:
+    let
+      value = if services.ssh.enable or false then services.ssh.address else s.cfg.ingressAddress;
+    in
+    {
+      name = hostname;
+      type = if lib.hasInfix ":" value then "AAAA" else "A";
+      inherit value;
+    }
+  ) others;
 in
 {
   options.modules = ps.moduleOptions "headscale" (
@@ -35,6 +47,12 @@ in
         default = [ ];
         example = [ "10.0.0.1" ];
         description = "Resolvers that tailnet clients use, as split DNS, for every other modules.public-services hostname; empty leaves those names to the client's own DNS. The consumer routes these addresses into the tailnet (for example as a subnet route) and answers there with addresses reachable through it.";
+      };
+      ingressAddress = mkOption {
+        type = types.nullOr types.nonEmptyStr;
+        default = null;
+        example = "10.0.0.1";
+        description = "Address that tailnet clients get, as MagicDNS extra records, for every other modules.public-services hostname (SSH endpoints get their ssh.address); null publishes no records. The consumer routes it into the tailnet and serves the gateway there.";
       };
       policy = mkOption {
         type = types.nullOr json.type;
@@ -77,6 +95,7 @@ in
             nameservers.split = lib.mkIf (s.cfg.nameservers != [ ]) (
               lib.genAttrs splitHostnames (_: s.cfg.nameservers)
             );
+            extra_records = lib.mkIf (s.cfg.ingressAddress != null) extraRecords;
           };
           policy.path = lib.mkIf (s.cfg.policy != null) (json.generate "headscale-policy.json" s.cfg.policy);
         };
