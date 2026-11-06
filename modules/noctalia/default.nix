@@ -96,7 +96,14 @@
         description = "Recording source understood by the Noctalia recorder plugin.";
       };
       codec = lib.mkOption {
-        type = lib.types.nonEmptyStr;
+        # The recorder plugin's video_codec choices; Noctalia only warns on other values and records h264.
+        type = lib.types.enum [
+          "h264"
+          "hevc"
+          "av1"
+          "vp8"
+          "vp9"
+        ];
         default = "h264";
         description = "Video codec understood by the Noctalia recorder plugin.";
       };
