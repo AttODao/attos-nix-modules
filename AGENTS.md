@@ -1,54 +1,54 @@
-# 共有moduleの作成・利用側への導入
+# Creating shared modules and adopting them on the consumer side
 
-新しい利用側環境の作成は[Wikiの新しい環境の作成手順](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started)に従う。
-利用側への導入には共有入口と既存の公開APIを使い、共有実装の変更・他repo統合・pin更新・build・実機適用・commit/pushを無断で追加しない。
+To create a new consumer environment, follow [the Wiki's guide to creating a new environment](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/getting-started).
+To adopt modules on the consumer side, use the shared entry point and the existing public API; do not add, without permission, changes to the shared implementation, integration into other repos, pin updates, builds, applying to real machines, or commit/push.
 
-以下は、`attos-nix-modules`で機能moduleを追加・変更するときの手順。
-共有repoの実装、利用側のコード移行・lock更新、build、実機適用は別の完了条件として扱う。
+The following is the procedure for adding or changing a feature module in `attos-nix-modules`.
+Treat the shared repo implementation, the consumer's code migration and lock update, the build, and applying to real machines as separate completion criteria.
 
-## 1. 既存実装と責務を確認する
+## 1. Check the existing implementation and responsibilities
 
-- 最初に`git status --short`を確認し、既存のユーザー変更を保持する。
-- `README.md`、[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki)の対象moduleページを読む。
-- `modules/default.nix`、対象・依存moduleを確認する。
-- 既存設定を移す場合は、利用側のNixOS / HM設定、package供給元、依存、実行時の前提を両scopeで追う。現在の設計・APIは採用revisionのREADME・Wiki・実装を確認する。
-- 類似実装や標準NixOS / Home Manager optionを再利用し、独自resolver、ホスト台帳、不要なwrapperを追加しない。
+- First check `git status --short` and preserve existing user changes.
+- Read `README.md` and the [Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki) page for the target module.
+- Check `modules/default.nix` and the target and dependency modules.
+- When moving existing configuration, trace the consumer's NixOS / HM configuration, package source, dependencies and runtime assumptions in both scopes. For the current design and API, check the README, Wiki and implementation of the adopted revision.
+- Reuse similar implementations and standard NixOS / Home Manager options; do not add custom resolvers, host registries or unnecessary wrappers.
 
-### 共有側と利用側の境界
+### Boundary between the shared side and the consumer side
 
-共有側は機能設定、機能間の依存、HMの読み込み・共通設定・package引数を担当する。
-hardware、ユーザー作成、ログインシェル、権限・linger、secrets、stateVersion、保存先、unfree許可、機器固有値は利用側に残す。
-機器固有値には、ユーザー名・アカウント・メールアドレスなどの個人識別情報、利用側が運用するサービスのFQDN・URL、デバイスのserial・IDを含む。共有側が既定値として持つのはpackageと機能設定だけで、これらは型付きoptionで利用側から受け取る。
+The shared side is responsible for feature settings, dependencies between features, and HM loading, common settings and package arguments.
+Hardware, user creation, login shell, permissions/linger, secrets, stateVersion, storage locations, unfree allowance and device-specific values stay on the consumer side.
+Device-specific values include personally identifying information such as user names, accounts and email addresses, FQDNs/URLs of services the consumer operates, and device serials/IDs. The shared side holds only packages and feature settings as defaults; it receives these values from the consumer through typed options.
 
-秘密の内容をNix式へ埋め込んだり、Nix storeへ取り込んだりしない。必要な場合は復号後のruntime pathを参照する。
-共有moduleはsecrets backend（`sops`・`agenix`等）の名前を知らない。`config.sops.secrets`などを直接参照せず、pathは必ず自moduleのoption経由で受け取る。
-認証・履歴・可変データを宣言的設定で上書きしない。
+Do not embed secret contents in Nix expressions or import them into the Nix store. When needed, reference the runtime path after decryption.
+Shared modules do not know the name of the secrets backend (`sops`, `agenix`, etc.). Do not reference `config.sops.secrets` or similar directly; always receive paths through the module's own options.
+Do not overwrite authentication, history or mutable data with declarative configuration.
 
-## 2. 最小の公開APIを決める
+## 2. Decide the minimal public API
 
-- 機能選択はNixOS側の`modules.<name>.enable`に集約し、`lib.mkEnableOption`で既定falseにする。公開サーバーは`modules.public-services.<FQDN>.<service>`、localhost単独利用は`modules.<service>`を使う。`public-services/lib.nix`の`moduleOptions`で同じtyped schemaを再利用し、単独利用を公開registryへ注入しない（既存Paseo bridge、SSH client/serverのscopeは維持）。
-- 公開サービスは有効時に`host`で所有OSの`networking.hostName`を指定する。物理ホスト・guestが同じnamespaceを読み、所有OSだけで実体を起動する。`deploy`は全種既定true、falseは管理外endpoint登録専用。別ホストのrecordをfalseに書き換える実装はしない。
-- HM専用の機能にもNixOS側のenableを設ける。HM側に別のenableやstandalone HM exportを追加しない。
-- enable以外の独自optionは、利用側から渡す必要がある値だけに限定する。型、説明、妥当な既定値または有効時の必須条件を定義する。
-- ユーザーごとの調整は標準`home-manager.users.<name>`へ書けるようにする。調整可能な既定値には`lib.mkDefault`を使い、安易に`mkForce`で固定しない。大きな設定ツリー（shell・browser・barの設定など）は`lib.mapAttrsRecursive (_: lib.mkDefault)`で各leafを`mkDefault`にし、利用側が`mkForce`なしで一部だけ上書きできるようにする。
-- 外部到達性・特権・信頼範囲を広げる値（relay・外部公開・socketマウント・信頼するproxy範囲・rate limit無効化など）は既定で無効にし、利用側が明示して有効化する。公開サービスの既定は単独利用より緩くしない。
-- 同じ利用側option（既定アプリ・MIME関連付け・環境変数など）に既定値を主張するmoduleは1つにする。複数moduleが候補になるときは、`default.nix`の依存宣言や`mkIf (!config.modules.<other>.enable)`で排他にし、同優先度の値を並べて評価順に任せない。
-- 必要な依存機能は、対象機能の有効時に`modules.<dependency>.enable = true;`で有効化する。通常代入のfalseとの競合を隠さない。
+- Consolidate feature selection into `modules.<name>.enable` on the NixOS side, defaulting to false with `lib.mkEnableOption`. Public servers use `modules.public-services.<FQDN>.<service>`, and localhost-only standalone use uses `modules.<service>`. Reuse the same typed schema via `moduleOptions` in `public-services/lib.nix`, and do not inject standalone use into the public registry (keep the scope of the existing Paseo bridge and SSH client/server).
+- When enabled, a public service sets `host` to the owning OS's `networking.hostName`. Physical hosts and guests read the same namespace, and only the owning OS starts the actual service. `deploy` defaults to true for all kinds; false is only for registering unmanaged endpoints. Do not implement rewriting another host's record to false.
+- Give HM-only features an enable on the NixOS side as well. Do not add a separate enable on the HM side or a standalone HM export.
+- Limit custom options other than enable to values the consumer must pass. Define the type, the description, and a reasonable default or the requirement when enabled.
+- Make per-user adjustments writable in the standard `home-manager.users.<name>`. Use `lib.mkDefault` for adjustable defaults, and do not casually pin them with `mkForce`. For large settings trees (shell, browser, bar settings, etc.), make each leaf `mkDefault` with `lib.mapAttrsRecursive (_: lib.mkDefault)` so the consumer can override only part of it without `mkForce`.
+- Values that widen external reachability, privilege or trust scope (relay, external exposure, socket mounts, trusted proxy ranges, disabling rate limits, etc.) are disabled by default, and the consumer enables them explicitly. Defaults for public services must not be looser than for standalone use.
+- Only one module may claim a default for the same consumer option (default apps, MIME associations, environment variables, etc.). When multiple modules are candidates, make them mutually exclusive with dependency declarations in `default.nix` or `mkIf (!config.modules.<other>.enable)`; do not line up values of equal priority and leave it to evaluation order.
+- Enable required dependency features with `modules.<dependency>.enable = true;` when the target feature is enabled. Do not hide conflicts with a plainly assigned false.
 
-## 3. 機能ディレクトリを作る
+## 3. Create the feature directory
 
 ```text
 modules/<name>/
-  default.nix   公開option・依存・両scopeへの接続
-  home.nix      HM実設定（必要な場合のみ）
-  nixos.nix     NixOS実設定（必要な場合のみ）
-  <assets>      付随するscript・desktop entryなど
+  default.nix   public options, dependencies, wiring into both scopes
+  home.nix      actual HM settings (only when needed)
+  nixos.nix     actual NixOS settings (only when needed)
+  <assets>      accompanying scripts, desktop entries, etc.
 ```
 
-空のscopeファイルや将来用の抽象化は作らない。
-HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSのみなら`modules/pipewire/`を参考にする。
+Do not create empty scope files or abstractions for future use.
+For HM only, use `modules/foot/` as a reference; for both scopes, `modules/thunderbird/`; for NixOS only, `modules/pipewire/`.
 
-両scopeを持つ機能の最小形（`example`は実際の機能名に置き換える）:
+Minimal form of a feature with both scopes (replace `example` with the actual feature name):
 
 ```nix
 # modules/example/default.nix
@@ -64,57 +64,57 @@ HMのみなら`modules/foot/`、両scopeなら`modules/thunderbird/`、NixOSの�
 }
 ```
 
-- NixOSの`imports`は静的に宣言し、enableから組み立てない。依存moduleのimportも同様。
-- `nixos.nix`の実設定は`lib.mkIf config.modules.<name>.enable`で囲む。公開サーバーと単独利用は`public-services/lib.nix`の`select`・`moduleOptions`・`common`・`pathOption`・`require`を再利用し、`select.enabled`で同じ実装を囲む。`select.standalone`の場合だけlocalhost bind/HTTP・通常Docker bridgeを使い、公開record・gateway依存を作らない。公開時はnative serviceを`backendEndpoint`のaddress:portにbindし、`0.0.0.0`など全interfaceにbindしない。singleton assertionも登録し、無効・`host`不一致・`deploy = false`でlocal依存・必須path・unitを作らない。
-- `public-services/lib.nix`はmodule引数`ps`（`_module.args.ps`）から使い、各moduleで`import ../public-services/lib.nix`しない。同じ導出（listen address、`network-online.target`依存、bracket除去など）が3 module以上に現れたら、各moduleへ写す前に`lib.nix`へ入れる。
-- 公開namespaceはtypeを拡張するだけにし、rootのdefault / descriptionを各サービスで重複宣言しない。DNS・CNAME・proxyはnamespaceから導出し、consumerの`public-hosts.nix`や別のhost台帳をimportしない。具体例・制約は[Wikiの公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各サービスページを参照。
-- `home.nix`の実設定は`lib.mkIf osConfig.modules.<name>.enable`で囲む。
-- HM設定は`home-manager.sharedModules`で接続する。特定ユーザーへの直書きや、ユーザー一覧を機能ごとに走査する実装はしない。
-- 有効なHM設定は、標準`home-manager.users`に直接宣言したユーザーを含む全HMユーザーに適用される。固定アカウント・デバイス設定や複数ユーザーでの競合を確認する。
+- Declare NixOS `imports` statically; do not build them from enable. The same applies to imports of dependency modules.
+- Wrap the actual configuration in `nixos.nix` in `lib.mkIf config.modules.<name>.enable`. For public servers and standalone use, reuse `select`, `moduleOptions`, `common`, `pathOption` and `require` from `public-services/lib.nix`, and wrap the same implementation in `select.enabled`. Only in the `select.standalone` case use localhost bind/HTTP and the normal Docker bridge, and do not create public records or gateway dependencies. When public, bind the native service to the address:port of `backendEndpoint`; do not bind to all interfaces such as `0.0.0.0`. Also register the singleton assertion, and when disabled, on a `host` mismatch, or with `deploy = false`, do not create local dependencies, required paths or units.
+- Use `public-services/lib.nix` through the module argument `ps` (`_module.args.ps`); do not `import ../public-services/lib.nix` in each module. When the same derivation logic (listen address, `network-online.target` dependency, bracket stripping, etc.) appears in 3 or more modules, put it into `lib.nix` before copying it into each module.
+- Public namespaces only extend the type; do not redeclare the root default / description in each service. Derive DNS, CNAME and proxy from the namespace; do not import the consumer's `public-hosts.nix` or a separate host registry. For concrete examples and constraints, see [the Wiki's public service API](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services) and each service page.
+- Wrap the actual configuration in `home.nix` in `lib.mkIf osConfig.modules.<name>.enable`.
+- Connect HM configuration via `home-manager.sharedModules`. Do not hard-code it for specific users or implement per-feature iteration over the user list.
+- Enabled HM configuration applies to all HM users, including users declared directly in the standard `home-manager.users`. Check for fixed account/device settings and conflicts between multiple users.
 
-## 4. 登録とpackageの接続を行う
+## 4. Register and connect packages
 
-1. `modules/default.nix`の静的`imports`へ`./<name>`を追加する。
-2. 通常のpackageは利用ホストの`pkgs`を使う。
-3. custom derivation / overrideが必要な場合だけ、nixpkgsと同じ`packages/by-name/<先頭2文字>/<name>/package.nix`を作る。登録は自動で、`packages/default.nix`の編集は不要。consumer入力が必要なbuilderは`{ deps }: { args }: ...`のcurried形にし、nixpkgsの同名packageを上書きする場合は`pkgs.<name>`を参照する。
-4. root直下に`package.nix`を持つ外部repoは、`flake.nix`へ`flake = false`のinputを追加し、`packages/default.nix`の外部input表へ1行追加する。
-5. custom packageはmodule引数`attopkgs`から使う。機能module内で直接`callPackage`しない。供給は`flake.nix`の`nixosModules.default`に任せる。
-6. 取得物はflake inputかpackage内のversion・hashで固定する。module・package内で`builtins.fetchTarball`・`fetchGit`など評価時にネットワークへ出る取得を使わない。外部repoはhash付きでも`flake = false`のinputにする。consumer固有のアーカイブURL・hashなどは利用側に残す。
-7. 評価はpackageの中身に依存させない（IFD禁止）。`lib.importTOML "${pkgs.<x>}/..."`や`builtins.readFile`でstoreのpackageを読まず、必要な設定ファイルの元はrepoへコピーして`./`で参照し、更新は`update-packages`で扱う。packageはすべて`flake check --no-build`の対象に残す。
+1. Add `./<name>` to the static `imports` in `modules/default.nix`.
+2. For normal packages, use the consuming host's `pkgs`.
+3. Only when a custom derivation / override is needed, create `packages/by-name/<first-2-letters>/<name>/package.nix`, as in nixpkgs. Registration is automatic, and editing `packages/default.nix` is not needed. Builders that need consumer inputs take the curried form `{ deps }: { args }: ...`; when overriding a nixpkgs package of the same name, reference `pkgs.<name>`.
+4. For external repos that have `package.nix` at the root, add a `flake = false` input to `flake.nix` and add one line to the external input table in `packages/default.nix`.
+5. Use custom packages through the module argument `attopkgs`. Do not `callPackage` directly inside feature modules. Leave supplying them to `nixosModules.default` in `flake.nix`.
+6. Pin fetched artifacts with a flake input or a version/hash inside the package. Do not use fetches that hit the network at evaluation time, such as `builtins.fetchTarball` or `fetchGit`, inside modules or packages. External repos are `flake = false` inputs even when a hash is available. Consumer-specific archive URLs, hashes, etc. stay on the consumer side.
+7. Do not make evaluation depend on package contents (no IFD). Do not read store packages with `lib.importTOML "${pkgs.<x>}/..."` or `builtins.readFile`; copy the source of the needed configuration files into the repo, reference it with `./`, and handle updates with `update-packages`. Keep all packages covered by `flake check --no-build`.
 
-通常の機能追加で`flake.nix`へ個別module exportや別のHM読み込みを追加する必要はない。
-Home Manager revision・共有nixpkgs・利用側nixpkgsの更新を機能追加に混ぜない。
+Normal feature additions do not need individual module exports or separate HM loading added to `flake.nix`.
+Do not mix updates of the Home Manager revision, the shared nixpkgs or the consumer nixpkgs into feature additions.
 
-## 5. 評価する
+## 5. Evaluate
 
-Nix moduleのテストは持たない。Goのcustom packageは各packageのtestと`go vet`をbuild内で実行する。リポジトリルートから次を実行する。
+There are no Nix module tests. Go custom packages run each package's tests and `go vet` inside the build. Run the following from the repository root.
 
 ```sh
 nix flake check --no-build 'path:.'
-nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpackage
+nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # a changed package
 ```
 
-- `nix flake check --no-build`は、packageがstoreに無い状態でも通ること（§4-7）。
-- 未有効時に機能設定・依存が勝手に有効にならないこと、enable一つで必要な設定が入ることは、利用側の`--override-input`付き評価で確認する。
-- `path:`評価は未追跡ファイルも含む。既存のstage状態を検証のために変えない。
-- 通常のflake評価には`--no-write-lock-file`を使う。依頼されていないlock更新・rebuild・switch・pushはしない。
+- `nix flake check --no-build` must pass even when the packages are not in the store (§4-7).
+- Confirm, by evaluating on the consumer side with `--override-input`, that feature settings and dependencies do not become enabled on their own while the feature is disabled, and that a single enable brings in the required configuration.
+- `path:` evaluation includes untracked files. Do not change the existing staging state for verification.
+- Use `--no-write-lock-file` for normal flake evaluation. Do not do lock updates, rebuilds, switches or pushes that were not requested.
 
-評価成功はビルド成功・実機動作の保証ではない。boot、PAM、desktop起動、user service、外部機器などは利用側への移行後に別途確認する。
+Successful evaluation does not guarantee a successful build or working behavior on real machines. Check boot, PAM, desktop startup, user services, external devices, etc. separately after migrating the consumer.
 
-## 6. ドキュメントと差分を確認する
+## 6. Check documentation and the diff
 
-- `README.md`の機能一覧、scope、依存、独自option、利用側の前提を更新する。
-- moduleのpackage/version・設定項目・設定例・運用上の制約はWikiの対応ページへ記載し、重複する機能別docsを増やさない。custom packageの実装・供給契約は`packages/README.md`へ記載する。作業履歴・成功ログはdocsへ残さない。
-- version・revision・hashは1箇所（`flake.nix`のinput、`package.nix`、または`packages/default.nix`の外部input表）だけに書く。README・docsには「`flake.lock`／`package.nix`を参照」と書き、具体値を写さない。
-- 利用側が`mkForce`なしで既定値を上書きできるか（§2）、権限・露出を広げる既定がopt-inか（§2）を確認する。
-- `git diff --check`と対象ファイルのdiffを確認し、無関係な変更やcredentialがないことを確認する。新規ファイルは未追跡の内容も確認する。
-- 完了報告には、変更した機能・ファイル、実行した検証、未検証事項を短く記す。利用側の移行や実機適用を行っていない場合は明示する。
+- Update the feature list, scope, dependencies, custom options and consumer assumptions in `README.md`.
+- Document the module's package/version, settings, configuration examples and operational constraints on the corresponding Wiki page; do not add duplicate per-feature docs. Document the implementation and supply contract of custom packages in `packages/README.md`. Do not leave work history or success logs in docs.
+- Write version, revision and hash in only one place (the input in `flake.nix`, `package.nix`, or the external input table in `packages/default.nix`). In README and docs, write 「`flake.lock`／`package.nix`を参照」 ("see `flake.lock` / `package.nix`") and do not copy concrete values.
+- Check that the consumer can override defaults without `mkForce` (§2) and that defaults that widen privilege or exposure are opt-in (§2).
+- Check `git diff --check` and the diff of the target files, and confirm there are no unrelated changes or credentials. For new files, also check the untracked contents.
+- In the completion report, briefly state the changed features and files, the verification that was run, and what remains unverified. State explicitly if consumer migration or applying to real machines was not done.
 
-## 7. CI workflowとCI用script
+## 7. CI workflows and CI scripts
 
-`.forgejo/workflows/`と`packages/by-name/at/attos-ci/`を変えるときに守る。
+Follow these rules when changing `.forgejo/workflows/` and `packages/by-name/at/attos-ci/`.
 
-- `nix run`・`nix shell`はすべて`--inputs-from .`で`flake.lock`のnixpkgsに固定し、registry経由の未固定inputを使わない。CIが`nix run`する他repoのtool（`CI_TOOL`等）はrevで固定し、週次更新PRで上げる。
-- tokenは使うstepの`env:`にだけ渡し、workflow全体やjob全体のenvに置かない。URLへ埋め込まず（`https://bot:$TOKEN@...`）、`git -c http.extraHeader=...`や`GIT_ASKPASS`で渡す。ログのマスク済み出力（`***`）をコードへ写さない。
-- 全jobに`timeout-minutes`を付ける。複数ホストの評価を行うjobは`needs:`か`concurrency`で直列にし、共有runnerで同時に走らせない。
-- 利用側のホスト一覧をCIに固定で持つ場合は、`workflow_dispatch`入力で上書きできるようにする。
+- Pin every `nix run` and `nix shell` to the nixpkgs in `flake.lock` with `--inputs-from .`; do not use unpinned inputs via the registry. Pin tools from other repos that CI runs with `nix run` (`CI_TOOL`, etc.) by rev, and bump them in the weekly update PR.
+- Pass tokens only in the `env:` of the step that uses them; do not put them in workflow-wide or job-wide env. Do not embed them in URLs (`https://bot:$TOKEN@...`); pass them via `git -c http.extraHeader=...` or `GIT_ASKPASS`. Do not copy masked log output (`***`) into code.
+- Add `timeout-minutes` to every job. Serialize jobs that evaluate multiple hosts with `needs:` or `concurrency`, and do not run them at the same time on the shared runner.
+- When CI holds a fixed list of consumer hosts, make it overridable through `workflow_dispatch` inputs.
