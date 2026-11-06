@@ -71,7 +71,7 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 
 ## Home Managerの管理
 
-- HMのsourceはこのflakeでrevision固定。現在は `095fef2f265c3c0da4fe315efba8f8a04495ab34`。
+- HMのsourceはこのflakeでrevision固定。現在は `2c0c1f01521469cf0271180c453c79782d53c2f6`。
 - HMも利用ホストの `pkgs` を使用し、packageはNixOSユーザー環境へ導入する。
 - ユーザー名・ホームディレクトリはNixOSのユーザー定義から導出する。
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。

@@ -5,7 +5,7 @@
     # packages出力専用。moduleのattopkgsは利用ホストのpkgsで構築する。
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     home-manager = {
-      url = "github:nix-community/home-manager/095fef2f265c3c0da4fe315efba8f8a04495ab34";
+      url = "github:nix-community/home-manager/2c0c1f01521469cf0271180c453c79782d53c2f6";
       flake = false;
     };
     claude-code-nix = {
@@ -14,7 +14,7 @@
     };
     # hermes moduleが使うupstream NixOS moduleと、hermes-desktopのsource。
     # upstreamのPython環境はupstreamのlockで固定するため、nixpkgsはfollowsしない。
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.22.6";
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.0";
     # scarlett-driver（CLI・daemon・gpui GUI）。root直下のpackage.nixでsourceからbuildする。
     scarlett-driver = {
       url = "git+https://git.attodao.cc/AttODao/scaelett-driver?ref=refs/tags/v0.1.1";
