@@ -86,6 +86,7 @@
     };
     headroom.enable = lib.mkEnableOption "Headroom AI plan usage in the Noctalia bar";
     systemdUnits.enable = lib.mkEnableOption "systemd unit management through the Noctalia /svc launcher";
+    tailscale.enable = lib.mkEnableOption "Tailscale status, peers and exit-node control in the Noctalia bar (requires services.tailscale; changing preferences needs the user as tailscale operator)";
     wallpaperEngine.enable = lib.mkEnableOption "Wallpaper Engine through the Noctalia W Engine plugin";
     screenRecorder = {
       enable = lib.mkEnableOption "Noctalia screen recorder";
@@ -108,6 +109,10 @@
         assertion =
           !(config.modules.noctalia.wallpaperEngine.enable && config.modules.linux-wallpaperengine.enable);
         message = "modules.noctalia.wallpaperEngine and modules.linux-wallpaperengine cannot be enabled together: W Engine kills all linux-wallpaperengine processes on startup.";
+      }
+      {
+        assertion = !config.modules.noctalia.tailscale.enable || config.services.tailscale.enable;
+        message = "modules.noctalia.tailscale needs services.tailscale: the plugin drives the local tailscaled through the tailscale CLI.";
       }
     ];
     # Recording from a monitor or window goes through gsr-kms-server, which needs the setcap

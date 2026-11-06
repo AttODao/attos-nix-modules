@@ -48,6 +48,8 @@ in
       pkgs.wl-clipboard
     ]
     ++ lib.optional cfg.screenRecorder.enable recorderPackage
+    # The Tailscale plugin reads `tailscale debug prefs` through jq; the CLI comes from services.tailscale.
+    ++ lib.optional cfg.tailscale.enable pkgs.jq
     ++ lib.optionals cfg.wallpaperEngine.enable [
       pkgs.linux-wallpaperengine
       pkgs.util-linux
@@ -89,6 +91,9 @@ in
             provider_antigravity = "off";
           };
         }))
+        (lib.mkIf cfg.tailscale.enable (sharedSettings {
+          widget.tailscale.type = "davemhammer/tailscale:status";
+        }))
         (lib.mkIf cfg.wallpaperEngine.enable (sharedSettings {
           widget.wallpaper_engine.type = "tadomika_ari/w-engine:w-engine-widget";
           plugin_settings."tadomika_ari/w-engine".sync_colors = false;
@@ -127,6 +132,7 @@ in
               lib.optional cfg.screenRecorder.enable "noctalia/screen_recorder"
               ++ lib.optional cfg.headroom.enable "ayagmar/headroom"
               ++ lib.optional cfg.systemdUnits.enable "srounce/systemd"
+              ++ lib.optional cfg.tailscale.enable "davemhammer/tailscale"
               ++ lib.optional cfg.wallpaperEngine.enable "tadomika_ari/w-engine"
               ++ lib.optional jobsPlugin "attos/jobs";
           };
@@ -136,10 +142,6 @@ in
             enabled = true;
             delay_ms = 150;
             top_left.action = "launcher";
-          };
-          widget.network = {
-            type = "network";
-            show_vpn_label = true;
           };
           bar = {
             order = [ "main" ];
@@ -175,6 +177,9 @@ in
                   "tray"
                   "notifications"
                   "clipboard"
+                ]
+                ++ lib.optional cfg.tailscale.enable "tailscale"
+                ++ [
                   "network"
                   "bluetooth"
                   "volume"
