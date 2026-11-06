@@ -43,7 +43,7 @@ in
     listenServices = lib.mkOption {
       type = lib.types.listOf (lib.types.strMatching "[^[:space:]/]+\\.service");
       default = [ ];
-      description = "Network setup services to pull in and order before the SSH listener (including socket activation), such as wireguard-wg0.service.";
+      description = "Network setup services to pull in and order before the SSH listener (including socket activation), such as systemd-networkd.service.";
     };
     waitForNetwork = lib.mkOption {
       type = lib.types.bool;

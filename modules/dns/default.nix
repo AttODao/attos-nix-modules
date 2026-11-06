@@ -22,8 +22,6 @@ let
         addresses =
           if services.ssh.enable or false then
             [ services.ssh.address ]
-          else if services.wireguard-server.enable or false then
-            [ (ps.require "modules.dns" "wireguardAddress" cfg.wireguardAddress) ]
           # Tailscale clients dial the control server outside the tunnel, so it keeps one directly reachable address.
           else if services.headscale.enable or false then
             [ (ps.require "modules.dns" "headscaleAddress" cfg.headscaleAddress) ]
@@ -50,11 +48,6 @@ in
       default = [ ];
       description = "Consumer-owned ingress addresses used for ordinary service hostnames.";
     };
-    wireguardAddress = lib.mkOption {
-      type = lib.types.nullOr lib.types.nonEmptyStr;
-      default = null;
-      description = "Local DNS address for the WireGuard endpoint; required when it is registered.";
-    };
     headscaleAddress = lib.mkOption {
       type = lib.types.nullOr lib.types.nonEmptyStr;
       default = null;
@@ -67,12 +60,9 @@ in
       {
         assertion =
           cfg.ingressAddresses != [ ]
-          || lib.all (
-            services:
-            (services.ssh.enable or false)
-            || (services.wireguard-server.enable or false)
-            || (services.headscale.enable or false)
-          ) (lib.attrValues hosts);
+          || lib.all (services: (services.ssh.enable or false) || (services.headscale.enable or false)) (
+            lib.attrValues hosts
+          );
         message = "modules.dns.ingressAddresses must be supplied for ordinary service hostnames.";
       }
     ]
