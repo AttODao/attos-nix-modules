@@ -42,7 +42,7 @@ in
 
       virtualisation.oci-containers.containers = {
         attos-hoyo-dashboard-db = {
-          image = lib.mkDefault "docker.io/library/postgres:18-alpine3.23@sha256:dec395d8c09c45609d6deb5c2388a07882d64fa59b1d98c1895792e085f57888";
+          image = lib.mkDefault "docker.io/library/postgres:18-alpine3.23@sha256:a0cbdbbcc57f7317ca183ac9d10eb3af72b5b05b2f25acad58e765bd2b139099";
           # The app connects as the image-created POSTGRES_USER, which is a superuser.
           environmentFiles = lib.mkDefault [ environmentFile ];
           environment = lib.mapAttrs (_: lib.mkDefault) {
