@@ -34,12 +34,12 @@ in
 # scope内の同名attrでなく、利用ホストのbase packageを上書きする。
 pkgs.context-mode.overrideAttrs (
   finalAttrs: previousAttrs: {
-    version = "1.0.169";
+    version = "2.1.5";
     # Pi loads skills from the package manifest; generic discovery finds duplicate copies.
     dontInstallAgentSkills = true;
     src = fetchurl {
       url = "https://registry.npmjs.org/context-mode/-/context-mode-${finalAttrs.version}.tgz";
-      hash = "sha256-CcQeTPd7IVZsdrjqL9vX89gjBV/uLwLCFm/Vu1ddryw=";
+      hash = "sha256-qGaomacPe9WgKOW028dDC2ayJLVOpxjzwWcPSew8vbo=";
     };
     # Include the Pi adapter and expose the CLI (which also starts MCP with no arguments).
     installPhase =

@@ -9,21 +9,21 @@
 
 buildNpmPackage (finalAttrs: {
   pname = "ccpocket-bridge";
-  version = "1.97.0";
+  version = "1.101.0";
 
   # The monorepo tags each app separately; the bridge releases are bridge/v<version>.
   src = fetchFromGitHub {
     owner = "K9i-0";
     repo = "ccpocket";
     tag = "bridge/v${finalAttrs.version}";
-    hash = "sha256-iwkqGGGWojcQB+KgROBjzSdRTj6GGdXHHYvRQePhtdw=";
+    hash = "sha256-pMaoQRFWv+U5AWYAP0kO1cEXAmM3BLGUiZ+ghuq3pZw=";
   };
 
   nodejs = nodejs_22;
 
   # Unchanged upstream root lockfile; NPM_FETCHER_VERSION=2 keeps workspace metadata.
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-sNGc/UTRVem4xcpE8BaWhaFNzwZvsbgiXgH+Cu9Su6Y=";
+  npmDepsHash = "sha256-yjgV8X0t64rFUQ75Mw6NIveHH7SIedZO96KvB68jJuA=";
   npmWorkspace = "packages/bridge";
 
   nativeBuildInputs = [
