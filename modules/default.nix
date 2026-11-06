@@ -16,6 +16,7 @@
     ./forgejo
     ./forgejo-actions-runner
     ./groupware
+    ./headscale
     ./hermes
     ./heavy
     ./attos-jobs
