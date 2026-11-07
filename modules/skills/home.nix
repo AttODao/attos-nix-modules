@@ -9,7 +9,10 @@ let
   cfg = osConfig.modules.skills;
   catalog = import ./catalog.nix { inherit pkgs lib attopkgs; };
   for =
-    agent: lib.filterAttrs (name: skill: cfg.${name}.enable && lib.elem agent skill.agents) catalog;
+    agent:
+    lib.mapAttrs (_: skill: skill // { source = skill.source.${agent} or skill.source; }) (
+      lib.filterAttrs (name: skill: cfg.${name}.enable && lib.elem agent skill.agents) catalog
+    );
 in
 {
   config = lib.mkIf cfg.enable (

@@ -37,7 +37,7 @@ in
   plugins = {
     context-mode = {
       source = "${contextMode}/lib/context-mode";
-      entry = "build/adapters/pi/extension.js";
+      entry = "pi/index.js";
     };
     pi-mcp-adapter.package = "npm:pi-mcp-adapter@5.3.2";
     pi-sessions = {

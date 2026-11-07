@@ -1,4 +1,5 @@
 # Agent skills shared by Pi and Claude Code: source and the agents each one works with.
+# `source` is one path, or an attrset of paths per agent when the agents need different copies.
 {
   pkgs,
   lib,
@@ -10,7 +11,12 @@ let
     "claude-code"
   ];
   inherit (import ./sources.nix { inherit pkgs; }) mattSkills vercelSkills ponytail;
-  contextMode = "${attopkgs.context-mode}/lib/context-mode/skills";
+  contextMode = "${attopkgs.context-mode}/lib/context-mode";
+  # context-mode ships Pi copies that call its Pi tools and generic copies that call its MCP tools.
+  contextModeSkill = name: {
+    pi = "${contextMode}/pi/skills/${name}";
+    claude-code = "${contextMode}/skills/${name}";
+  };
 in
 {
   # Pi-only: needs Pi's mermaid_diagram tool.
@@ -33,7 +39,7 @@ in
   };
   # Pi-only: rewrites the context-mode install, which Nix keeps read-only.
   ctx-upgrade = {
-    source = "${contextMode}/ctx-upgrade";
+    source = contextModeSkill "ctx-upgrade";
     agents = [ "pi" ];
   };
 }
@@ -54,15 +60,10 @@ in
 //
   lib.genAttrs
     [
-      "context-mode"
       "ctx-doctor"
-      "ctx-index"
-      "ctx-insight"
-      "ctx-purge"
-      "ctx-search"
       "ctx-stats"
     ]
     (name: {
-      source = "${contextMode}/${name}";
+      source = contextModeSkill name;
       agents = both;
     })
