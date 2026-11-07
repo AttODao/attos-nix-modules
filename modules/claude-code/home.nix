@@ -15,7 +15,15 @@ in
       enable = true;
       package = attopkgs.claude-code;
       mcpServers = lib.mkIf cfg.contextMode.enable {
-        context-mode.command = lib.getExe' attopkgs.context-mode "context-mode";
+        # 2.x prints usage without arguments; the MCP server is the `server` command.
+        context-mode = {
+          command = lib.getExe' attopkgs.context-mode "context-mode";
+          args = [
+            "server"
+            "--agent"
+            "claude-code"
+          ];
+        };
       };
       lspServers = lib.filterAttrs (name: _: cfg.lsp.${name}.enable) {
         nixd = {
