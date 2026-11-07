@@ -29,6 +29,10 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    # Desktopはremote接続でもlocalの<HERMES_HOME>/desktop-pluginsだけからpluginを読む。
+    home.file = lib.mapAttrs' (
+      id: source: lib.nameValuePair ".hermes/desktop-plugins/${id}/plugin.js" { inherit source; }
+    ) cfg.plugins;
     home.packages = [
       (attopkgs.hermes-desktop.override {
         extraRun = [

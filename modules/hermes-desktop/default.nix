@@ -14,6 +14,12 @@
       example = "hermes@hermes.example.org";
       description = "SSH target (user@host[:port]) of the remote Hermes, written as the initial connection only when the app has no connection settings yet. The app starts its own dashboard over SSH with the user's SSH key.";
     };
+    plugins = lib.mkOption {
+      type = lib.types.attrsOf lib.types.path;
+      default = { };
+      example = lib.literalExpression "{ morning-brief = ./hermes-desktop-plugins/morning-brief.js; }";
+      description = "Desktop plugins (one uncompiled ESM `plugin.js` per plugin id) placed at `~/.hermes/desktop-plugins/<id>/plugin.js` on this machine. Against a remote backend the app loads desktop plugins only from the local machine; a plugin's `plugin_api.py` routes stay on the backend.";
+    };
   };
 
   config = lib.mkIf config.modules.hermes-desktop.enable {
