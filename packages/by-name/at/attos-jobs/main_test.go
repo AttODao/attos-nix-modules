@@ -255,8 +255,12 @@ func TestAgentRequests(t *testing.T) {
 		t.Fatalf("stop: %+v", resp)
 	}
 	root := filepath.Dir(c.ProcRoot)
-	if data, _ := os.ReadFile(filepath.Join(root, "terminated")); string(data) != "7\n" {
-		t.Errorf("terminated %q", data)
+	// Session 7 is closing: logind would ignore terminate-session, so its scope is stopped.
+	if data, _ := os.ReadFile(filepath.Join(root, "terminated")); len(data) != 0 {
+		t.Errorf("terminate-session called for a closing session: %q", data)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "systemctl")); !strings.Contains(string(data), "stop session-7.scope\n") {
+		t.Errorf("systemctl calls %q, want stop session-7.scope", data)
 	}
 	if data, _ := os.ReadFile(filepath.Join(root, "docker-stopped")); string(data) != "0123456789abcdef0123\n" {
 		t.Errorf("docker stop %q", data)
