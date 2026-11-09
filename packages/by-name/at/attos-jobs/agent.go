@@ -297,6 +297,16 @@ func (a *agent) stopItem(it item) (string, error) {
 		}
 		return "container stopped (the runner reports the job as failed)", nil
 	case "session":
+		// logind ignores terminate-session for a closing session: it already ran
+		// session_stop (s->stopping) when the client disconnected, so the call
+		// succeeds without killing anything. Stop the abandoned scope instead.
+		if it.State == "closing" && it.cgroup != "" {
+			scope := filepath.Base(it.cgroup)
+			if _, err := runOut(3*time.Minute, a.c.Systemctl, "stop", scope); err != nil {
+				return "", err
+			}
+			return "leftover processes stopped (" + scope + ")", nil
+		}
 		if _, err := runOut(30*time.Second, a.c.Loginctl, "terminate-session", it.ref); err != nil {
 			return "", err
 		}
