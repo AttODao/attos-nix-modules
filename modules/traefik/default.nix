@@ -19,7 +19,7 @@ in
       };
     };
     fail2ban.enable = lib.mkEnableOption "host-wide bans for verified Web login failure signatures (requires accessLog.enable)";
-    environmentFile = ps.pathOption "Runtime Cloudflare environment file containing CLOUDFLARE_API_TOKEN; ACME state stays in services.traefik.dataDir.";
+    environmentFile = ps.pathOption "Runtime environment file containing CLOUDFLARE_API_TOKEN for the DNS-01 wildcard certificates; required when enabled. ACME state stays in services.traefik.dataDir.";
     privateNetworks = mkOption {
       type = types.listOf types.nonEmptyStr;
       default = [ ];
