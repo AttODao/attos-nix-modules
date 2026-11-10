@@ -29,7 +29,7 @@ modules = [
 
 利用側ルートの `common.nix` に共通の機能選択・ユーザー差分、`node-a.nix` 等に
 ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストからimportする。
-機能別import、独自resolver、利用側のHM module import・standalone HM出力は不要。
+機能別import、独自resolver、利用側のHM module importは不要。NixOSでない環境（Arch等のstandalone HM）は[standalone Home Manager](#standalone-home-manager)を使う。
 
 remoteのHEADに依存しないよう、URLの `?ref=main` は省略しない。
 
@@ -76,21 +76,55 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 - ユーザー名・ホームディレクトリはNixOSのユーザー定義から導出する。
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。
 - `attopkgs` は共有側で利用ホストの `pkgs` から構築し、NixOS / HMへ渡す。
-- 機能選択はNixOS側の `modules.*` に一本化し、`home.*` exportとstandalone HM経路は提供しない。
+- 機能選択はNixOS側の `modules.*` に一本化する。standalone HMも同じ `modules.*` をHM側に書く（下記）。HM側に別のenableは持たない。
 - `modules/home-manager/home.nix` が全HMユーザーへ共通helperを `config.lib.attos.*` で供給する。`mutableXdgConfigFiles`はappが書き換える設定（Fcitx5の`config`/`profile`、Solaarの`rules.yaml`/`config.yaml`）をstore symlinkでなく未存在時だけ0600でcopyし、`graphicalAppService`はGUI常駐app（Discord・OpenCloud・Kando）の`graphical-session.target`配下user serviceを生成する。生成するserviceと`fcitx5-daemon`に`Requisite=graphical-session.target`を設定し、ログアウト後の再起動でセッション外に起動しない。
 
 ユーザー一覧に複数名を指定すると、固定メールアカウント・デバイス設定なども含め、
 有効な機能の共通設定が全HMユーザーへ配布される。credential、secretの配置・権限は共有しない。
 
+## standalone Home Manager
+
+NixOSを使わない環境（Arch Linux上のstandalone HM等）では、`homeManager.<name>`（`flake.modules.homeManager.<name>`、別名`homeModules.<name>`）を読み、NixOSと同じ `modules.*` をHM側に書く。
+
+```nix
+# flake.nix（outputsの引数にattos-nix-modules・home-manager・nixpkgsを受け取る）
+homeConfigurations.alice = home-manager.lib.homeManagerConfiguration {
+  pkgs = import nixpkgs { system = "aarch64-linux"; };
+  modules = [
+    attos-nix-modules.modules.homeManager.foot # modules.foot.enable = mkDefault true
+    attos-nix-modules.modules.homeManager.floorp
+    (
+      { lib, ... }:
+      {
+        home = {
+          username = "alice";
+          homeDirectory = "/home/alice";
+          stateVersion = "26.05";
+        };
+        modules.floorp.vaultwardenUrl = "https://vault.example.org";
+        modules.fcitx5.enable = lib.mkForce false; # 依存で有効になる機能を外す
+      }
+    )
+  ];
+};
+```
+
+- `homeManager.default` は全featureのHM設定を読むだけで何も有効にしない（`modules.<name>.enable` で選ぶ）。`homeManager.<name>` はdefaultに `modules.<name>.enable = mkDefault true` を足したもので、複数読んでもdefaultは一度だけ入る。
+- 共有側はNixOS側のmodule（`modules/`）をNixOSなしで評価し、その結果を各 `home.nix` へ `osConfig` として渡す（`modules/home-manager/standalone.nix`）。依存の自動有効化・既定値・assertionはNixOSと同じに働く。NixOS側の設定（services・systemd・fonts・users等）は捨てられ、HMの設定だけが入る（system packageやserviceは利用側がpacman等で用意する）。
+- `attopkgs` はHMの `pkgs` から作る。`osConfig`・`attopkgs` を `extraSpecialArgs` で渡さない。`home.stateVersion` は設定しないので利用側が書く。unfreeの許可は利用側の `pkgs`。
+- 優先度は葉に書く（`modules.foo.enable = lib.mkForce false;`）。`modules` 全体への `mkForce` 等は効かない。宣言されていない `modules.*`（typo）はassertionで止まる。
+- `hyprland`（`osConfig.programs.hyprland`）と`attos-mouse`（`osConfig.programs.uwsm`）は `home.nix` がNixOSのoptionを読むためstandaloneでは使えない（それらを有効にする機能も同じ）。NixOS専用の機能（scopeがNixOSだけのもの）は有効にしても何も入らない。
+
 ## 構造
 
 ```text
-flake.nix
+flake.nix                   flake-partsで出力を組み立てる
 flake.lock
 modules/
   default.nix               modules/直下の全dirを静的import（dir一覧から。登録不要）
   home-manager/default.nix  HMユーザー一覧・共通HM設定・package引数
   home-manager/home.nix     全HMユーザー共通のhelper（`config.lib.attos.*`）
+  home-manager/standalone.nix  standalone HM用の入口（`homeManager.default`）
   thunderbird/
     default.nix             公開option・依存・両scopeの接続
     home.nix                HM設定
@@ -103,11 +137,16 @@ modules/
 packages/
   default.nix               by-nameの自動登録と外部source input
   by-name/<2文字>/<name>/package.nix  nixpkgsと同じshard構成
+tests/
+  default.nix               評価だけのmodule test（flake checks）
+  fixtures.nix              有効時に必須のoptionへ入れるtest用の値
 workbench/                  作業dir（nix-setup）のdevenv・AGENTS.md・setup.sh
 .forgejo/
   consumers                 CIで評価する利用側ホストの一覧
   workflows/                pr-check（PRの評価）、update（週次の更新PR）
 ```
+
+flake出力: `nixosModules.default`（別名 `nixos.default`、`modules.nixos.default`）、`modules.homeManager.{default,<name>}`（別名 `homeModules`）、`overlays.default`、`attopkgs`、`packages` / `legacyPackages`（x86_64-linux）、`formatter`（nixfmt。`nix fmt -- <files>`）、`checks`（下記の検証）。
 
 公開option・module間の依存は各機能の `default.nix` に置く。
 `home.nix` / `nixos.nix` は実設定を担当し、HM側は `osConfig.modules.<feature>` を参照する。
@@ -399,11 +438,19 @@ mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` す�
 
 ## 検証
 
-module単体のテストは持たない。変更時は次の評価で確認する。
+`tests/default.nix` が評価だけのmodule testをflake check（`checks.x86_64-linux.*`）として持つ。buildはしない。
+
+- `modules-disabled`: 最小のNixOS system（`tests/default.nix` のfixture）に `nixosModules.default` を足して何も有効にしないとき、足さないsystemとpackage名・systemd unit・`/etc`・users/groups・firewall・有効なservices/programsが変わらない。意図した差分はtest内の `allowed` に書く。
+- `module-<name>`: そのfeatureだけを有効にした最小system（HMユーザー1人）のtoplevelが評価できる。公開serviceはregistry（`modules.public-services."<name>.attos-test.example"`、`host` はtestのhostName）で有効にする。有効時に必須のoptionはtest用の値を `tests/fixtures.nix` に置く。
+- `home-manager-<name>`: `homeManager.<name>` だけのstandalone HM構成が評価できる。`home-manager-unknown-option` はtypoが拒否されることを確かめる。
+- 一覧は `modules/` のdirから作るため、新しいmoduleは自動でtestされる。外すdirは理由付きで `skip`（`home-manager`・`public-services`）と `hmSkip`（`hyprland`・`attos-mouse`）に書く。
 
 ```sh
 nix flake check --no-build 'path:.'
+nix eval --raw 'path:.#checks.x86_64-linux.module-<name>.drvPath' # 1つのcheckだけ
 nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpackage
 ```
+
+全checkを1 processで評価するとメモリが解放されず、`nix flake check --no-build` のpeak RSSは約33GBになる（attodesk計測、checkは103個）。1つずつ別processで評価すると1 checkあたり最大約1.1GB（中央値約0.7GB）で済むため、メモリの少ないhost・CI（共有runnerは6GiB）ではcheckを1つずつ評価する（`nix eval --raw 'path:.#checks.x86_64-linux.<name>.drvPath'`）。testのsystemはmanual（option文書の評価）を無効にしている。
 
 利用側では `--override-input shared "path:$(realpath ../attos-nix-modules)"` を付けて全OS・HM・imageを評価する。

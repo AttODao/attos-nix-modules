@@ -56,7 +56,7 @@
 `centered-plymouth-theme { image = <consumer画像path>; }` も同じsetに含む関数。ImageMagickの `-resize '960x360>'` で縦横比を保ち最大960x360へ縮小し、拡大しない。出力は `share/plymouth/themes/centered-logo/` にdescriptor・script・logo.pngを置く。画像は公開可能なbuild入力としてstoreへ入るため、秘密・可変データを渡さない。
 code-server releaseの取得URL/hash・versionはconsumer inputに固定し、共有側でlatest取得や新しい供給元へ切り替えない。
 
-`flake.nix` の `nixosModules.default` が利用ホストのpkgsで構築した結果をNixOS / HMへ引数`attopkgs`として渡す。ホスト側の手動設定は不要で、各機能のmodule内ではpackage定義を直接callPackageしない。
+`flake.nix` の `nixosModules.default` が利用ホストのpkgsで構築した結果をNixOS / HMへ引数`attopkgs`として渡す（standalone HMの `homeManager.default` はHMの `pkgs` から構築する）。ホスト側の手動設定は不要で、各機能のmodule内ではpackage定義を直接callPackageしない。
 カーソルは `attopkgs.custom-cursors { cursor = pkgs.fetchurl { name = "custom-cursors.zip"; url = "https://example.invalid/cursor.zip"; hash = "sha256-..."; }; }` で組み立てる。実際のURL・hashと取得処理はconsumer側に置き、共有repoへ書かない。
 archiveは展開後のrootに `cursors/` が必要。通常は取得済みarchive packageを `modules.desktop-theme.cursor` へ渡し、共有側が `custom-cursors` を呼ぶ。ユーザーごとに別packageが必要な場合だけ標準HM `home.pointerCursor.package` へ生成結果を渡す。
 Plymouthも通常は `modules.limine.splashImage = ./assets/boot-logo.png;` で選択する。画像のみconsumerに残し、descriptor/script・画像変換の実装は共有側が所有する。nullの場合にこのpackageを作らずupstream themeを維持するのはLimine moduleの契約で、package関数自体のimage引数は必須。
