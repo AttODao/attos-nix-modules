@@ -15,6 +15,11 @@ let
     subscriptions.test."Jellyfin TV Show by Date".Test = "https://www.youtube.com/@example";
   };
   services = {
+    attic = {
+      backendUrl = "http://127.0.0.1:8080";
+      dataDir = "/srv/attic";
+      environmentFile = "/run/secrets/atticd.env";
+    };
     attos-hoyo-dashboard = {
       backendUrl = "http://127.0.0.1:8082";
       dataDir = "/srv/attos-hoyo-dashboard";
