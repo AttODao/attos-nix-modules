@@ -381,7 +381,7 @@ code-serverも `enable = true; host = "<所有OS>";` でnative実体を有効に
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
 `HASHED_PASSWORD`）。単独利用は127.0.0.1:4444、公開時は他のnative serviceと同じく `backendUrl` のaddress:portでlistenする（全interfaceへbindしない）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 Nerd Font組み込みpackage（`attopkgs.code-server { src = <固定したstandalone release>; }`）は、
-公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
+公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。実行account・auth等は標準 `services.code-server.*` で変え、account作成・権限はconsumerが保持する。
 
 OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Terminal・secret/path・HTTP proxy routeを作らない。WebUIは独立したrecordを持たず、container/unit名は`open-webui`を使う。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
 
