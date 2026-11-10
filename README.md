@@ -207,7 +207,7 @@ importをenableから組み立てず、設定を条件付きで適用する。`m
 | amazon-music | HM | —（Wine。Windows版をユーザーごとのWine prefixへ初回起動時に導入） |
 | open-deck-desktop | HM（`binfmt`時NixOS） | —（`binfmt`時のみAppImage binfmt） |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | —（pcmanfmの`inode/directory`既定はyazi無効時のみ。両方有効ならYaziが既定） |
-| pi | HM + `systemWide`時NixOS | skills |
+| pi | HM | skills |
 | claude-code | HM | skills、context-mode MCP同梱 |
 | skills | HM | —（Pi・Claude Code共通のagent skill。有効なagentへだけ導入） |
 
@@ -258,7 +258,6 @@ AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・C
 `hermes-desktop.{url,ssh}`はHermes Desktopの初期接続先で、有効時はちょうど一方を指定する。`url`はdashboard URL、`ssh`は`user@host[:port]`で、ユーザーのSSH鍵を使い接続先でapp専用dashboardを起動する。connection.jsonが無い場合だけ書き、認証・既存接続registryは管理しない。`hermes-desktop.plugins.<id>`（既定`{ }`）はDesktop plugin（未compileのESM `plugin.js`）を`~/.hermes/desktop-plugins/<id>/plugin.js`に置く。remote接続でもappはlocalのこのdirだけからpluginを読み、pluginの`plugin_api.py`は接続先のHermesに置く。
 `immich-client.watchDirectories`は起動時に再帰uploadし、以後監視するディレクトリで、既定nullは各ユーザーのXDG Pictures（`xdg.userDirs.pictures`）を使う。user serviceは`~/.config/immich/auth.yml`（`immich login <url> <api-key>`で作成）がある場合だけ起動し、認証情報は管理しない。
 `zed.installEditor`も公開入力を使う。Discord・Zed・VS Codeの設定とpackageは標準HMの`programs.discord`・`programs.zed-editor`・`programs.vscode`で上書きする。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
-`pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable`（各既定true）で同梱extensionを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterはnpm packageをversion固定（`modules/pi/resources.nix`を参照）で導入し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
 `claude-code.contextMode.enable`（既定true）でcontext-mode MCP server（`context-mode server --agent claude-code`）を選ぶ。`claude-code.lsp.{nixd,rust-analyzer,gopls}.enable`（各既定false）でホストpkgsのlanguage serverをClaude CodeのLSPへ登録する。packageは`attopkgs.claude-code`（sadjow/claude-code-nixをrevision/hash固定）。claude-code/context-modeのunfree許可は利用側、settings.json・認証・履歴は管理しない。
 `skills.<name>.enable`（各既定true）でPi・Claude Code共通のskillを個別選択する。skillごとの取得元と対応agentは`modules/skills/catalog.nix`、取得repoの固定は`modules/skills/sources.nix`に置く。pi-mermaid-studio（Pi tool依存）・find-skills（npxでNix管理外へ追加）・ctx-upgrade（Nix管理installの書換え）はPiだけへ導入する。skillの`source`はagentごとのattrsetにもでき、context-modeのskillはPiへPi tool用の写し、Claude CodeへMCP tool用の写しを入れる。
 `openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。
