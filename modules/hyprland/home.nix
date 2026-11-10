@@ -101,18 +101,15 @@ in
       configType = "lua";
 
       systemd.enable = false;
-      xwayland.enable = true;
 
       # Default individual leaves/lists, keeping Lua marker attrsets atomic.
       settings = sharedSettings {
         mod._var = mod;
 
         config = {
-          animations.enabled = true;
           binds.workspace_back_and_forth = true;
 
           cursor = {
-            enable_hyprcursor = true;
             no_hardware_cursors = true;
             hide_on_key_press = true;
             inactive_timeout = 3;
@@ -120,15 +117,9 @@ in
 
           decoration = {
             rounding = 10;
-            rounding_power = 2;
-            active_opacity = 1.0;
-            inactive_opacity = 1.0;
-            fullscreen_opacity = 1.0;
 
             shadow = {
-              enabled = true;
               range = 18;
-              render_power = 3;
               color = "rgba(0b1010aa)";
               color_inactive = "rgba(0b101066)";
               offset = [
@@ -139,16 +130,10 @@ in
             };
 
             blur = {
-              enabled = true;
-              size = 8;
               passes = 3;
-              noise = 0.0117;
               contrast = 0.95;
               brightness = 0.82;
               vibrancy = 0.16;
-              new_optimizations = true;
-              ignore_opacity = true;
-              xray = false;
             };
           };
 

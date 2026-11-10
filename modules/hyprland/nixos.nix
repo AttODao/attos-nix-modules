@@ -44,31 +44,30 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
-    programs = {
-      dconf.enable = true;
-      hyprland = {
-        enable = true;
-        withUWSM = true;
-        package = lib.mkDefault sessionPackage;
-      };
+    programs.hyprland = {
+      enable = true;
+      withUWSM = true;
+      package = lib.mkDefault sessionPackage;
     };
 
-    services.logind.settings.Login = {
-      # Incus uses an ACPI power key event for graceful VM stop/restart.
-      HandlePowerKey = if config.virtualisation.incus.agent.enable then "poweroff" else "ignore";
-      HandlePowerKeyLongPress = "ignore";
-    }
-    // lib.optionalAttrs cfg.lidSwitch.enable {
-      HandleLidSwitch = "ignore";
-      HandleLidSwitchExternalPower = "ignore";
-      HandleLidSwitchDocked = "ignore";
-    };
+    # The power key and (with lidSwitch) the lid are handled by Hyprland binds instead of logind.
+    services.logind.settings.Login = lib.mapAttrs (_: lib.mkDefault) (
+      {
+        HandlePowerKey = "ignore";
+        HandlePowerKeyLongPress = "ignore";
+      }
+      // lib.optionalAttrs cfg.lidSwitch.enable {
+        HandleLidSwitch = "ignore";
+        HandleLidSwitchExternalPower = "ignore";
+        HandleLidSwitchDocked = "ignore";
+      }
+    );
 
     services.gvfs.enable = true;
 
     systemd.services = {
       # NixOS only marks logind reloadIfChanged; nothing reloads it when logind.conf changes,
-      # so the new HandlePowerKey would stay unread until reboot. A reload trigger is enough.
+      # so new Handle* settings would stay unread until reboot. A reload trigger is enough.
       systemd-logind.reloadTriggers = [ config.environment.etc."systemd/logind.conf".source ];
     };
   };
