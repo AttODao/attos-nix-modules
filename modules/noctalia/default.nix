@@ -7,33 +7,15 @@
 {
   options.modules.noctalia = {
     enable = lib.mkEnableOption "shared Noctalia configuration";
-    package = lib.mkOption {
-      type = lib.types.nullOr lib.types.package;
-      default = null;
-      description = "Optional Noctalia package from a separately pinned input; null retains the host package.";
-    };
-    systemd = {
-      enable = lib.mkEnableOption "Noctalia user service instead of direct compositor startup";
-      requires = lib.mkOption {
-        type = lib.types.listOf lib.types.nonEmptyStr;
-        default = [ ];
-        description = "User units required by the Noctalia service; applied only with the effective HM systemd launcher.";
-      };
-      after = lib.mkOption {
-        type = lib.types.listOf lib.types.nonEmptyStr;
-        default = [ ];
-        description = "User units ordered before the Noctalia service; does not create those units.";
-      };
-    };
     dock.pinned = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
-      description = "Desktop entry IDs pinned to the dock (replaces the default list).";
+      description = "Desktop entry IDs pinned to the dock, in order (replaces the default list). The dock matches windows to entries by ID, so a pinned app's window app-id must equal its entry ID.";
     };
     location.address = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Location address for Noctalia; null leaves it unspecified.";
+      description = "Address Noctalia uses as its location (location.address), for example for weather; null leaves it unset.";
     };
     calendar.accounts = lib.mkOption {
       type = lib.types.attrsOf (
@@ -93,7 +75,7 @@
       source = lib.mkOption {
         type = lib.types.nonEmptyStr;
         default = "portal";
-        description = "Recording source understood by the Noctalia recorder plugin.";
+        description = "video_source of the Noctalia recorder plugin. Any source other than \"portal\" records through gpu-screen-recorder's KMS helper, so it also enables programs.gpu-screen-recorder.";
       };
       codec = lib.mkOption {
         # The recorder plugin's video_codec choices; Noctalia only warns on other values and records h264.

@@ -60,19 +60,8 @@ in
       "d ${builtins.toJSON recordingsDirectory} 0755 - - -"
     ];
 
-    systemd.user.services = lib.mkIf config.programs.noctalia.systemd.enable {
-      noctalia = {
-        Unit = {
-          Requires = cfg.systemd.requires;
-          After = cfg.systemd.after;
-        };
-      };
-    };
-
     programs.noctalia = {
       enable = true;
-      package = lib.mkIf (cfg.package != null) (lib.mkDefault cfg.package);
-      systemd.enable = lib.mkDefault cfg.systemd.enable;
       customPalettes.Everforest = ./Everforest.json;
 
       settings = lib.mkMerge [
@@ -146,16 +135,11 @@ in
           bar = {
             order = [ "main" ];
             main = {
-              position = "top";
-              thickness = 34;
               background_opacity = 0.92;
               radius = 10;
               margin_ends = 12;
               margin_edge = 6;
               padding = 12;
-              widget_spacing = 6;
-              shadow = true;
-              reserve_space = true;
               start = [
                 "launcher"
                 "clock"
@@ -193,44 +177,28 @@ in
 
           shell = {
             avatar_path = "${config.home.homeDirectory}/.face";
-            time_format = "{:%H:%M}";
             date_format = "%Y-%m-%d";
             launch_apps_as_systemd_services = true;
             polkit_agent = true;
             window_switcher.mru = true;
             screenshot.directory = "${config.xdg.userDirs.pictures}/Screenshots";
-            panel = {
-              transparency_mode = "glass";
-              launcher_placement = "floating";
-              control_center_placement = "attached";
-              session_placement = "attached";
-            };
+            panel.transparency_mode = "glass";
           };
 
           dock = {
             enabled = true;
-            position = "bottom";
             launcher_position = "start";
-            active_monitor_only = false;
-            show_running = true;
             show_dots = true;
             pinned = cfg.dock.pinned;
           };
 
           theme = {
-            mode = "dark";
             source = "custom";
             custom_palette = "Everforest";
           };
 
-          weather = {
-            enabled = true;
-            unit = "celsius";
-          };
-
           calendar = {
             enabled = true;
-            refresh_minutes = 15;
             account = lib.mapAttrs (
               _: account:
               {
