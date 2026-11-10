@@ -1,0 +1,4 @@
+# Repositories of the nix-setup work dir (cloned side by side by setup.sh, read by devenv.nix).
+attos-nix-modules
+server-nix
+personal-nix

@@ -9,15 +9,15 @@ on:
   workflow_dispatch:
     inputs:
       consumers:
-        description: "Consumer hosts to evaluate (owner/repo:host,host ...)"
+        description: "Consumer hosts to evaluate (owner/repo:host,host ...); empty uses .forgejo/consumers"
         type: string
         required: false
-        default: "AttODao/server-nix:attofort,attobox,hermes AttODao/personal-nix:attodesk,attolap"
+        default: ""
 
 env:
   NIX_CONFIG: "experimental-features = nix-command flakes"
-  # Consumer hosts evaluated against each update; scheduled runs use the dispatch default.
-  CONSUMERS: ${{ inputs.consumers || 'AttODao/server-nix:attofort,attobox,hermes AttODao/personal-nix:attodesk,attolap' }}
+  # Consumer hosts evaluated against each update; empty (scheduled runs) reads .forgejo/consumers.
+  CONSUMERS: ${{ inputs.consumers }}
 
 jobs:
   flake-inputs:

@@ -1,11 +1,18 @@
 # attos-ci: shared steps for the Forgejo Actions workflows of attos-nix-modules and its consumers.
-# Environment: GITHUB_SERVER_URL, GITHUB_REPOSITORY (Actions), FORGEJO_TOKEN (bot).
+# Environment: GITHUB_SERVER_URL, GITHUB_REPOSITORY (Actions), FORGEJO_TOKEN (bot; not needed by check-consumers).
 set -euo pipefail
 
 api() { curl -fsS -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/$1" "${@:2}"; }
 
-# git with the bot token in a header; the token never appears in URLs or remotes.
-auth_git() { git -c "http.extraHeader=Authorization: token $FORGEJO_TOKEN" "$@"; }
+# git with the bot token in a header; the token never appears in URLs or remotes. Without a token
+# (pull_request checks, which only read the public consumer repos) it is plain git.
+auth_git() {
+  if [ -n "${FORGEJO_TOKEN:-}" ]; then
+    git -c "http.extraHeader=Authorization: token $FORGEJO_TOKEN" "$@"
+  else
+    git "$@"
+  fi
+}
 
 # substitute FILE EXPECTED SED_SCRIPT: apply the substitution and fail unless EXPECTED (fixed string) is now in FILE.
 substitute() {
@@ -19,7 +26,7 @@ usage() {
 usage: attos-ci COMMAND [ARGS]
   update-shared            bump attos-nix-modules inputs: HM/hermes pins in flake.nix, flake.lock
   update-packages          nix-update every versioned custom package and registry-based Strata API images, update-nix-fetchgit the Pi and skill sources
-  check-consumers REPO...  evaluate consumer hosts (owner/repo:host,host) against this checkout
+  check-consumers [REPO...] evaluate consumer hosts (owner/repo:host,host; default .forgejo/consumers) against this checkout
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
 USAGE
   exit 2
@@ -175,7 +182,12 @@ update_packages() {
 }
 
 check_consumers() {
-  local spec repo hosts host tmp dir
+  local spec repo hosts host tmp dir specs
+  # Without arguments, evaluate the consumer hosts listed in .forgejo/consumers (one owner/repo:host,host per line).
+  if [ $# -eq 0 ]; then
+    mapfile -t specs < <(grep -v -e '^#' -e '^$' .forgejo/consumers)
+    set -- "${specs[@]}"
+  fi
   nix flake check --no-build "path:$PWD"
   tmp=$(mktemp -d)
   # shellcheck disable=SC2064 # expand $tmp now.

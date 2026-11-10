@@ -1,0 +1,16 @@
+# nix-setup
+
+A working directory that holds attos-nix-modules, server-nix and personal-nix side by side. Follow the shared skills `attos-nix-deploy` and `git-shared-checkouts` for procedures, and give precedence to each repository's AGENTS.md.
+
+This file and the work environment live in `attos-nix-modules/workbench/` (`devenv.nix`, `repos`, `setup.sh`). The work dir only has `devenv.yaml` (which imports `./attos-nix-modules/workbench`), an empty root `devenv.nix` for machine-local additions, `devenv.lock`, `.worktrees/` and an `AGENTS.md` symlink to this file. Create or repair a work dir with `bash attos-nix-modules/workbench/setup.sh <dir>`. Change the environment through a PR to attos-nix-modules; the original checkout follows `main` through `sync-repos`. To add a repository to the work dir, add a line to `workbench/repos`.
+
+Other sessions and agents use the same checkouts, so do your work in worktrees.
+
+- First, run `devenv shell -- repos-status` to check the branch and uncommitted changes of the original checkouts and the state of every worktree (`dirty:N`, `ahead:N` = commits not in `origin/main`, `new` = no commit yet, `merged`; as of the last fetch). In the original checkouts, do not `git switch`, `reset` or commit (do not move branches or changes you did not create).
+- `devenv shell -- sync-repos` fetches the repositories and fast-forwards to `origin/main` only those original checkouts that are on `main` and have no changes. It does not switch branches. Use the original checkouts as a reference for reading the latest `main`.
+- When starting work, create `.worktrees/<repo>-<topic>` from the latest `origin/main` with `devenv shell -- wt-add <branch> [repo...]` (`<topic>` is the part of `<branch>` after the last `/`. Example: `erumaru/yazi` → `.worktrees/attos-nix-modules-yazi`). For changes spanning multiple repositories, line them up under the same `<branch>`.
+- Edit, commit and push in the worktree. Evaluate with e.g. `TOPIC=<topic> devenv shell -- check-all`. Repositories with a worktree use the worktree and those without use the original checkout; the consuming side is evaluated with the in-progress attos-nix-modules overridden.
+- Remove your own worktrees that are no longer needed after their PR is merged with `devenv shell -- wt-remove <topic> [repo...]`. `devenv shell -- wt-prune` fetches and then removes every worktree in the `merged` state, including ones left by other sessions: they have no changes and every commit is in `origin/main`, so nothing is lost (branches are kept). It keeps `dirty`, `ahead` and `new` worktrees; `wt-prune -n` only lists. Do not remove worktrees in other states that belong to other work.
+- Proceed with changes spanning multiple repositories in this order: PR for the shared module (attos-nix-modules) → merge → `nix flake update attos-nix-modules` on the consuming side. If a consuming-side PR is waiting for the shared-side merge, state that dependency in the PR body.
+- PRs that change configuration include updates to the relevant parts of the same repository's README, docs and (for the shared side) wiki.
+- Forgejo Actions evaluates every PR to the three repositories (`pr-check.yml`, nothing is built). Read its result before asking for a merge; it does not replace `check-all` for unpushed work.

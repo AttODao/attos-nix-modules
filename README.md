@@ -103,6 +103,10 @@ modules/
 packages/
   default.nix               by-nameの自動登録と外部source input
   by-name/<2文字>/<name>/package.nix  nixpkgsと同じshard構成
+workbench/                  作業dir（nix-setup）のdevenv・AGENTS.md・setup.sh
+.forgejo/
+  consumers                 CIで評価する利用側ホストの一覧
+  workflows/                pr-check（PRの評価）、update（週次の更新PR）
 ```
 
 公開option・module間の依存は各機能の `default.nix` に置く。
@@ -375,7 +379,7 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 自動更新
 
-Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側ホストの一覧は手動実行時のinput `consumers` で上書きできる。PRのタイトル・本文は日本語。
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側ホストの一覧は `.forgejo/consumers`（1行に `owner/repo:host,host`）で、手動実行時のinput `consumers` で上書きできる。利用側にホストを足したらこのファイルに足す。PRのタイトル・本文は日本語。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
 - `update/packages`: version固定のcustom package（Open-DeckのAppImage、CC Pocket Bridgeを含む）、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。StrataのAPI専用image（`modules/strata/nixos.nix`）はRenovateの対象外で、registryのtag一覧から全flavorの`<version>-<flavor>`が揃う最新の数値版を選び、tag・digestをまとめて更新する。取得失敗や揃う版がない場合はimageの固定を変更しない。
@@ -385,9 +389,17 @@ flake input・packageのPRは、`nix flake check --no-build` と利用側全ホ�
 mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` する。利用側は各repoの週次更新PR（土曜05:00 JST）でpinを上げて採用し、各ホストが自身でbuild・適用する。
 共有runnerは外部のjobも実行するため、このrepoと利用側repoのmainはbranch protectionでbotにPR作成だけを許す運用を推奨する。
 
+## PRの評価
+
+`.forgejo/workflows/pr-check.yml` はPR（AGitを含む）と手動実行で、PRのcommitに対して `attos-ci check-consumers` を流す（`nix flake check --no-build` と `.forgejo/consumers` の全ホストの `toplevel.drvPath` 評価。buildもsecretも使わない）。server-nix・personal-nixにも同名のworkflowがあり、各repoの全ホストを評価してから `nix flake check --no-build` を流す。
+
+## 作業環境（nix-setup）
+
+`workbench/` は、このrepo・server-nix・personal-nixを並べて扱う作業dir（nix-setup）のdevenvを持つ。`bash workbench/setup.sh <dir>` が `workbench/repos` のrepoをcloneし、`workbench` をimportする `devenv.yaml`・空の `devenv.nix`・`AGENTS.md`（`workbench/AGENTS.md` へのsymlink）を作る。worktree（`wt-add` / `wt-remove` / `wt-prune`）・状態表示（`repos-status`）・同期（`sync-repos`）・評価（`check-*` / `on-eval-host`、attodeskが届けばそこで評価）のscriptを持つ。使い方は `workbench/AGENTS.md`。
+
 ## 検証
 
-このrepoはテストを持たない。変更時は次の評価で確認する。
+module単体のテストは持たない。`checks.x86_64-linux.module-imports` だけが、`modules/` 直下のdirがすべて `modules/default.nix` のimportsに載っていることを確かめる。変更時は次の評価で確認する。
 
 ```sh
 nix flake check --no-build 'path:.'

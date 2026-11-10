@@ -1,0 +1,26 @@
+# Evaluates a pull request (and main on demand): `nix flake check --no-build` of this flake,
+# then every consumer host in .forgejo/consumers with this checkout as attos-nix-modules.
+# Nothing is built and no secret is used (the consumer repos are public). One job, so the
+# host evaluations run one at a time on the shared runner.
+name: pr-check
+on:
+  pull_request:
+  workflow_dispatch: {}
+
+env:
+  NIX_CONFIG: "experimental-features = nix-command flakes"
+
+jobs:
+  eval:
+    runs-on: docker
+    timeout-minutes: 60
+    container:
+      image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
+    steps:
+      # GITHUB_REF is refs/pull/<n>/head for pull requests (AGit included) and the branch otherwise.
+      - run: |
+          git init -q .
+          git fetch -q --depth 1 "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_REF"
+          git checkout -q FETCH_HEAD
+          git log -1 --format='%H %s'
+      - run: nix run .#attos-ci -- check-consumers

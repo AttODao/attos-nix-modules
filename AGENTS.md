@@ -87,7 +87,7 @@ Do not mix updates of the Home Manager revision, the shared nixpkgs or the consu
 
 ## 5. Evaluate
 
-There are no Nix module tests. Go custom packages run each package's tests and `go vet` inside the build. Run the following from the repository root.
+There are no Nix module tests; the only flake check, `checks.x86_64-linux.module-imports`, fails when a directory under `modules/` is missing from `modules/default.nix`. Go custom packages run each package's tests and `go vet` inside the build. Run the following from the repository root.
 
 ```sh
 nix flake check --no-build 'path:.'
@@ -114,7 +114,7 @@ Successful evaluation does not guarantee a successful build or working behavior 
 
 Follow these rules when changing `.forgejo/workflows/` and `packages/by-name/at/attos-ci/`.
 
-- Pin every `nix run` and `nix shell` to the nixpkgs in `flake.lock` with `--inputs-from .`; do not use unpinned inputs via the registry. Pin tools from other repos that CI runs with `nix run` (`CI_TOOL`, etc.) by rev, and bump them in the weekly update PR.
+- Pin every `nix run` and `nix shell` to the nixpkgs in `flake.lock` with `--inputs-from .`; do not use unpinned inputs via the registry. Consumers run `attos-ci` through their lock (`nix run --inputs-from . attos-nix-modules#attos-ci`), so it follows the revision they adopted; do not add a second rev pin for it. Pin tools from other repos by rev and bump them in the weekly update PR.
 - Pass tokens only in the `env:` of the step that uses them; do not put them in workflow-wide or job-wide env. Do not embed them in URLs (`https://bot:$TOKEN@...`); pass them via `git -c http.extraHeader=...` or `GIT_ASKPASS`. Do not copy masked log output (`***`) into code.
 - Add `timeout-minutes` to every job. Serialize jobs that evaluate multiple hosts with `needs:` or `concurrency`, and do not run them at the same time on the shared runner.
 - When CI holds a fixed list of consumer hosts, make it overridable through `workflow_dispatch` inputs.
