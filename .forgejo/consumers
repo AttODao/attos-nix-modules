@@ -1,4 +1,5 @@
-# Consumer hosts that attos-ci check-consumers evaluates against this checkout (update.yml, pr-check.yml).
-# One owner/repo:host,host per line. Add a host here when a consumer adds a nixosConfiguration.
-AttODao/server-nix:attofort,attobox,hermes
-AttODao/personal-nix:attodesk,attolap
+# Consumer repos that attos-ci check-consumers evaluates against this checkout (update.yml, pr-check.yml).
+# One owner/repo per line; every host in the repo's nixosConfigurations is evaluated, so adding or
+# retiring a host needs no edit here. owner/repo:host,host limits a line to those hosts.
+AttODao/server-nix
+AttODao/personal-nix

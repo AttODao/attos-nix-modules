@@ -26,7 +26,11 @@ usage() {
 usage: attos-ci COMMAND [ARGS]
   update-shared            bump attos-nix-modules inputs: HM/hermes pins in flake.nix, flake.lock
   update-packages          nix-update every versioned custom package and registry-based Strata API images, update-nix-fetchgit the Pi and skill sources
-  check-consumers [REPO...] evaluate consumer hosts (owner/repo:host,host; default .forgejo/consumers) against this checkout
+  check-flake              evaluate every checks.x86_64-linux drvPath (one nix process each) and the packages output
+  check-consumers [--report-warnings] [owner/repo[:host,host]...]
+                           check-flake, then evaluate every nixosConfiguration of each consumer (default .forgejo/consumers)
+                           against this checkout; fails on evaluation warnings missing from .forgejo/known-warnings
+                           (--report-warnings writes them to the PR body instead)
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
 USAGE
   exit 2
@@ -182,25 +186,149 @@ update_packages() {
 }
 
 check_consumers() {
-  local spec repo hosts host tmp dir specs
-  # Without arguments, evaluate the consumer hosts listed in .forgejo/consumers (one owner/repo:host,host per line).
+  local report=false all=false spec repo hosts host dir specs
+  if [ "${1:-}" = --report-warnings ]; then
+    report=true
+    shift
+  fi
+  [ $# -gt 0 ] || all=true
+  # Without arguments, evaluate the consumers listed in .forgejo/consumers (owner/repo per line;
+  # owner/repo:host,host limits the evaluation to those hosts).
   if [ $# -eq 0 ]; then
-    mapfile -t specs < <(grep -v -e '^#' -e '^$' .forgejo/consumers)
+    mapfile -t specs < <(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' .forgejo/consumers)
     set -- "${specs[@]}"
   fi
-  nix flake check --no-build "path:$PWD"
-  tmp=$(mktemp -d)
-  # shellcheck disable=SC2064 # expand $tmp now.
-  trap "rm -rf -- '$tmp'" EXIT
+  rm -f "$warnings_report"
+  check_flake
+  local o=(--no-write-lock-file --override-input attos-nix-modules "path:$PWD")
   for spec in "$@"; do
-    repo=${spec%%:*}; hosts=${spec#*:}
-    dir=$tmp/${repo//\//--}
+    repo=${spec%%:*}
+    hosts=''
+    [ "$spec" = "$repo" ] || hosts=${spec#*:}
+    dir=$eval_tmp/${repo//\//--}
     auth_git clone -q --depth 1 "$GITHUB_SERVER_URL/$repo.git" "$dir"
+    if [ -z "$hosts" ]; then
+      # The host list is the consumer's own nixosConfigurations, so new or retired hosts need no edit here.
+      if ! hosts=$(nix eval "${o[@]}" --raw "path:$dir#nixosConfigurations" --apply 'c: builtins.concatStringsSep "," (builtins.attrNames c)'); then
+        eval_failed+=("$repo")
+        continue
+      fi
+      echo "== $repo: nixosConfigurations $hosts"
+    fi
     for host in ${hosts//,/ }; do
       echo "== $repo#$host"
-      nix eval --no-write-lock-file --override-input attos-nix-modules "path:$PWD" --raw "path:$dir#nixosConfigurations.$host.config.system.build.toplevel.drvPath" >/dev/null
+      evaluate "$repo#$host" nix eval "${o[@]}" --raw "path:$dir#nixosConfigurations.$host.config.system.build.toplevel.drvPath" >/dev/null
     done
   done
+  finish_eval "$report" "$all"
+}
+
+# --- Evaluation with warning capture ---------------------------------------------------------
+# Every evaluation of check-flake / check-consumers goes through evaluate(), which keeps the first
+# line of each `evaluation warning:` / `trace: warning:` it prints. finish_eval() compares them with
+# $known_warnings (one fixed substring per line, # comments) after everything was evaluated.
+known_warnings=.forgejo/known-warnings
+warnings_report=.attos-ci-warnings.md
+eval_tmp=''
+eval_failed=()
+
+eval_setup() {
+  [ -z "$eval_tmp" ] || return 0
+  eval_tmp=$(mktemp -d)
+  # shellcheck disable=SC2064 # expand $eval_tmp now.
+  trap "rm -rf -- '$eval_tmp'" EXIT
+  : >"$eval_tmp/warnings"
+}
+
+# Warning messages on stdin → one normalised message per line (no colours, store hashes or temp dirs).
+normalize_warnings() {
+  sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' | { grep -E '(evaluation warning|trace: warning):' || true; } |
+    sed -E -e 's/^.*(evaluation warning|trace: warning): *//' \
+      -e 's|/nix/store/[0-9a-z]{32}-|/nix/store/<hash>-|g' \
+      -e "s|$eval_tmp/[^/ ]*|<consumer>|g" \
+      -e 's/[[:space:]]+$//'
+}
+
+# evaluate CONTEXT CMD...: run CMD with its stderr passed through, and record its warnings as
+# "CONTEXT<TAB>message". A failure is recorded and reported by finish_eval, so one run covers every host.
+evaluate() {
+  local ctx=$1 status=0
+  shift
+  { "$@" 2>&1 1>&3 | tee "$eval_tmp/stderr" >&2; } 3>&1 || status=$?
+  normalize_warnings <"$eval_tmp/stderr" | sort -u | sed "s|^|$ctx\t|" >>"$eval_tmp/warnings"
+  if [ "$status" -ne 0 ]; then
+    eval_failed+=("$ctx")
+    echo "::error::$ctx: evaluation failed" >&2
+  fi
+}
+
+# Recorded warnings not covered by $known_warnings, as markdown list items with where they appeared.
+# With stale=true (every consumer was evaluated), patterns that matched nothing are printed as a
+# notice (entries to remove).
+unknown_warnings() {
+  awk -F'\t' -v known="$known_warnings" -v stale="${1:-false}" '
+    BEGIN {
+      while ((getline line < known) > 0) {
+        sub(/[[:space:]]+$/, "", line)
+        if (line !~ /^[[:space:]]*(#|$)/) pat[++n] = line
+      }
+    }
+    {
+      hit = 0
+      for (i = 1; i <= n; i++) if (index($2, pat[i])) { used[i] = 1; hit = 1; break }
+      if (!hit) {
+        if (!($2 in where)) { order[++m] = $2; where[$2] = $1 }
+        else if (index(", " where[$2] ", ", ", " $1 ", ") == 0) where[$2] = where[$2] ", " $1
+      }
+    }
+    END {
+      for (i = 1; i <= m; i++) printf "- `%s`（%s）\n", order[i], where[order[i]]
+      if (stale == "true") for (i = 1; i <= n; i++) if (!used[i]) printf "::notice::%s: no evaluation printed \"%s\"\n", known, pat[i] > "/dev/stderr"
+    }
+  ' "$eval_tmp/warnings"
+}
+
+# finish_eval [REPORT [STALE]]: fail on evaluation failures and unknown warnings (REPORT=true writes
+# the warnings to $warnings_report for the PR body and does not fail on them).
+finish_eval() {
+  local report=${1:-false} unknown
+  unknown=$(unknown_warnings "${2:-false}")
+  if [ -n "$unknown" ]; then
+    echo "::error::evaluation warnings not listed in $known_warnings:" >&2
+    printf '%s\n' "$unknown" >&2
+    if "$report"; then
+      {
+        echo "### 新しい評価warning"
+        echo
+        echo "\`$known_warnings\` に無いwarningです。PRのpr-checkはこのままでは失敗します。原因を直すか、出どころをcommentに書いて登録してください。"
+        echo
+        printf '%s\n' "$unknown"
+        echo
+      } >"$warnings_report"
+    fi
+  fi
+  if [ ${#eval_failed[@]} -gt 0 ]; then
+    echo "::error::evaluation failed: ${eval_failed[*]}" >&2
+    return 1
+  fi
+  [ -z "$unknown" ] || "$report"
+}
+
+# Every flake check in its own nix process (many evaluation-only module checks do not fit in the
+# runner's memory as one `nix flake check`), then every package drvPath in one process. This covers
+# what `nix flake check --no-build` evaluated, so that is not run any more.
+check_flake() {
+  eval_setup
+  local flake="path:$PWD" name names
+  # A leading "." makes the attribute path absolute: without it, nix also tries
+  # legacyPackages.x86_64-linux.packages..., which is the scope's packages function and fails.
+  names=$(nix eval --raw "$flake#.checks.x86_64-linux" --apply 'c: builtins.concatStringsSep " " (builtins.attrNames c)')
+  for name in $names; do
+    echo "== checks.$name"
+    evaluate "checks.$name" nix eval --raw "$flake#.checks.x86_64-linux.\"$name\".drvPath" >/dev/null
+  done
+  echo "== packages"
+  evaluate packages nix eval --json "$flake#.packages.x86_64-linux" --apply 'builtins.mapAttrs (_: p: p.drvPath)' >/dev/null
 }
 
 
@@ -212,6 +340,7 @@ pr() {
   body=$(
     echo "自動更新のPRです。ビルドはしていません。mergeの前に、必要ならホストで \`nixos-rebuild build\` を実行して確認してください。"
     echo
+    if [ -s "$warnings_report" ]; then cat "$warnings_report"; fi
     lock_summary
     if [ -s "$summary_file" ]; then cat "$summary_file"; fi
   )
@@ -234,6 +363,7 @@ case "$command" in
   update-shared) update_shared ;;
   update-packages) update_packages ;;
   check-consumers) check_consumers "$@" ;;
+  check-flake) check_flake && finish_eval ;;
   pr) pr "$@" ;;
   *) usage ;;
 esac
