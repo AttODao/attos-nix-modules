@@ -15,8 +15,8 @@ in
   options.modules = ps.moduleOptions "jellyfin" (
     ps.common "Jellyfin media server"
     // {
-      dataDir = ps.pathOption "Service root containing the existing cache, config, fonts, music and video directories.";
-      mediaDir = ps.pathOption "Consumer-selected ytdl-sub media root containing YouTube and Twitch; visible read-only at /ytdl-sub.";
+      dataDir = ps.pathOption "Service root in the official image layout: cache, config, fonts, music and video directories (created when missing); required when deployed locally.";
+      mediaDir = ps.pathOption "ytdl-sub media root (normally modules.ytdl-sub.dataDir), visible read-only at /ytdl-sub; required for a public deployment, optional standalone.";
     }
   );
 
@@ -43,11 +43,10 @@ in
       ];
 
       # Keep the official image layout so existing library and metadata paths stay valid.
+      # configDir and logDir follow dataDir upstream (config/config and config/log).
       services.jellyfin = {
         enable = true;
         dataDir = "${root}/config";
-        configDir = "${root}/config/config";
-        logDir = "${root}/config/log";
         cacheDir = "${root}/cache";
       };
       systemd.services.jellyfin = {
