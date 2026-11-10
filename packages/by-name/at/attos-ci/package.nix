@@ -1,5 +1,6 @@
 {
   writeShellApplication,
+  attic-client,
   coreutils,
   findutils,
   gawk,
@@ -15,6 +16,7 @@ writeShellApplication {
   name = "attos-ci";
   # nix comes from the job environment (the nixos/nix container).
   runtimeInputs = [
+    attic-client
     coreutils
     findutils
     gawk

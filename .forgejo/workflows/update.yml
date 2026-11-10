@@ -3,8 +3,8 @@
 # body and fails the job). New evaluation warnings are listed in the PR body (its pr-check then
 # fails until they are fixed or added to .forgejo/known-warnings). Jobs run in a pinned Nix
 # container on the shared Docker runner, one at a time (consumer evaluation of every host would
-# OOM the runner if run in parallel). Secret: BOT_TOKEN (bot account that can open PRs, not push
-# main); it is passed only to the steps that need it.
+# OOM the runner if run in parallel). Secrets: BOT_TOKEN (bot account that can open PRs, not push
+# main) and ATTIC_TOKEN (push to the binary cache); each is passed only to the steps that need it.
 name: update
 on:
   schedule:
@@ -18,7 +18,16 @@ on:
         default: ""
 
 env:
-  NIX_CONFIG: "experimental-features = nix-command flakes"
+  # Flake inputs and outputs are also substituted from the private binary cache on attobox
+  # (Attic, server-nix); an unreachable cache only costs the timeout, then Nix fetches as before.
+  NIX_CONFIG: |
+    experimental-features = nix-command flakes
+    extra-substituters = https://cache.attodao.cc/ci
+    extra-trusted-public-keys = ci:srH2BUGXoEpH8toJDNpuJtyGSKfCpysKlKXydEZO9Z8=
+    connect-timeout = 5
+  # Where `attos-ci cache-push` pushes the fetched input sources (secret ATTIC_TOKEN).
+  ATTIC_ENDPOINT: https://cache.attodao.cc/
+  ATTIC_CACHE: ci
   # Consumers evaluated against each update; empty (scheduled runs) reads .forgejo/consumers.
   CONSUMERS: ${{ inputs.consumers }}
 
@@ -34,6 +43,9 @@ jobs:
       - run: nix run .#attos-ci -- check-consumers --report-warnings $CONSUMERS
         env:
           FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
+      - run: nix run .#attos-ci -- cache-push
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       - run: |
           nix run .#attos-ci -- pr update/flake-inputs "chore(flake): Home Manager・nixpkgs・固定inputを更新"
         env:
@@ -54,6 +66,9 @@ jobs:
       - run: nix run .#attos-ci -- check-consumers --report-warnings $CONSUMERS
         env:
           FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
+      - run: nix run .#attos-ci -- cache-push
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       - run: |
           nix run .#attos-ci -- pr update/packages "chore(packages): 自前パッケージとPiリソースを更新"
         env:

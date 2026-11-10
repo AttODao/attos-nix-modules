@@ -14,7 +14,16 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NIX_CONFIG: "experimental-features = nix-command flakes"
+  # Flake inputs and outputs are also substituted from the private binary cache on attobox
+  # (Attic, server-nix); an unreachable cache only costs the timeout, then Nix fetches as before.
+  NIX_CONFIG: |
+    experimental-features = nix-command flakes
+    extra-substituters = https://cache.attodao.cc/ci
+    extra-trusted-public-keys = ci:srH2BUGXoEpH8toJDNpuJtyGSKfCpysKlKXydEZO9Z8=
+    connect-timeout = 5
+  # Where `attos-ci cache-push` pushes the fetched input sources (secret ATTIC_TOKEN).
+  ATTIC_ENDPOINT: https://cache.attodao.cc/
+  ATTIC_CACHE: ci
   # Outside the checkout, so that the path: flake attos-ci evaluates does not copy the wiki.
   WIKI_DIR: /tmp/attos-nix-modules.wiki
 
