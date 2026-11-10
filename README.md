@@ -191,6 +191,7 @@ importをenableから組み立てず、設定を条件付きで適用する。`m
 | attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
+| attic | NixOS | —（native `services.atticd`のNix binary cache。静的account `atticd`、`dataDir`にSQLiteとNAR chunk。公開registryでは既定`private = true`） |
 | strata | NixOS | Docker（digest固定のAMD image、greeter sessionまたはデスクトップの`strata-headless start`でon-demand起動するAPI・モデル別unit・polkit）。`wake.enable`でgateway（Traefik host）に`strata-wake-gate`、ownerに`strata-wake-control`を置き、POSTで起動（WoL）・自動起動分のidle停止。`POST /_strata-wake/wake` でStrataを起動せずownerだけを起こし、最後の呼び出しから`idleMinutes`の間は電源を切らない（他のclient、Hermes Bot Screen用）。 |
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
@@ -330,13 +331,13 @@ modules.public-services."vault.example.org".vaultwarden = {
 };
 ```
 
-対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
+対応サービス: `attic`, `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `headscale`,
 `paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG・Karakeep）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
-通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
+HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG・Karakeep・Attic）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
+通常は `private = false`（SSH endpoint、Attic、MCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
 
 `public-services.<FQDN>.<service>.privateExtraNetworks`（非空文字列のlist、既定`[]`）は、そのprivate HTTP routeだけに`modules.traefik.privateNetworks`からの追加許可を与える。非空なら`private = true`必須。TCP/UDPやstandaloneには適用せず、firewall・routing・認証も変更しない。
 
@@ -347,6 +348,7 @@ Traefikの`accessLog.enable`（既定false）は`/var/log/traefik/access.log`へ
 Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（dummy interface等）で、Traefikのwants/afterへ追加する。
 
 SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`trustedProxies`（文字列list、既定[]）はclient addressを判別するために `X-Forwarded-For` / `X-Real-IP` を信頼するreverse proxyのaddress/CIDRで、loopbackは引き続き信頼する。`passNetworks`（文字列list、既定[]）はlimiter・bot対策を除外して無制限のAPI利用を許すclient address/CIDRで、信頼する自動化hostなど最小範囲に絞る。どちらも `limiter = true` が必要。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
+Atticの公開入力は `attic.{dataDir,environmentFile,retentionPeriod}`。`dataDir`（local配置時必須）に `server.db`（SQLite）と `storage/`（NARのchunk）を置き、upstreamのDynamicUserではなく静的account `atticd` で書く。`environmentFile`（local配置時必須）はJWT署名鍵 `ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64` を持つdotenvのruntime path。`retentionPeriod`（既定 `"30 days"`）は作成・最後のアクセスがともにそれより古いobjectをGC（12時間ごと）で消す既定の保持期間で、cacheごとに `attic cache configure` で変えられる。chunkingはupstreamの既定値（64KiB以上のNARを平均64KiBに分割）、圧縮はzstd。`api-endpoint` は `https://<FQDN>/`、`allowed-hosts` はそのhostnameだけ。cacheの作成・tokenの発行は適用後に `atticd-atticadm make-token` と `attic`（attic-clientを同梱）で行う。
 OpenCloudの公開共有linkは既定でpasswordを必須にする（`OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD=true`）。Jellyfinの保存先は`jellyfin:jellyfin` 0750で作る。
 attos-hoyo-dashboardの `timezoneOffset`（`+09:00`形式、local配置時必須）はdailyリセット時刻の固定UTC offsetで、`time.timeZone`から導出しない。DBはimageが作る`POSTGRES_USER`（superuser）で接続する。任意の `metricsEnvironmentFile` は `METRICS_TOKEN=…` を含むdotenvのruntime pathで、app containerだけに渡す。設定したときだけ `/metrics` がBearer token付きで公開される。
 

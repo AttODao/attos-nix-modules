@@ -3,6 +3,7 @@ let
   inherit (lib) mkOption types;
   # Services whose HTTP upstream the consumer supplies as backendUrl; the owner publishes it there.
   httpServices = [
+    "attic"
     "forgejo"
     "headscale"
     "immich"
