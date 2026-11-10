@@ -15,12 +15,12 @@ in
   options.modules = ps.moduleOptions "vaultwarden" (
     ps.common "Vaultwarden password manager"
     // {
-      dataDir = ps.pathOption "Service root containing the existing vw-data directory.";
-      environmentFile = ps.pathOption "Runtime environment file containing Vaultwarden credentials and mail configuration.";
+      dataDir = ps.pathOption "Service root whose vw-data/ directory is DATA_FOLDER (created when missing); required when deployed locally.";
+      environmentFile = ps.pathOption "Runtime environment file with Vaultwarden credentials (for example ADMIN_TOKEN) and SMTP settings; required when deployed locally. It is read after the generated settings, so its values win.";
       signupsAllowed = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Allow password-based self-registration. False also clears the signup-domain whitelist because it overrides the flag; true preserves any whitelist from the environment file.";
+        description = "SIGNUPS_ALLOWED: allow self-registration. False also sets an empty SIGNUPS_DOMAINS_WHITELIST, since a whitelist admits its domains even with signups off; true leaves the whitelist unset. The environment file is read last and can still set either.";
       };
       extraHosts = lib.mkOption {
         type = lib.types.attrsOf lib.types.nonEmptyStr;
