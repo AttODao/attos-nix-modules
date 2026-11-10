@@ -27,6 +27,13 @@ let
     standalone = s.standalone;
     service = "open-terminal";
   };
+  webuiDependencies =
+    lib.optionals (!s.standalone) (map ps.networkUnit transports)
+    ++ [
+      "ollama.service"
+      "ollama-model-loader.service"
+    ]
+    ++ lib.optional localSearch.enabled "searx.service";
   searxngUrl =
     if s.standalone then
       "http://127.0.0.1:8081/search"
@@ -49,9 +56,12 @@ in
       lib.mapAttrs
         (
           _: option:
-          lib.mkOption {
-            inherit (option) type default description;
-          }
+          lib.mkOption (
+            {
+              inherit (option) type default description;
+            }
+            // lib.optionalAttrs (option ? defaultText) { inherit (option) defaultText; }
+          )
         )
         (
           lib.getAttrs [
@@ -65,18 +75,19 @@ in
         )
     // {
       listenAddress = lib.mkOption {
-        inherit (options.services.ollama.host) type default description;
+        inherit (options.services.ollama.host) type default;
+        description = "Address the native Ollama API listens on (services.ollama.host). The module never opens the firewall for it; admit clients with the consumer's source/interface rules.";
       };
       webui = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Enable the optional Open WebUI frontend with Docker; public deployment also requires Swarm/Terminal. False runs only Ollama and creates no HTTP proxy route.";
+        description = "Also run the Open WebUI frontend in Docker. A public deployment then enables Open Terminal on the same host and needs an enabled SearXNG registry entry. False runs only Ollama and creates no HTTP proxy route.";
       };
-      dataDir = ps.pathOption "Service root containing the existing data directory and persistent authentication state.";
+      dataDir = ps.pathOption "Open WebUI root whose data/ directory holds its database and secret key; required when webui is enabled.";
       ollamaUrl = lib.mkOption {
         type = lib.types.nullOr lib.types.nonEmptyStr;
         default = null;
-        description = "Consumer-selected Ollama HTTP endpoint reachable from the container; standalone defaults to http://127.0.0.1 at the native services.ollama.port, while public WebUI requires an explicit endpoint. Listener routing/firewall remain consumer-owned.";
+        description = "Ollama URL that Open WebUI calls. Standalone defaults to http://127.0.0.1:<services.ollama.port> (the container uses host networking); a public WebUI requires an address reachable from the container's Docker bridge. Routing and firewall stay with the consumer.";
       };
     }
   );
@@ -97,20 +108,8 @@ in
       ];
       systemd.services.docker-open-webui = {
         unitConfig.RequiresMountsFor = [ root ] ++ lib.optional terminalEnabled environmentFile;
-        wants =
-          lib.optionals (!s.standalone) (map ps.networkUnit transports)
-          ++ [
-            "ollama.service"
-            "ollama-model-loader.service"
-          ]
-          ++ lib.optional localSearch.enabled "searx.service";
-        after =
-          lib.optionals (!s.standalone) (map ps.networkUnit transports)
-          ++ [
-            "ollama.service"
-            "ollama-model-loader.service"
-          ]
-          ++ lib.optional localSearch.enabled "searx.service";
+        wants = webuiDependencies;
+        after = webuiDependencies;
       };
       virtualisation.oci-containers.containers.open-webui = {
         image = lib.mkDefault "ghcr.io/open-webui/open-webui:v0.12.3@sha256:a537bbe1e6b428820f52ed4a029d7fff97062e24d5cf32c365fba36fd0542def";
@@ -166,14 +165,12 @@ in
           }
         );
         autoRemoveOnStop = lib.mkDefault false;
-        # v0.11.4 backend/start.sh passes HOST/PORT to uvicorn; host networking
+        # Standalone: backend/start.sh passes HOST/PORT to uvicorn, and host networking
         # reaches loopback Ollama without widening either service's listener.
-        extraOptions = lib.mkDefault (
-          [ "--restart=unless-stopped" ]
-          ++ [
-            (if s.standalone then "--network=host" else "--network-alias=open-webui")
-          ]
-        );
+        extraOptions = lib.mkDefault [
+          "--restart=unless-stopped"
+          (if s.standalone then "--network=host" else "--network-alias=open-webui")
+        ];
         volumes = lib.mkDefault [
           "${root}/data:/app/backend/data"
           "/etc/localtime:/etc/localtime:ro"
