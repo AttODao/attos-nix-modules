@@ -13,7 +13,7 @@ in
   options.modules = ps.moduleOptions "immich" (
     ps.common "shared Immich photo service"
     // {
-      dataDir = ps.pathOption "Persistent Immich root whose library directory holds the media (visible to Immich at /data).";
+      dataDir = ps.pathOption "Persistent Immich root whose library/ directory holds the media, bound to /data for immich-server only (the database stores /data paths from the official image); required when deployed locally.";
     }
   );
 
