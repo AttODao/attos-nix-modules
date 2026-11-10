@@ -20,6 +20,12 @@ in
     };
     fail2ban.enable = lib.mkEnableOption "host-wide bans for verified Web login failure signatures (requires accessLog.enable)";
     environmentFile = ps.pathOption "Runtime environment file containing CLOUDFLARE_API_TOKEN for the DNS-01 wildcard certificates; required when enabled. ACME state stays in services.traefik.dataDir.";
+    readTimeout = mkOption {
+      type = types.nullOr types.nonEmptyStr;
+      default = null;
+      example = "15m";
+      description = "Maximum time the HTTPS entrypoint (websecure) spends reading a whole request, including its body (Traefik `respondingTimeouts.readTimeout`, e.g. `\"15m\"`). Null keeps Traefik's default of 60 seconds, which aborts slower uploads (large binary cache pushes, media uploads) with 499/504. A longer value also gives slow clients more time, so raise it only as far as the uploads need.";
+    };
     privateNetworks = mkOption {
       type = types.listOf types.nonEmptyStr;
       default = [ ];

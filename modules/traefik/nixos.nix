@@ -112,7 +112,12 @@ let
           scheme = "https";
         };
       };
-      websecure.address = ":443/tcp";
+      websecure = {
+        address = ":443/tcp";
+      }
+      // lib.optionalAttrs (cfg.readTimeout != null) {
+        transport.respondingTimeouts.readTimeout = cfg.readTimeout;
+      };
     }
     // byName tcp (entry: {
       address = "${if entry.listen or null == null then "" else entry.listen}:${toString entry.port}/tcp";
