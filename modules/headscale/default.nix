@@ -89,7 +89,6 @@ in
           # Upstream defaults to 127.0.0.1:9090, which Prometheus also uses by default.
           metrics_listen_addr = lib.mkDefault "127.0.0.1:9098";
           dns = {
-            magic_dns = true;
             base_domain = baseDomain;
             override_local_dns = false;
             nameservers.split = lib.mkIf (s.cfg.nameservers != [ ]) (
