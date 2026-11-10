@@ -33,15 +33,11 @@ let
 in
 {
   config = lib.mkIf osConfig.modules.atcoder-go.enable {
-    programs.go = {
-      enable = lib.mkDefault true;
-      package = lib.mkDefault cfg.goPackage;
-    };
+    programs.go.enable = lib.mkDefault true;
 
     programs.direnv = {
       enable = lib.mkDefault true;
-      enableZshIntegration = lib.mkDefault true;
-      nix-direnv.enable = lib.mkDefault cfg.nixDirenv.enable;
+      nix-direnv.enable = lib.mkDefault true;
     };
 
     home.sessionVariables.GOTOOLCHAIN = lib.mkDefault "local";
