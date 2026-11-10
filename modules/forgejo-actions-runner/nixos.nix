@@ -10,8 +10,9 @@ let
   forgejo = ps.entries config "forgejo";
   localForgejo = ps.select config "forgejo";
   local = localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo;
-  # Guests pinned to an older nixpkgs import this module too; define the runner only where it exists.
-  supported = options.services ? forgejo-runner;
+  # Guests pinned to an older nixpkgs import this module too; define the runner only where it exists
+  # (hasAttrByPath also keeps the standalone Home Manager evaluation, which has no NixOS options, working).
+  supported = lib.hasAttrByPath [ "services" "forgejo-runner" ] options;
 in
 {
   # jobはこのhostで動く。このhostを信頼して任せられるworkflowのownerだけにForgejoでrunnerを登録する。

@@ -52,9 +52,15 @@
           ];
           _module.args.attopkgs = attopkgsFor pkgs;
         };
+      # standalone Home Manager用の入口。NixOSと同じmodules.<name>.*をHM側で書く。
+      homeManagerDefault = import ./modules/home-manager/standalone.nix { inherit attopkgsFor; };
+      # home.nixを持つfeature（home-managerはenableを持たない共通helperなので除く）。
+      homeFeatures = builtins.filter (
+        name: name != "home-manager" && builtins.pathExists (./modules + "/${name}/home.nix")
+      ) (map baseNameOf (import ./modules).imports);
     in
     flake-parts.lib.mkFlake { inherit inputs; } (
-      { lib, ... }:
+      { config, lib, ... }:
       {
         # flake.modules.<class>.<name>（nixos・homeManager）を出力する。
         imports = [ flake-parts.flakeModules.modules ];
@@ -89,6 +95,16 @@
           overlays.default = final: _prev: { attopkgs = attopkgsFor final; };
           modules.nixos.default = default;
           nixos.default = default;
+          # homeManager.defaultは全featureのHM設定を読み、modules.<name>.*で選ぶ。
+          # homeManager.<name>はdefaultにmodules.<name>.enable = mkDefault trueを足したもの。
+          modules.homeManager = {
+            default = homeManagerDefault;
+          }
+          // lib.genAttrs homeFeatures (name: {
+            imports = [ homeManagerDefault ];
+            modules.${name}.enable = lib.mkDefault true;
+          });
+          homeModules = config.flake.modules.homeManager;
         };
       }
     )
