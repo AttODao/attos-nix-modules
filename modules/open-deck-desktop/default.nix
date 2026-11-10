@@ -5,11 +5,10 @@ in
 {
   options.modules.open-deck-desktop = {
     enable = lib.mkEnableOption "shared Open-Deck Desktop configuration";
-    binfmt = lib.mkEnableOption "system-wide AppImage execution through binfmt";
+    binfmt = lib.mkEnableOption "`programs.appimage` with binfmt so other AppImages run directly (Open-Deck itself is wrapped with appimageTools and does not need it)";
   };
 
   config = lib.mkIf cfg.enable {
-    # The package is already wrapped with appimageTools; binfmt is only for other AppImages.
     programs.appimage = lib.mkIf cfg.binfmt {
       enable = true;
       binfmt = lib.mkDefault true;
