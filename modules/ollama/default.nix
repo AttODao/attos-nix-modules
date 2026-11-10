@@ -55,12 +55,17 @@ in
     //
       lib.mapAttrs
         (
-          _: option:
+          name: option:
           lib.mkOption (
             {
               inherit (option) type default description;
             }
-            // lib.optionalAttrs (option ? defaultText) { inherit (option) defaultText; }
+            # The attribute set's shape must not force `option`: the standalone Home Manager export
+            # evaluates these declarations without NixOS, where options.services does not exist.
+            // lib.optionalAttrs (builtins.elem name [
+              "package"
+              "modelsDir"
+            ]) { inherit (option) defaultText; }
           )
         )
         (
