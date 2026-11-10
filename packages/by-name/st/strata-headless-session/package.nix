@@ -13,7 +13,14 @@ in
 stdenvNoCC.mkDerivation {
   pname = "strata-headless-session";
   version = "1";
-  src = ../../../../modules/strata;
+  # moduleのNix fileを変えてもsessionを作り直さないよう、2つのscriptだけをsrcにする。
+  src = lib.fileset.toSource {
+    root = ../../../../modules/strata;
+    fileset = lib.fileset.unions [
+      ../../../../modules/strata/session.py
+      ../../../../modules/strata/prepare.py
+    ];
+  };
   nativeBuildInputs = [ makeWrapper ];
   dontBuild = true;
   doCheck = true;
