@@ -32,7 +32,7 @@ in
             address = mkOption {
               type = types.nullOr types.nonEmptyStr;
               default = null;
-              description = "Address used for this SSH hostname in the local DNS hosts file.";
+              description = "Address that modules.dns and Headscale MagicDNS records return for this hostname; required when enabled.";
             };
             user = mkOption {
               type = types.nullOr types.nonEmptyStr;
@@ -47,7 +47,7 @@ in
       }
     );
     default = { };
-    description = "Services indexed by their public DNS hostname; configuration is supplied by the consumer.";
+    description = "Service registry keyed by fully qualified hostname. Every OS of the fleet imports the same registry; a service deploys only on the host named by its `host`, and the gateway, DNS and CNAME modules derive their records from the enabled entries.";
   };
 
   config = lib.mkMerge [
@@ -88,18 +88,6 @@ in
           assertion = builtins.length (lib.filter (route: route.hostname == hostname) routes) <= 1;
           message = "modules.public-services.${hostname}: only one HTTP backend may be enabled for a hostname.";
         }) hosts
-        ++
-          lib.concatMap
-            (
-              service:
-              map (entry: {
-                assertion = entry.cfg.backendUrl != null;
-                message = "modules.public-services.${entry.hostname}.${service}: supply the backendUrl reachable by the gateway.";
-              }) (ps.entries config service)
-            )
-            [
-              "code-server"
-            ]
         ++ map (route: {
           assertion = builtins.match "https?://[^[:space:]]+" route.cfg.backendUrl != null;
           message = "modules.public-services.${route.hostname}.${route.service}.backendUrl must be an HTTP(S) upstream URL.";
@@ -108,10 +96,6 @@ in
           assertion = builtins.length (lib.unique (map (route: route.cfg.private) matching)) <= 1;
           message = "modules.public-services: the same HTTP backend '${backend}' cannot have both public and private aliases.";
         }) (lib.groupBy (route: route.cfg.backendUrl) routes)
-        ++ map (entry: {
-          assertion = !config.modules.traefik.enable || entry.cfg.backendUrl != null;
-          message = "modules.public-services.${entry.hostname}.groupware.backendUrl is required on the Traefik gateway.";
-        }) (ps.entries config "groupware")
         ++ map (entry: {
           assertion = entry.cfg.address != null;
           message = "modules.public-services.${entry.hostname}.ssh.address is required when enabled.";
