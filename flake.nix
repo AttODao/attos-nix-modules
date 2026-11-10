@@ -88,6 +88,17 @@
             ) legacyPackages;
             # `nix fmt -- <files>`。flakeのnixpkgsのnixfmtで整形する。
             formatter = nixpkgs.legacyPackages.${system}.nixfmt;
+            # 評価だけのmodule test（tests/default.nix）。
+            checks = import ./tests {
+              inherit
+                lib
+                nixpkgs
+                home-manager
+                system
+                ;
+              nixosModule = default;
+              homeModules = config.flake.modules.homeManager;
+            };
           };
 
         flake = {
