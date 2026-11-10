@@ -550,11 +550,12 @@ pr() {
   fi
 }
 
-# Pushes the fetched flake input sources (every `*-source` path in the job's store: this flake's
-# inputs and those of the evaluated consumers) to the binary cache, so later jobs substitute them
-# by narHash instead of downloading them from GitHub. Settings: ATTIC_ENDPOINT, ATTIC_CACHE (workflow
-# env) and the secret ATTIC_TOKEN (push access to that cache). Without the token it does nothing;
-# a failed push only warns, the cache is an optimisation.
+# Pushes the flake input sources (every input of this flake, archived into the store, and every
+# other `*-source` path in the job's store, i.e. the inputs of the evaluated consumers) to the
+# binary cache, so later jobs substitute them by narHash instead of downloading them from GitHub.
+# Settings: ATTIC_ENDPOINT, ATTIC_CACHE (workflow env) and the secret ATTIC_TOKEN (push access to
+# that cache). Without the token it does nothing; a failed push only warns, the cache is an
+# optimisation.
 cache_push() {
   if [ -z "${ATTIC_TOKEN:-}" ]; then
     echo "::notice::ATTIC_TOKEN is not set; nothing pushed to the binary cache"
@@ -567,7 +568,14 @@ cache_push() {
   mkdir -p "$dir/attic"
   printf '%s' "$ATTIC_TOKEN" >"$dir/token"
   printf 'default-server = "ci"\n[servers.ci]\nendpoint = "%s"\ntoken-file = "%s"\n' "$ATTIC_ENDPOINT" "$dir/token" >"$dir/attic/config.toml"
-  paths=$(nix path-info --all | grep -E -- '-source$' || true)
+  # Nix fetches flake inputs into its Git cache and copies a source into the store only when
+  # evaluation needs it, so the store does not hold every input: `nix flake archive` copies all
+  # inputs of this flake (recursively) into the store first. The other `*-source` paths come from
+  # the consumers that check-consumers evaluated.
+  paths=$({
+    nix flake archive --json --no-write-lock-file . | jq -r '.inputs | .. | .path? // empty'
+    nix path-info --all | grep -E -- '-source$' || true
+  } | sort -u)
   if [ -z "$paths" ]; then
     echo "no flake input sources in the store"
   else
