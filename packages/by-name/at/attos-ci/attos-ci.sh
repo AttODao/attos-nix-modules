@@ -32,6 +32,8 @@ usage: attos-ci COMMAND [ARGS]
                            check-flake, then evaluate every nixosConfiguration of each consumer (default .forgejo/consumers)
                            against this checkout; fails on evaluation warnings missing from .forgejo/known-warnings
                            (--report-warnings writes them to the PR body instead)
+  check-hosts              (consumer repos) evaluate every nixosConfiguration and nix flake check --no-build;
+                           fails on evaluation warnings missing from .forgejo/known-warnings
   docs [WIKI_DIR]          write the generated option tables into WIKI_DIR/module-<name>.md (without WIKI_DIR: render only)
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
   cache-push               push the flake input sources in the store to the binary cache (needs ATTIC_TOKEN, ATTIC_ENDPOINT, ATTIC_CACHE)
@@ -281,6 +283,26 @@ check_consumers() {
     done
   done
   finish_eval "$report" "$all"
+}
+
+# For consumer repos (run from their root): evaluate every nixosConfiguration's toplevel first (it
+# realises the IFD that `nix flake check --no-build` cannot fetch into an empty store), then the
+# flake check. Warnings missing from the repo's own .forgejo/known-warnings fail the run at the
+# end; known-warnings lines that no evaluation printed are shown as a notice.
+check_hosts() {
+  eval_setup
+  local host hosts
+  if ! hosts=$(nix eval --raw .#nixosConfigurations --apply 'c: builtins.concatStringsSep " " (builtins.attrNames c)'); then
+    echo "::error::cannot list nixosConfigurations" >&2
+    return 1
+  fi
+  for host in $hosts; do
+    echo "== $host"
+    evaluate "$host" nix eval --raw ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath" >/dev/null
+  done
+  echo "== nix flake check --no-build"
+  evaluate "flake check" nix flake check --no-build
+  finish_eval false true
 }
 
 # --- Evaluation with warning capture ---------------------------------------------------------
@@ -566,6 +588,7 @@ case "$command" in
   update-packages) update_packages ;;
   check-consumers) check_consumers "$@" ;;
   check-flake) check_flake && finish_eval ;;
+  check-hosts) check_hosts ;;
   docs) docs "$@" ;;
   pr) pr "$@" ;;
   cache-push) cache_push ;;
