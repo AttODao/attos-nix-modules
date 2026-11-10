@@ -1,6 +1,5 @@
 {
   osConfig,
-  config,
   lib,
   pkgs,
   ...
@@ -21,35 +20,31 @@ in
   config = lib.mkIf cfg.enable {
     programs.thunderbird = {
       enable = true;
-      package = pkgs.thunderbird-esr;
+      package = lib.mkDefault pkgs.thunderbird-esr;
       languagePacks = [ "ja" ];
 
       profiles.${cfg.profile} = {
         isDefault = true;
-        settings = {
+        settings = lib.mapAttrs (_: lib.mkDefault) {
+          # Lets the bundled add-on run without enabling it by hand.
           "extensions.autoDisableScopes" = 0;
           "mail.shell.checkDefaultClient" = false;
-          "mail.spellcheck.inline" = true;
           "mailnews.start_page.enabled" = false;
         };
         extensions = [ thunderbirdMinimizeOnStartupAddon ];
       };
     };
 
-    accounts = {
-      calendar.basePath = ".local/share/calendars";
-
-      # Consumer-declared accounts; each is wired to Thunderbird unless the consumer says otherwise.
-      email.accounts = lib.mapAttrs (
-        _: account:
-        account
-        // {
-          thunderbird = {
-            enable = lib.mkDefault true;
-          }
-          // (account.thunderbird or { });
+    # Consumer-declared accounts; each is wired to Thunderbird unless the consumer says otherwise.
+    accounts.email.accounts = lib.mapAttrs (
+      _: account:
+      account
+      // {
+        thunderbird = {
+          enable = lib.mkDefault true;
         }
-      ) cfg.accounts;
-    };
+        // (account.thunderbird or { });
+      }
+    ) cfg.accounts;
   };
 }
