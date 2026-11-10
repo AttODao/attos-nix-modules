@@ -1,29 +1,11 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
+{ config, lib, ... }:
 {
   options.modules.zed = {
     enable = lib.mkEnableOption "shared Zed editor configuration";
     installEditor = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Install the Zed editor. Disable on hosts used only as SSH remote targets; their remote server still reads the managed settings.json.";
-    };
-    userSettings = lib.mkOption {
-      type = (pkgs.formats.json { }).type;
-      default = { };
-      description = "Shared Zed user settings, applied as overridable defaults to all HM users. Keep credentials out of these store-backed values.";
-    };
-    codexAcp.npmPolicy = lib.mkOption {
-      type = lib.types.enum [
-        "default"
-        "bounded-offline"
-      ];
-      default = "default";
-      description = "Default leaves npm policy unmanaged. Bounded-offline disables audit, prefers cached downloads, and limits retries/timeouts for Zed's codex-acp npx registry.";
+      description = "Install the Zed editor. Disable on hosts used only as SSH remote targets: the managed settings.json is still written, and the remote server Zed uploads there reads it.";
     };
   };
 

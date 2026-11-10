@@ -41,12 +41,12 @@ in
     listenAddresses = lib.mkOption {
       type = lib.types.listOf lib.types.nonEmptyStr;
       default = [ "127.0.0.1" ];
-      description = "Consumer-selected dnsmasq listen addresses; firewall policy remains consumer-owned.";
+      description = "dnsmasq listen addresses. The consumer opens port 53 in its own firewall.";
     };
     ingressAddresses = lib.mkOption {
       type = lib.types.listOf lib.types.nonEmptyStr;
       default = [ ];
-      description = "Consumer-owned ingress addresses used for ordinary service hostnames.";
+      description = "Gateway addresses returned for every registered hostname other than SSH endpoints (their ssh.address) and the Headscale control hostname (headscaleAddress); required when such hostnames exist. A Forgejo hostname with sshAddresses gets only the addresses also listed there.";
     };
     headscaleAddress = lib.mkOption {
       type = lib.types.nullOr lib.types.nonEmptyStr;

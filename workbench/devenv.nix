@@ -117,11 +117,12 @@ in
   # TOPIC=<topic> を付けると、.worktrees/<repo>-<topic> があるrepoはworktreeを評価する。
   scripts = {
     check-modules = {
-      description = "attos-nix-modules を nix flake check --no-build で評価（attodeskが届けばattodeskで評価（EVAL_HOST=localで手元）、TOPIC=<topic>でworktree）";
+      description = "attos-nix-modules の checks を1つずつ別processで評価（attos-ci check-flake。attodeskが届けばattodeskで評価（EVAL_HOST=localで手元）、TOPIC=<topic>でworktree）";
       exec = ''
         ${repoDir}
         ${evalHost}
-        run_on attos-nix-modules "nix flake check --no-build --no-write-lock-file path:. $(quote_args "$@")"
+        # nix flake check を1 processで回すとmodule testだけで約33 GBになるため、checkごとに評価する。
+        run_on attos-nix-modules "nix run --no-write-lock-file path:.#attos-ci -- check-flake"
       '';
     };
     check-server = {

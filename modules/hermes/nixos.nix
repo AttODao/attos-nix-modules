@@ -68,6 +68,8 @@ let
     PrivateTmp = lib.mkForce false;
   };
 
+  hardening = if cfg.sandbox then sandbox else unsandboxed;
+
   # upstreamの全key固定ではなく、Nixが書くkeyだけを同じmanaged scopeで固定する。
   # sandbox無効時はPAM sessionにも渡し、login shell・Desktop SSHとstateを共有する。
   managedDir = pkgs.writeTextDir "config.yaml" (
@@ -107,13 +109,15 @@ in
           ];
         };
 
-        systemd.services.hermes-agent = lib.mkMerge (
-          [ managedScope ] ++ lib.optional cfg.sandbox sandbox ++ lib.optional (!cfg.sandbox) unsandboxed
-        );
+        systemd.services.hermes-agent = lib.mkMerge [
+          managedScope
+          hardening
+        ];
         systemd.services.hermes-backend = lib.mkIf (native.backend.mode != "none") (
-          lib.mkMerge (
-            [ managedScope ] ++ lib.optional cfg.sandbox sandbox ++ lib.optional (!cfg.sandbox) unsandboxed
-          )
+          lib.mkMerge [
+            managedScope
+            hardening
+          ]
         );
       }
       (lib.mkIf cfg.botDesktop {

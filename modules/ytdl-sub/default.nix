@@ -1,5 +1,4 @@
 {
-  config,
   lib,
   ps,
   ...
@@ -18,17 +17,17 @@ in
     subscriptions = mkOption {
       type = types.attrsOf (types.attrsOf types.anything);
       default = { };
-      description = "ytdl-sub subscription documents by instance name (for example youtube, twitch); each runs every three hours. Use real paths below dataDir and cookieFile.";
+      description = "ytdl-sub subscription documents by instance name (for example youtube, twitch); each instance becomes ytdl-sub-<name>.service, run every three hours at minute 15. At least one is required. Use real host paths below dataDir, and cookieFile for cookies; the documents enter the Nix store, so keep secrets out.";
     };
     user = mkOption {
       type = types.nonEmptyStr;
       default = "ytdl-sub";
-      description = "Existing account owning the downloads and the cookie file.";
+      description = "Account running the downloads and owning dataDir; it must be able to write cookieFile. A custom account is created by the consumer.";
     };
     group = mkOption {
       type = types.nonEmptyStr;
       default = "ytdl-sub";
-      description = "Group of the downloads.";
+      description = "Group owning dataDir.";
     };
   };
 }

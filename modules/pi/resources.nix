@@ -2,7 +2,6 @@
 # Skills live in modules/skills.
 {
   pkgs,
-  lib,
   attopkgs,
 }:
 let

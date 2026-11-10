@@ -48,10 +48,10 @@ in
           }
         ];
       };
-      description = "Hyprland Lua settings for all HM users, recursively overriding shared defaults; lists replace defaults. Each user can override these defaults through standard Home Manager settings. Monitor layout uses settings.monitor (including scale).";
+      description = "Hyprland Lua settings (the shape of Home Manager's wayland.windowManager.hyprland.settings) for all HM users, recursively merged over the shared defaults. Lists replace the shared list, except window_rule, which is appended to the shared rules. config.general.layout = \"scrolling\" also adds the scrolling-layout binds and gestures. Every resulting leaf is a default that home-manager.users.<name> can override. List every monitor in settings.monitor, including its scale.";
     };
-    neowall.enable = lib.mkEnableOption "neowall startup with the fixed wallpaper shader";
-    lidSwitch.enable = lib.mkEnableOption "Noctalia monitor on/off bindings for the lid switch";
+    neowall.enable = lib.mkEnableOption "neowall as the wallpaper (fixed neonwave_sunrise shader, started with the session); Noctalia's own wallpaper is then disabled";
+    lidSwitch.enable = lib.mkEnableOption "turning the monitors off and on through Noctalia when the lid closes and opens, instead of logind's lid handling";
   };
 
   config = lib.mkIf config.modules.hyprland.enable {

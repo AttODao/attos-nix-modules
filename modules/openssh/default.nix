@@ -2,6 +2,7 @@
   config,
   lib,
   options,
+  ps,
   ...
 }:
 let
@@ -40,15 +41,10 @@ in
       defaultText = lib.literalExpression "services.openssh.openFirewall (normally true)";
       description = "Open the native OpenSSH ports in the firewall.";
     };
-    listenServices = lib.mkOption {
-      type = lib.types.listOf (lib.types.strMatching "[^[:space:]/]+\\.service");
-      default = [ ];
-      description = "Network setup services to pull in and order before the SSH listener (including socket activation), such as systemd-networkd.service.";
-    };
     waitForNetwork = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Order the sshd listener after network-online.target and pull that target in, for addresses configured during boot.";
+      description = "Order the sshd listener (the socket with startWhenNeeded) after network-online.target and pull that target in, for listenAddresses configured during boot.";
     };
   };
 
@@ -83,21 +79,11 @@ in
       startWhenNeeded = lib.mkIf (supplied "startWhenNeeded") cfg.startWhenNeeded;
       openFirewall = lib.mkIf (supplied "openFirewall") cfg.openFirewall;
     };
-    systemd = lib.mkIf (cfg.waitForNetwork || cfg.listenServices != [ ]) (
+    systemd = lib.mkIf cfg.waitForNetwork (
       if config.services.openssh.startWhenNeeded then
-        {
-          sockets.sshd = {
-            wants = lib.optional cfg.waitForNetwork "network-online.target" ++ cfg.listenServices;
-            after = lib.optional cfg.waitForNetwork "network-online.target" ++ cfg.listenServices;
-          };
-        }
+        { sockets.sshd = ps.afterNetworkOnline; }
       else
-        {
-          services.sshd = {
-            wants = lib.optional cfg.waitForNetwork "network-online.target" ++ cfg.listenServices;
-            after = lib.optional cfg.waitForNetwork "network-online.target" ++ cfg.listenServices;
-          };
-        }
+        { services.sshd = ps.afterNetworkOnline; }
     );
   };
 }

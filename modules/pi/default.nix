@@ -6,39 +6,20 @@
   ...
 }:
 let
-  resources = import ./resources.nix { inherit pkgs lib attopkgs; };
-  switches =
-    kind:
-    lib.mapAttrs (name: _: {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Enable the shared Pi ${kind} ${name}.";
-      };
-    }) resources.${kind};
+  resources = import ./resources.nix { inherit pkgs attopkgs; };
 in
 {
-  imports = [
-    ./nixos.nix
-    ../skills
-  ];
+  imports = [ ../skills ];
 
   options.modules.pi = {
     enable = lib.mkEnableOption "shared Pi configuration";
-    plugins = switches "plugins";
-    settingsMode = lib.mkOption {
-      type = lib.types.enum [
-        "declarative"
-        "merge"
-      ];
-      default = "declarative";
-      description = "Manage settings.json declaratively, or merge defaults into a writable user-owned 0600 file, preserving existing settings recursively. Invalid JSON fails activation without replacing the file.";
-    };
-    systemWide = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Also install the shared Pi and context-mode CLIs system-wide.";
-    };
+    plugins = lib.mapAttrs (name: _: {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Install the bundled Pi plugin ${name} (catalog in `modules/pi/resources.nix`).";
+      };
+    }) resources.plugins;
   };
 
   config = lib.mkIf config.modules.pi.enable {

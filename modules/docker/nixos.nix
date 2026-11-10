@@ -68,10 +68,7 @@ in
       }) latest;
     virtualisation.docker = {
       enable = true;
-      autoPrune = {
-        enable = lib.mkDefault true;
-        dates = lib.mkDefault "weekly";
-      };
+      autoPrune.enable = lib.mkDefault true;
     };
     virtualisation.oci-containers.backend = lib.mkDefault "docker";
     modules.docker.networks = lib.genAttrs serviceBridges (_: { });

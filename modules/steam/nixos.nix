@@ -7,6 +7,6 @@
       dedicatedServer.openFirewall = lib.mkDefault config.modules.steam.firewall.dedicatedServer;
       localNetworkGameTransfers.openFirewall = lib.mkDefault config.modules.steam.firewall.localNetworkGameTransfers;
     };
-    # Firewall choices and unfree permission remain consumer policies.
+    # Allowing the unfree Steam packages stays with the consumer.
   };
 }

@@ -29,7 +29,6 @@ in
         "rd.systemd.show_status=auto"
       ];
       loader = {
-        systemd-boot.enable = lib.mkDefault false;
         limine = {
           enable = true;
           maxGenerations = lib.mkDefault 10;

@@ -1,12 +1,10 @@
 {
   osConfig,
-  config,
   lib,
   ...
 }:
 {
   config = lib.mkIf osConfig.modules.foot.enable {
-
     programs.foot = {
       enable = true;
       server.enable = true;

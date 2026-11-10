@@ -16,13 +16,10 @@ in
       userDirs = {
         enable = true;
         createDirectories = lib.mkDefault true;
-        desktop = lib.mkDefault "${homeDirectory}/Desktop";
         documents = lib.mkDefault "${dataDirectory}/Documents";
         download = lib.mkDefault "${dataDirectory}/Downloads";
         music = lib.mkDefault "${dataDirectory}/Music";
         pictures = lib.mkDefault "${dataDirectory}/Pictures";
-        publicShare = lib.mkDefault "${homeDirectory}/Public";
-        templates = lib.mkDefault "${homeDirectory}/Templates";
         videos = lib.mkDefault "${dataDirectory}/Videos";
       };
     };

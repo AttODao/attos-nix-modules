@@ -60,6 +60,12 @@ let
   listenKey =
     entry:
     if entry.listen or null == null then entry.port else "${entry.listen}:${toString entry.port}";
+  tcpListeners = [
+    80
+    443
+  ]
+  ++ map listenKey tcp;
+  unique = values: builtins.length values == builtins.length (lib.unique values);
   bound = lib.filter (entry: entry.listen or null != null) tcp;
   unbound = lib.filter (entry: entry.listen or null == null) tcp;
   udp = lib.optionals (game != null) (
@@ -325,23 +331,7 @@ in
         message = "Traefik cannot forward the same mail listener to multiple mail backends or visibility policies.";
       }
       {
-        assertion =
-          builtins.length (
-            [
-              80
-              443
-            ]
-            ++ map listenKey tcp
-          ) == builtins.length (
-            lib.unique (
-              [
-                80
-                443
-              ]
-              ++ map listenKey tcp
-            )
-          )
-          && builtins.length udp == builtins.length (lib.unique (map (entry: entry.port) udp));
+        assertion = unique tcpListeners && unique (map (entry: entry.port) udp);
         message = "Traefik listener ports must be unique within each transport.";
       }
     ];
@@ -371,9 +361,10 @@ in
     };
     systemd.services.traefik = {
       unitConfig.RequiresMountsFor = [ environmentFile ];
-      # Bound listeners need their addresses configured before Traefik binds them.
-      wants = ps.afterNetworkOnline.wants ++ cfg.listenServices;
-      after = ps.afterNetworkOnline.after ++ cfg.listenServices;
+      # Upstream already orders Traefik after network-online.target; bound listeners also
+      # need the services that configure their addresses.
+      wants = cfg.listenServices;
+      after = cfg.listenServices;
       serviceConfig = {
         # network-online.target may be reached via another link (wait-online --any), so wait per address.
         ExecStartPre = lib.mkIf (bound != [ ]) (

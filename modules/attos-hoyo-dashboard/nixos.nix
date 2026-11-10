@@ -17,7 +17,6 @@ in
         DB_NAME = "attos_dashboard";
         DB_USER = "attos_dashboard";
       };
-      mounts.unitConfig.RequiresMountsFor = lib.mkDefault [ root ];
     in
     {
       modules.docker.networks.attos-hoyo-dashboard = { };
@@ -36,9 +35,9 @@ in
         };
       };
 
-      systemd.services = {
-        docker-attos-hoyo-dashboard-db = mounts;
-      };
+      systemd.services.docker-attos-hoyo-dashboard-db.unitConfig.RequiresMountsFor = lib.mkDefault [
+        root
+      ];
 
       virtualisation.oci-containers.containers = {
         attos-hoyo-dashboard-db = {

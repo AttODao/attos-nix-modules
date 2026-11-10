@@ -23,11 +23,8 @@ in
       package = lib.mkIf (cfg.packageSource != null) (
         lib.mkDefault (attopkgs.code-server { src = cfg.packageSource; })
       );
-      user = lib.mkDefault cfg.user;
-      group = lib.mkDefault cfg.group;
       host = lib.mkDefault listen.address;
       port = lib.mkDefault listen.port;
-      auth = lib.mkDefault "password";
       disableTelemetry = lib.mkDefault true;
       disableUpdateCheck = lib.mkDefault true;
       extraEnvironment.HOME = lib.mkDefault config.users.users.${native.user}.home;
@@ -42,8 +39,6 @@ in
         lib.optional (environmentFile != null) environmentFile
         ++ lib.optional (native.userDataDir != null) native.userDataDir
         ++ lib.optional (native.extensionsDir != null) native.extensionsDir;
-      wants = lib.mkIf (!selected.standalone) ps.afterNetworkOnline.wants;
-      after = lib.mkIf (!selected.standalone) ps.afterNetworkOnline.after;
     };
     networking.firewall = ps.backendFirewall config selected [ ];
   };

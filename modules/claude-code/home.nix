@@ -10,12 +10,12 @@ let
 in
 {
   # settings.jsonは/model等のruntime変更を保持するため管理しない。認証も触らない。
-  config = lib.mkIf osConfig.modules.claude-code.enable {
+  config = lib.mkIf cfg.enable {
     programs.claude-code = {
       enable = true;
       package = attopkgs.claude-code;
       mcpServers = lib.mkIf cfg.contextMode.enable {
-        # 2.x prints usage without arguments; the MCP server is the `server` command.
+        # context-mode runs as an MCP server only through its `server` command.
         context-mode = {
           command = lib.getExe' attopkgs.context-mode "context-mode";
           args = [

@@ -29,7 +29,7 @@ modules = [
 
 利用側ルートの `common.nix` に共通の機能選択・ユーザー差分、`node-a.nix` 等に
 ホスト固有の選択・標準設定を置ける。hardware configurationは各ホストからimportする。
-機能別import、独自resolver、利用側のHM module import・standalone HM出力は不要。
+機能別import、独自resolver、利用側のHM module importは不要。NixOSでない環境（Arch等のstandalone HM）は[standalone Home Manager](#standalone-home-manager)を使う。
 
 remoteのHEADに依存しないよう、URLの `?ref=main` は省略しない。
 
@@ -76,21 +76,55 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 - ユーザー名・ホームディレクトリはNixOSのユーザー定義から導出する。
 - HMの `home.stateVersion` は `mkDefault "26.05"`。既存ホストでは既存の値を上書き指定し、HM更新に連動して変更しない。
 - `attopkgs` は共有側で利用ホストの `pkgs` から構築し、NixOS / HMへ渡す。
-- 機能選択はNixOS側の `modules.*` に一本化し、`home.*` exportとstandalone HM経路は提供しない。
+- 機能選択はNixOS側の `modules.*` に一本化する。standalone HMも同じ `modules.*` をHM側に書く（下記）。HM側に別のenableは持たない。
 - `modules/home-manager/home.nix` が全HMユーザーへ共通helperを `config.lib.attos.*` で供給する。`mutableXdgConfigFiles`はappが書き換える設定（Fcitx5の`config`/`profile`、Solaarの`rules.yaml`/`config.yaml`）をstore symlinkでなく未存在時だけ0600でcopyし、`graphicalAppService`はGUI常駐app（Discord・OpenCloud・Kando）の`graphical-session.target`配下user serviceを生成する。生成するserviceと`fcitx5-daemon`に`Requisite=graphical-session.target`を設定し、ログアウト後の再起動でセッション外に起動しない。
 
 ユーザー一覧に複数名を指定すると、固定メールアカウント・デバイス設定なども含め、
 有効な機能の共通設定が全HMユーザーへ配布される。credential、secretの配置・権限は共有しない。
 
+## standalone Home Manager
+
+NixOSを使わない環境（Arch Linux上のstandalone HM等）では、`homeManager.<name>`（`flake.modules.homeManager.<name>`、別名`homeModules.<name>`）を読み、NixOSと同じ `modules.*` をHM側に書く。
+
+```nix
+# flake.nix（outputsの引数にattos-nix-modules・home-manager・nixpkgsを受け取る）
+homeConfigurations.alice = home-manager.lib.homeManagerConfiguration {
+  pkgs = import nixpkgs { system = "aarch64-linux"; };
+  modules = [
+    attos-nix-modules.modules.homeManager.foot # modules.foot.enable = mkDefault true
+    attos-nix-modules.modules.homeManager.floorp
+    (
+      { lib, ... }:
+      {
+        home = {
+          username = "alice";
+          homeDirectory = "/home/alice";
+          stateVersion = "26.05";
+        };
+        modules.floorp.vaultwardenUrl = "https://vault.example.org";
+        modules.fcitx5.enable = lib.mkForce false; # 依存で有効になる機能を外す
+      }
+    )
+  ];
+};
+```
+
+- `homeManager.default` は全featureのHM設定を読むだけで何も有効にしない（`modules.<name>.enable` で選ぶ）。`homeManager.<name>` はdefaultに `modules.<name>.enable = mkDefault true` を足したもので、複数読んでもdefaultは一度だけ入る。
+- 共有側はNixOS側のmodule（`modules/`）をNixOSなしで評価し、その結果を各 `home.nix` へ `osConfig` として渡す（`modules/home-manager/standalone.nix`）。依存の自動有効化・既定値・assertionはNixOSと同じに働く。NixOS側の設定（services・systemd・fonts・users等）は捨てられ、HMの設定だけが入る（system packageやserviceは利用側がpacman等で用意する）。
+- `attopkgs` はHMの `pkgs` から作る。`osConfig`・`attopkgs` を `extraSpecialArgs` で渡さない。`home.stateVersion` は設定しないので利用側が書く。unfreeの許可は利用側の `pkgs`。
+- 優先度は葉に書く（`modules.foo.enable = lib.mkForce false;`）。`modules` 全体への `mkForce` 等は効かない。宣言されていない `modules.*`（typo）はassertionで止まる。
+- `hyprland`（`osConfig.programs.hyprland`）と`attos-mouse`（`osConfig.programs.uwsm`）は `home.nix` がNixOSのoptionを読むためstandaloneでは使えない（それらを有効にする機能も同じ）。NixOS専用の機能（scopeがNixOSだけのもの）は有効にしても何も入らない。
+
 ## 構造
 
 ```text
-flake.nix
+flake.nix                   flake-partsで出力を組み立てる
 flake.lock
 modules/
-  default.nix               各機能を静的import
+  default.nix               modules/直下の全dirを静的import（dir一覧から。登録不要）
   home-manager/default.nix  HMユーザー一覧・共通HM設定・package引数
   home-manager/home.nix     全HMユーザー共通のhelper（`config.lib.attos.*`）
+  home-manager/standalone.nix  standalone HM用の入口（`homeManager.default`）
   thunderbird/
     default.nix             公開option・依存・両scopeの接続
     home.nix                HM設定
@@ -103,15 +137,21 @@ modules/
 packages/
   default.nix               by-nameの自動登録と外部source input
   by-name/<2文字>/<name>/package.nix  nixpkgsと同じshard構成
+tests/
+  default.nix               評価だけのmodule test（flake checks）
+  fixtures.nix              有効時に必須のoptionへ入れるtest用の値
 workbench/                  作業dir（nix-setup）のdevenv・AGENTS.md・setup.sh
 .forgejo/
-  consumers                 CIで評価する利用側ホストの一覧
-  workflows/                pr-check（PRの評価）、update（週次の更新PR）
+  consumers                 CIで評価する利用側repoの一覧
+  known-warnings            CIが許す評価warning（出どころのcomment付き）
+  workflows/                pr-check（PRの評価）、update（週次の更新PR）、docs（wikiのoption表）
 ```
+
+flake出力: `nixosModules.default`（別名 `nixos.default`、`modules.nixos.default`）、`modules.homeManager.{default,<name>}`（別名 `homeModules`）、`overlays.default`、`attopkgs`、`packages` / `legacyPackages`（x86_64-linux）、`formatter`（nixfmt。`nix fmt -- <files>`）、`checks`（下記の検証）。
 
 公開option・module間の依存は各機能の `default.nix` に置く。
 `home.nix` / `nixos.nix` は実設定を担当し、HM側は `osConfig.modules.<feature>` を参照する。
-importをenableから組み立てず、設定を条件付きで適用する。独自のfeature探索・依存resolverは使わない。
+importをenableから組み立てず、設定を条件付きで適用する。`modules/default.nix` はdir一覧をそのままimportするだけで、独自のfeature探索・依存resolverは使わない。
 
 ## 機能と依存
 
@@ -137,7 +177,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | steam | NixOS + HM | Yazi（FootからFonts） |
 | limine | NixOS | — |
 | atcoder-go | HM | Zsh、Go・direnv・AtCoder CLI/oj/aclogin・project scaffold同梱 |
-| zed | HM | 任意のcodex-acp npm policy、claude-code有効時はClaude AgentにNixのclaudeを使用 |
+| zed | HM | —（claude-code有効時はClaude AgentにNixのclaudeを使用） |
 | discord | HM | Fcitx5 |
 | hermes-desktop | HM | —（remote専用。dashboard URLまたはSSH接続先） |
 | foot | HM | Fonts |
@@ -151,6 +191,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | attos-hoyo-dashboard | NixOS | Docker |
 | forgejo / immich / vaultwarden / opencloud | NixOS | —（native `services.<name>`。Forgejo・ImmichはローカルPostgreSQL） |
 | searxng | NixOS | —（native `services.searx`） |
+| attic | NixOS | —（native `services.atticd`のNix binary cache。静的account `atticd`、`dataDir`にSQLiteとNAR chunk。公開registryでは既定`private = true`） |
 | strata | NixOS | Docker（digest固定のAMD image、greeter sessionまたはデスクトップの`strata-headless start`でon-demand起動するAPI・モデル別unit・polkit）。`wake.enable`でgateway（Traefik host）に`strata-wake-gate`、ownerに`strata-wake-control`を置き、POSTで起動（WoL）・自動起動分のidle停止。`POST /_strata-wake/wake` でStrataを起動せずownerだけを起こし、最後の呼び出しから`idleMinutes`の間は電源を切らない（他のclient、Hermes Bot Screen用）。 |
 | jellyfin | NixOS | 公開配置時のみytdl-sub（native `services.jellyfin`） |
 | ollama | NixOS | `webui`時のみDocker、公開配置時はOpen Terminalも |
@@ -168,7 +209,7 @@ importをenableから組み立てず、設定を条件付きで適用する。�
 | amazon-music | HM | —（Wine。Windows版をユーザーごとのWine prefixへ初回起動時に導入） |
 | open-deck-desktop | HM（`binfmt`時NixOS） | —（`binfmt`時のみAppImage binfmt） |
 | fcitx5 / floorp / pandora-launcher / pcmanfm / userDirs / vscode / linux-wallpaperengine | HM | —（pcmanfmの`inode/directory`既定はyazi無効時のみ。両方有効ならYaziが既定） |
-| pi | HM + `systemWide`時NixOS | skills |
+| pi | HM | skills |
 | claude-code | HM | skills、context-mode MCP同梱 |
 | skills | HM | —（Pi・Claude Code共通のagent skill。有効なagentへだけ導入） |
 
@@ -188,14 +229,14 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 - `login-pin.{user,pinDatabaseFile}`: 有効時にどちらも必須。`user`はPINでログインできる唯一のaccount（他のuserはPIN promptを通らずpasswordで認証）。`pinDatabaseFile`はpam_userdbのDB（`.db`で終わる絶対runtime path）。`/etc/security/login-pin/pins.db`を指定した場合だけhost管理となり、`set-login-pin`コマンドを導入してrootがそこへ書く。別pathは復号済みsecretなど利用側が供給する読み取り専用DB。greetd/loginのPAMには`pam_faillock`（5回失敗で300秒lock、成功で解除）と`pam_faildelay`（3秒）を入れる。PIN ruleはNixOSが挿入する早期pam_unix（gnome-keyring・zfs・`failDelay`などが有効なときの`unix-early`）より前に置き、最初のpromptでPINかpasswordのどちらか1回の入力でログインできる（PINが一致すればそこで認証完了、不一致なら同じ入力をpasswordとしてpam_unixが再利用）。PINでログインしたときはgnome-keyringはpasswordで解錠されない。標準`failDelay`は使わない（同じ早期pam_unixを追加するだけで順序を制御できないため）。
 - `thunderbird.{profile,accounts}`: `profile`（既定`default`）は全HMユーザーに作る既定profile名。`accounts`（既定`{}`）はHMの`accounts.email.accounts`と同じ形のattrsで、全HMユーザーへ`thunderbird.enable = true`既定で適用する。1件以上宣言するときは1件だけ`primary = true`にする。address・server・表示名などの個人識別情報は利用側に置き、認証情報は各ユーザーのprofileに残る。
 - `floorp.defaultPreferences`: enterprise policyが設定できないpref（bool・int・str）をautoconfigの`defaultPref`で渡す。既定はパスワードSync無効・マウスジェスチャー有効で、ユーザーは変更可能。利用側の定義は既定集合全体を置き換える。
-- `floorp.{vaultwardenUrl,extensions}`: `vaultwardenUrl`（既定null）はBitwarden拡張のself-hosted server presetで、nullなら拡張の環境設定を出さない。`extensions`（拡張ID→install URL、既定は同梱の一覧）はpolicyで`normal_installed`として導入し、ユーザーは無効化できる。利用側の定義は既定一覧全体を置き換える。
+- `floorp.{vaultwardenUrl,extensions}`: `vaultwardenUrl`（既定null）はBitwarden拡張のself-hosted server presetで、nullなら拡張の環境設定を出さない。`extensions`（拡張ID→install URL、既定は同梱の一覧）はpolicyで`normal_installed`として導入し、ユーザーは無効化できる。利用側の定義は既定一覧全体を置き換える。共有の`programs.floorp.policies`は各leafが`mkDefault`で、`home-manager.users.<name>`から`mkForce`なしに一部だけ上書きできる。
 - `opencloud-client.serverUrl`: 有効時必須。clientのaccount wizardに事前入力するserver URL。
-- `noctalia.{package,systemd,dock.pinned,location.address,calendar.accounts,screenRecorder,idle,headroom.enable,systemdUnits.enable,tailscale.enable,wallpaperEngine}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。`idle.{lockAfter,screenOffAfter,suspendAfter}`は各nullまたは正整数（秒）、既定nullはbehaviorを生成しない。Headroom・systemdUnits・tailscale・wallpaperEngineは各既定無効。`tailscale`はbarにcommunity plugin `davemhammer/tailscale`（状態・peer・exit node・route切替）を置き、`services.tailscale`必須。設定変更にはuserをtailscaledのoperator（`--operator`）にする必要がある（consumer）。壁紙の割り当て・再生設定はW Engineのpanelがstate（`data.json`）として持ち、宣言しない。旧`modules.linux-wallpaperengine`とは同時有効化不可。community pluginの取得・手動更新はNoctaliaが行い、自動更新はofficialのみ。accountのpasswordはruntime `passwordFile` で渡す。launcherはfloating、polkit agent・blur付きlockscreen・MRU switcher・左上launcher hot cornerを既定で有効にする。共通入力と共有の`programs.noctalia.settings`は各leafが`mkDefault`で、`home-manager.users.<name>`から`mkForce`なしに一部だけ上書きできる（listは置換）。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
+- `noctalia.{dock.pinned,location.address,calendar.accounts,screenRecorder,idle,headroom.enable,systemdUnits.enable,tailscale.enable,wallpaperEngine}`: locationは既定null、CalDAV account集合は既定 `{}`。録画は既定無効、`source = "portal"` / `codec = "h264"`。`idle.{lockAfter,screenOffAfter,suspendAfter}`は各nullまたは正整数（秒）、既定nullはbehaviorを生成しない。Headroom・systemdUnits・tailscale・wallpaperEngineは各既定無効。`tailscale`はbarにcommunity plugin `davemhammer/tailscale`（状態・peer・exit node・route切替）を置き、`services.tailscale`必須。設定変更にはuserをtailscaledのoperator（`--operator`）にする必要がある（consumer）。壁紙の割り当て・再生設定はW Engineのpanelがstate（`data.json`）として持ち、宣言しない。旧`modules.linux-wallpaperengine`とは同時有効化不可。community pluginの取得・手動更新はNoctaliaが行い、自動更新はofficialのみ。accountのpasswordはruntime `passwordFile` で渡す。launcherはfloating、polkit agent・blur付きlockscreen・MRU switcher・左上launcher hot cornerを既定で有効にする。共通入力と共有の`programs.noctalia.settings`は各leafが`mkDefault`で、`home-manager.users.<name>`から`mkForce`なしに一部だけ上書きできる（listは置換）。詳細は[Noctalia](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-noctalia)。
 - `attos-mouse.settings`: 既定 `{ }` のTOML設定。共有のuwsm wrapper・static CJK font・GTK icon theme・Everforest色へ再帰mergeし、listは置換する。device・menu定義は利用側が所有する。build時に`check-config`で検証し、daemonがinotifyで再読込する。`modules.solaar.enable`とは同じbuttonをdivertするため排他。Wayland/Hyprland・MX Master 4向け。
 - `attos-deck.{settings,credentials,agent}`: `settings`（既定`{ }`）はattos-deckの`config.toml`。共有既定（`time.timeZone`のtimezone、state `/var/lib/attos-deck`、ssh client・鍵、static CJK font）へ再帰mergeし、listは置換する。host・agent・取得元・home keyは利用側が所有し、build時に`check-config`で検証する。`credentials`（名前→runtime path、既定`{ }`）は`LoadCredential`で渡し、settingsからは`/run/credentials/attos-deck.service/<名前>`で参照する。serviceは`DynamicUser`で、Stream Deck（`0fd9:0080`）のhidrawをudevで`attos-deck-hid` groupへ渡す。SSH鍵は初回起動時にstateへ生成し、公開鍵をjournalへ出す。`agent.{enable,socketGroup,settings}`は許可したsystemctl操作だけを行うroot agent（`/run/attos-deck-agent.sock`、`Accept=yes`）。`socketGroup`は利用側の既存groupで有効時必須、同じhostのdeckは自動で参加する。遠隔のdeckは利用側が作るSSH account（このgroup所属、鍵は`restrict,command="/run/current-system/sw/bin/attos-deck-agent ssh"`）経由で使う。`agent.settings`の既定は`restart_failed = true`・`deny = ["sshd.service" "attos-deck-agent.socket"]`で、`units.<unit>.allow`に許可する操作を書く。詳細は[attos-deck](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-attos-deck)。
 - `solaar.deviceConfig`: 既定nullのpath。Solaarの`config.yaml`（デバイスserial・unit ID・設定値）を全HMユーザーの`~/.config/solaar/`へ未存在時だけ配置する。nullならSolaarが初回起動時に作る。rules.yamlも同じく未存在時だけ配置し、既存ファイルはSolaarの変更を保持する（共有既定を受け直すにはファイルを削除する）。デバイス識別子は利用側が持つ。
 - `scarlett-driver.settings`: 既定 `{ }` のdaemon `config.toml`（`apply_on_connect`・`apply_phantom`・`autosave`・`card`・`[pipewire]`・`[filter]`）。空ならdaemonの既定値を使う。build時に`check-config`で検証し、変更時はdaemonを再起動する。daemonは接続時に保存済みの機器状態を戻し、変更を自動保存する。機器のserial・入力node名など機器固有の値は利用側が持つ。firmware fileは同梱しない。詳細は[scarlett-driver](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-scarlett-driver)。
-- `pipewire.{alsaDevices,loopbacks,virtualSinks}`: 既定 `{}` / `[]` / `{}`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
+- `pipewire.{alsaDevices,loopbacks}`: 既定 `{}` / `[]`。型付き機器調整・loopback定義を共有設定へ変換し、device/node identityとlatency校正値はconsumerが渡す。
 - `limine.quietBoot`: 既定true。Plymouth・quiet kernel/console設定と、kernel引数によるsystemd initrdの状態表示制御を追加する。falseではこれらを適用しない。kernel/GPUの選択はconsumer。
 - `limine.splashImage`: 既定nullの画像path。指定時は黒背景・中央配置、最大960x360の汎用 `centered-logo` Plymouth themeを構築する。未指定時はupstream themeを維持。
 - `desktop-theme.{cursor,cursorName,cursorSize}`: archiveは既定null、nameは`Custom-Cursors`、sizeは48。指定時は共有 `custom-cursors` が全HMユーザー向けに `Custom-Cursors` を生成する。
@@ -214,17 +255,16 @@ Hyprlandの既定packageは通常の`Hyprland` sessionのentry（`hyprland.deskt
 archiveのURL/hash・licenseはconsumerに残す。
 カーソル名/サイズは公開APIへ指定し、共有側がGTK・Xresources・Hyprcursor・systemd user session環境へ反映する。Hyprland・user serviceはsession環境を継承する。
 Limineの画像素材、kernel・GPU・mitigationはホストが選択し、汎用Plymouth実装は共有側に置く。
-Hyprlandのスクリーンショット3種（領域・注釈・フォーカス中monitor全体）とAlt+TabはNoctaliaへ送る。保存先（Pictures配下のScreenshots）はNoctaliaが保存時に作成する（`.keep`不要）。全windowにfullscreen時のidle inhibit ruleを追加し、consumer・Solaarのruleと結合する。既定で全windowの枠線4px（フォーカスは色で区別）・ダイアログ/portal/PiPのfloat rule・カーソル自動非表示を設定する。`settings.config.general.layout = "scrolling"`のときだけscrolling用キー（列幅・列入替・列への出し入れ・中央寄せ・テープ内focus）と3本指scroll_move/4本指workspaceを入れる。Noctaliaの壁紙はneowall・標準HM linux-wallpaperengine service・W Engineが有効なら既定で無効にし、background surfaceの二重描画を避ける。Incus agentを有効にしたVMではACPI電源要求を通常のpoweroffとして扱い、設定変更時にlogindをreloadする。物理desktop・laptopでは電源キーを無視する。
-AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.{goPackage,devenv.enable,nixDirenv.enable,projectGoPackage}`でtoolchain・devenv導入（既定true）・direnvを選択できる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
+Hyprlandのスクリーンショット3種（領域・注釈・フォーカス中monitor全体）とAlt+TabはNoctaliaへ送る。保存先（Pictures配下のScreenshots）はNoctaliaが保存時に作成する（`.keep`不要）。全windowにfullscreen時のidle inhibit ruleを追加し、consumer・Solaarのruleと結合する。既定で全windowの枠線4px（フォーカスは色で区別）・ダイアログ/portal/PiPのfloat rule・カーソル自動非表示を設定する。`settings.config.general.layout = "scrolling"`のときだけscrolling用キー（列幅・列入替・列への出し入れ・中央寄せ・テープ内focus）と3本指scroll_move/4本指workspaceを入れる。Noctaliaの壁紙はneowall・標準HM linux-wallpaperengine service・W Engineが有効なら既定で無効にし、background surfaceの二重描画を避ける。電源キー（`lidSwitch.enable`では蓋も）はlogindでは無視し（既定値）、Hyprlandのbindで扱う。logind.confが変わるとlogindをreloadする。
+AtCoder Goは`modules.atcoder-go`で有効化し、project scaffold（devenv・CLI source・template）と統合CLI `atcoder-go`（init/sync/version/new/test/submit/snippet/login）をmoduleに同梱する。`atcoder-go.devenv.enable`（既定true）でdevenvの導入、`atcoder-go.projectGoPackage`（既定`pkgs.go`）でscaffold使用時に`atcoder-go`が使うGoを選ぶ。scaffoldなしでは各ユーザーの`programs.go.package`を使う。Go・direnv（nix-direnv）は標準HMの`programs.go`・`programs.direnv`へ既定値として入れる。`projectAssets`は既定`./assets`、独自scaffoldへの上書きも可能、null時はscaffoldせず、init/syncはgo.modを記録どおりに使う。認証は配布しない。
 `hermes-desktop.{url,ssh}`はHermes Desktopの初期接続先で、有効時はちょうど一方を指定する。`url`はdashboard URL、`ssh`は`user@host[:port]`で、ユーザーのSSH鍵を使い接続先でapp専用dashboardを起動する。connection.jsonが無い場合だけ書き、認証・既存接続registryは管理しない。`hermes-desktop.plugins.<id>`（既定`{ }`）はDesktop plugin（未compileのESM `plugin.js`）を`~/.hermes/desktop-plugins/<id>/plugin.js`に置く。remote接続でもappはlocalのこのdirだけからpluginを読み、pluginの`plugin_api.py`は接続先のHermesに置く。
 `immich-client.watchDirectories`は起動時に再帰uploadし、以後監視するディレクトリで、既定nullは各ユーザーのXDG Pictures（`xdg.userDirs.pictures`）を使う。user serviceは`~/.config/immich/auth.yml`（`immich login <url> <api-key>`で作成）がある場合だけ起動し、認証情報は管理しない。
-`discord.{commandLineArgs,service.killMode}`、`zed.{installEditor,userSettings,codexAcp.npmPolicy}`、`vscode.userSettings`、`fcitx5.keyboardLayout`も公開入力を使う。Fcitx5はHome Managerの`i18n/input-method/default.nix`を無効にし、GTK 2のimmodule cacheを作らない写し（`modules/fcitx5/input-method.nix`）を使う。nixpkgsがgtk2をbrokenにしたため。Home Managerがgtk2を参照しなくなったら写しを外す。Zedの既定npm policyはunmanaged、bounded-offlineはcache優先・retry/timeout制限を選ぶ。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
-`pi.{settingsMode,systemWide}`で宣言的/既存優先mergeと全system userへのCLI導入を選ぶ。pi-sessions extensionのrevision/hashは共有module側で固定する。`pi.plugins.<name>.enable`（各既定true）で同梱extensionを個別選択する。公開switchと導入先は`modules/pi/resources.nix`のカタログから生成する。Pi MCP Adapterはnpm packageをversion固定（`modules/pi/resources.nix`を参照）で導入し、`plugins.pi-mcp-adapter.enable`で選択する（npm依存はPiが導入）。pi-review・pi-usage・pi-keep-going・pi-mermaid-studioもrevision/hash固定で同梱する。Mermaid StudioのSSH閲覧は実URLの動的portを使い、AGENTSがlocal転送コマンドとtoken付きURLの案内を促す。agent共通AGENTS.mdで、過去session再利用、context-modeでの大出力処理、subagent分割、edit失敗時の読み直しを促す。管理pluginは生成manifestの自動探索で読み、mergeで保持したpackagesに依存しない。merge時は `context-mode-1.0.169` のstore-path string登録だけを除去し、明示filter付きobjectや他のpackageを保持する。mergeは非object/不正JSONを保存せず、user所有0600でatomic更新する。認証・履歴は触らない。
+`zed.installEditor`も公開入力を使う。Discord・Zed・VS Codeの設定とpackageは標準HMの`programs.discord`・`programs.zed-editor`・`programs.vscode`で上書きする。SSH接続先専用ホストは`zed.installEditor = false`でZed本体を入れずsettings.jsonだけを管理する。
 `claude-code.contextMode.enable`（既定true）でcontext-mode MCP server（`context-mode server --agent claude-code`）を選ぶ。`claude-code.lsp.{nixd,rust-analyzer,gopls}.enable`（各既定false）でホストpkgsのlanguage serverをClaude CodeのLSPへ登録する。packageは`attopkgs.claude-code`（sadjow/claude-code-nixをrevision/hash固定）。claude-code/context-modeのunfree許可は利用側、settings.json・認証・履歴は管理しない。
 `skills.<name>.enable`（各既定true）でPi・Claude Code共通のskillを個別選択する。skillごとの取得元と対応agentは`modules/skills/catalog.nix`、取得repoの固定は`modules/skills/sources.nix`に置く。pi-mermaid-studio（Pi tool依存）・find-skills（npxでNix管理外へ追加）・ctx-upgrade（Nix管理installの書換え）はPiだけへ導入する。skillの`source`はagentごとのattrsetにもでき、context-modeのskillはPiへPi tool用の写し、Claude CodeへMCP tool用の写しを入れる。
-`openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork,listenServices}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。`listenServices`は既定[]で、指定したnetwork setup serviceをlistener/socketのwants/afterへ追加する。
+`openssh.{settings,listenAddresses,startWhenNeeded,openFirewall,waitForNetwork}`はserver policyとlistener順序を選択する。listener/socket/firewallの未指定値はnative設定に追従し、明示した値だけを転送する。
 
-Noctaliaのsystemd launcher、PipeWire virtual sinkは共有側が実装し、consumerが公開入力を選択する。サーバーの入力・運用条件は
+サーバーの入力・運用条件は
 [Wikiの公開サービスAPI](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-public-services)と各moduleページに記載する。
 
 ### SSH client
@@ -291,13 +331,13 @@ modules.public-services."vault.example.org".vaultwarden = {
 };
 ```
 
-対応サービス: `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
+対応サービス: `attic`, `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `headscale`,
 `paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
-HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG・Karakeep）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
-通常は `private = false`（SSH endpointとMCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
+HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG・Karakeep・Attic）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
+通常は `private = false`（SSH endpoint、Attic、MCSManager・Hermesの管理面は既定true）。`private` はサービスごとの指定で、そのサービスのgateway HTTP/TCP routeをallowlist制限する。同じhostnameでpublicとprivateのサービスを併用でき（例: mailserverを公開したまま `groupware` のWebだけprivate）、公開CNAMEからは有効なサービスがすべてprivateのhostnameだけを除外する。
 
 `public-services.<FQDN>.<service>.privateExtraNetworks`（非空文字列のlist、既定`[]`）は、そのprivate HTTP routeだけに`modules.traefik.privateNetworks`からの追加許可を与える。非空なら`private = true`必須。TCP/UDPやstandaloneには適用せず、firewall・routing・認証も変更しない。
 
@@ -308,6 +348,7 @@ Traefikの`accessLog.enable`（既定false）は`/var/log/traefik/access.log`へ
 Traefikは全HTTPS routerにHSTS（1年、subdomainを含まない）と`nosniff`のheader middlewareを付け、TLS 1.2未満を拒否する（frame/CSP等のpolicyは各applicationが持つ）。`traefik.listenServices`（既定[]）はlistenerがbindするaddressを作るnetwork setup service（dummy interface等）で、Traefikのwants/afterへ追加する。
 
 SearXNGの公開 `searxng.limiter`（既定true）はrate limiter・bot対策をlocal Valkey socket付きで有効にする。falseはscrapingに晒すため、loopbackからしか届かない単独利用でだけ検討する。`trustedProxies`（文字列list、既定[]）はclient addressを判別するために `X-Forwarded-For` / `X-Real-IP` を信頼するreverse proxyのaddress/CIDRで、loopbackは引き続き信頼する。`passNetworks`（文字列list、既定[]）はlimiter・bot対策を除外して無制限のAPI利用を許すclient address/CIDRで、信頼する自動化hostなど最小範囲に絞る。どちらも `limiter = true` が必要。`environmentFile`の`SEARXNG_SECRET`は必須で、未設定ならsettings生成前にunitが失敗する。
+Atticの公開入力は `attic.{dataDir,environmentFile,retentionPeriod}`。`dataDir`（local配置時必須）に `server.db`（SQLite）と `storage/`（NARのchunk）を置き、upstreamのDynamicUserではなく静的account `atticd` で書く。`environmentFile`（local配置時必須）はJWT署名鍵 `ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64` を持つdotenvのruntime path。`retentionPeriod`（既定 `"30 days"`）は作成・最後のアクセスがともにそれより古いobjectをGC（12時間ごと）で消す既定の保持期間で、cacheごとに `attic cache configure` で変えられる。chunkingはupstreamの既定値（64KiB以上のNARを平均64KiBに分割）、圧縮はzstd。`api-endpoint` は `https://<FQDN>/`、`allowed-hosts` はそのhostnameだけ。cacheの作成・tokenの発行は適用後に `atticd-atticadm make-token` と `attic`（attic-clientを同梱）で行う。
 OpenCloudの公開共有linkは既定でpasswordを必須にする（`OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD=true`）。Jellyfinの保存先は`jellyfin:jellyfin` 0750で作る。
 attos-hoyo-dashboardの `timezoneOffset`（`+09:00`形式、local配置時必須）はdailyリセット時刻の固定UTC offsetで、`time.timeZone`から導出しない。DBはimageが作る`POSTGRES_USER`（superuser）で接続する。任意の `metricsEnvironmentFile` は `METRICS_TOKEN=…` を含むdotenvのruntime pathで、app containerだけに渡す。設定したときだけ `/metrics` がBearer token付きで公開される。
 
@@ -342,7 +383,7 @@ code-serverも `enable = true; host = "<所有OS>";` でnative実体を有効に
 code-serverは既定password認証でruntime `environmentFile` が必須（`PASSWORD` または
 `HASHED_PASSWORD`）。単独利用は127.0.0.1:4444、公開時は他のnative serviceと同じく `backendUrl` のaddress:portでlistenする（全interfaceへbindしない）。更新・telemetryは既定無効で、保存済みの設定・認証は上書きしない。
 Nerd Font組み込みpackage（`attopkgs.code-server { src = <固定したstandalone release>; }`）は、
-公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。`user` / `group`も公開入力で、account作成・権限はconsumerが保持する。
+公開 `code-server.packageSource` にstandalone releaseを渡して選ぶ。実行account・auth等は標準 `services.code-server.*` で変え、account作成・権限はconsumerが保持する。
 
 OllamaとOpen WebUIは`modules/ollama/`で一つのmoduleとして扱う。公開`modules.public-services.<FQDN>.ollama.enable`は所有OSのbackendを有効化し、同じrecordの`webui=true`で任意のWebUIも有効化する（既定false）。WebUI無効時はUI用Docker/Terminal・secret/path・HTTP proxy routeを作らない。WebUIは独立したrecordを持たず、container/unit名は`open-webui`を使う。`modules.ollama`は以下の単独利用入口としても使用できる。既存Paseoはpublic-to-global bridgeを保持する。
 
@@ -379,19 +420,23 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 自動更新
 
-Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側ホストの一覧は `.forgejo/consumers`（1行に `owner/repo:host,host`）で、手動実行時のinput `consumers` で上書きできる。利用側にホストを足したらこのファイルに足す。PRのタイトル・本文は日本語。
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。ホストのtoplevelはbuildせず評価だけで、`update/packages` だけが変更したcustom packageをbuildする（下記）。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側は `.forgejo/consumers`（1行に `owner/repo`）で、各repoの `nixosConfigurations` の全ホストを評価する（ホストの追加・廃止でこのファイルは変えない。`owner/repo:host,host` と書くとそのホストだけ）。手動実行時のinput `consumers` で上書きできる。PRのタイトル・本文は日本語。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
 - `update/packages`: version固定のcustom package（Open-DeckのAppImage、CC Pocket Bridgeを含む）、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。StrataのAPI専用image（`modules/strata/nixos.nix`）はRenovateの対象外で、registryのtag一覧から全flavorの`<version>-<flavor>`が揃う最新の数値版を選び、tag・digestをまとめて更新する。取得失敗や揃う版がない場合はimageの固定を変更しない。
 - OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` とForgejo runner labelの `docker://name:tag@sha256:...` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
 
-flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
+flake input・packageのPRは、このflakeのcheck・packagesの評価と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。`update/packages` はさらに、bumpでderivationが変わったpackageをx86_64-linuxでbuildする（評価ではbuild・installCheckが走らず、upstreamのlayout変更が実機の適用で初めて壊れるため）。buildに失敗したpackageはbumpを戻してPR本文に失敗logを載せ、PR作成後にjobを失敗させる。build分だけjobが延びるため、timeoutは90分。container storeは毎回空なので、build入力はcache.nixos.orgから取得する（runnerの負荷はbumpされたpackageの数に比例し、変更なしの週は増えない）。評価で出た `evaluation warning:`・`trace: warning:` のうち `.forgejo/known-warnings`（1行1つの固定文字列、各行の上に出どころのcomment）に無いものはPR本文の「新しい評価warning」に載り、そのPRのpr-checkが失敗する。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
 mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` する。利用側は各repoの週次更新PR（土曜05:00 JST）でpinを上げて採用し、各ホストが自身でbuild・適用する。
 共有runnerは外部のjobも実行するため、このrepoと利用側repoのmainはbranch protectionでbotにPR作成だけを許す運用を推奨する。
 
 ## PRの評価
 
-`.forgejo/workflows/pr-check.yml` はPR（AGitを含む）と手動実行で、PRのcommitに対して `attos-ci check-consumers` を流す（`nix flake check --no-build` と `.forgejo/consumers` の全ホストの `toplevel.drvPath` 評価。buildもsecretも使わない）。server-nix・personal-nixにも同名のworkflowがあり、各repoの全ホストを評価してから `nix flake check --no-build` を流す。
+`.forgejo/workflows/pr-check.yml` はPR（AGitを含む）と手動実行で、PRのcommitに対して `attos-ci check-consumers` を流す（`checks.x86_64-linux` の各attributeを別々の `nix eval` processで評価し（まとめた `nix flake check` は評価だけのcheckが増えるとrunnerの6GiBに収まらないため）、`packages` 出力のdrvPathと、`.forgejo/consumers` の各repoの全ホストの `toplevel.drvPath` を評価する。`.forgejo/known-warnings` に無い評価warningがあれば、全ホストの評価後に一覧を出して失敗する。buildもsecretも使わない）。続けて `attos-ci docs` でwikiのoption表を生成できることだけを確かめる（wikiはPRに含まれないため書き込まない）。server-nix・personal-nixにも同名のworkflowがあり、各repoの全ホストを評価してから `nix flake check --no-build` を流し、各repoの `.forgejo/known-warnings` に無い評価warningで失敗する。
+
+## option表の生成（wiki）
+
+wikiの各 `module-<name>.md` のoption表（`<!-- attos-options:begin -->`〜`<!-- attos-options:end -->` の間）は生成物で、手では直さない。`.forgejo/workflows/docs.yml` がmainへのpush（と手動実行）ごとに `attos-ci docs <wiki>` を流し、ページが変わったときだけbot名義（attos-bot <bot@attodao.cc>）でwikiへcommit・pushする。生成は `nixosModules.default` を最小の `nixosSystem` で評価し、`options.modules` の宣言（`modules.public-services.<name>.<service>` の登録optionを含む）を宣言した `modules/<dir>` のページへ、option名・型・既定値・descriptionの表として書く（buildはしない）。表を直すときはmoduleのdescription・型・既定値（`defaultText`）を直す。markerの無いページは、手書きのoption表が1つだけならそれを置き換え、無いか複数あれば `## 実装` の前に `## option一覧` として足す。secretは `WIKI_TOKEN`（このrepoのwikiへ書けるtoken。clone・pushのstepにだけ渡し、URLには入れない）。
 
 ## 作業環境（nix-setup）
 
@@ -399,11 +444,19 @@ mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` す�
 
 ## 検証
 
-module単体のテストは持たない。`checks.x86_64-linux.module-imports` だけが、`modules/` 直下のdirがすべて `modules/default.nix` のimportsに載っていることを確かめる。変更時は次の評価で確認する。
+`tests/default.nix` が評価だけのmodule testをflake check（`checks.x86_64-linux.*`）として持つ。buildはしない。
+
+- `modules-disabled`: 最小のNixOS system（`tests/default.nix` のfixture）に `nixosModules.default` を足して何も有効にしないとき、足さないsystemとpackage名・systemd unit・`/etc`・users/groups・firewall・有効なservices/programsが変わらない。意図した差分はtest内の `allowed` に書く。
+- `module-<name>`: そのfeatureだけを有効にした最小system（HMユーザー1人）のtoplevelが評価できる。公開serviceはregistry（`modules.public-services."<name>.attos-test.example"`、`host` はtestのhostName）で有効にする。有効時に必須のoptionはtest用の値を `tests/fixtures.nix` に置く。
+- `home-manager-<name>`: `homeManager.<name>` だけのstandalone HM構成が評価できる。`home-manager-unknown-option` はtypoが拒否されることを確かめる。
+- 一覧は `modules/` のdirから作るため、新しいmoduleは自動でtestされる。外すdirは理由付きで `skip`（`home-manager`・`public-services`）と `hmSkip`（`hyprland`・`attos-mouse`）に書く。
 
 ```sh
 nix flake check --no-build 'path:.'
+nix eval --raw 'path:.#checks.x86_64-linux.module-<name>.drvPath' # 1つのcheckだけ
 nix eval --raw 'path:.#packages.x86_64-linux.<name>.drvPath' # 変更したpackage
 ```
+
+全checkを1 processで評価するとメモリが解放されず、`nix flake check --no-build` のpeak RSSは約33GBになる（attodesk計測、checkは103個）。1つずつ別processで評価すると1 checkあたり最大約1.1GB（中央値約0.7GB）で済むため、メモリの少ないhost・CI（共有runnerは6GiB）ではcheckを1つずつ評価する（`nix eval --raw 'path:.#checks.x86_64-linux.<name>.drvPath'`）。testのsystemはmanual（option文書の評価）を無効にしている。
 
 利用側では `--override-input shared "path:$(realpath ../attos-nix-modules)"` を付けて全OS・HM・imageを評価する。

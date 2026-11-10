@@ -1,6 +1,9 @@
-# Weekly update PRs; nothing is built here. Jobs run in a pinned Nix container on the
-# shared Docker runner, one at a time (consumer evaluation of every host would OOM the
-# runner if run in parallel). Secret: BOT_TOKEN (bot account that can open PRs, not push
+# Weekly update PRs. Host toplevels are only evaluated; the packages job also builds the custom
+# packages whose derivation a bump changed (a failed build reverts that bump, is listed in the PR
+# body and fails the job). New evaluation warnings are listed in the PR body (its pr-check then
+# fails until they are fixed or added to .forgejo/known-warnings). Jobs run in a pinned Nix
+# container on the shared Docker runner, one at a time (consumer evaluation of every host would
+# OOM the runner if run in parallel). Secret: BOT_TOKEN (bot account that can open PRs, not push
 # main); it is passed only to the steps that need it.
 name: update
 on:
@@ -9,14 +12,14 @@ on:
   workflow_dispatch:
     inputs:
       consumers:
-        description: "Consumer hosts to evaluate (owner/repo:host,host ...); empty uses .forgejo/consumers"
+        description: "Consumers to evaluate (owner/repo, or owner/repo:host,host for some hosts ...); empty uses .forgejo/consumers"
         type: string
         required: false
         default: ""
 
 env:
   NIX_CONFIG: "experimental-features = nix-command flakes"
-  # Consumer hosts evaluated against each update; empty (scheduled runs) reads .forgejo/consumers.
+  # Consumers evaluated against each update; empty (scheduled runs) reads .forgejo/consumers.
   CONSUMERS: ${{ inputs.consumers }}
 
 jobs:
@@ -28,7 +31,7 @@ jobs:
     steps:
       - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-shared
-      - run: nix run .#attos-ci -- check-consumers $CONSUMERS
+      - run: nix run .#attos-ci -- check-consumers --report-warnings $CONSUMERS
         env:
           FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
       - run: |
@@ -40,19 +43,24 @@ jobs:
     needs: flake-inputs
     if: ${{ !cancelled() }}
     runs-on: docker
-    timeout-minutes: 60
+    # Evaluation plus the builds of the bumped packages (usually a few per week, each a few
+    # minutes; the container store starts empty, so build inputs come from cache.nixos.org).
+    timeout-minutes: 90
     container:
       image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
     steps:
       - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-packages
-      - run: nix run .#attos-ci -- check-consumers $CONSUMERS
+      - run: nix run .#attos-ci -- check-consumers --report-warnings $CONSUMERS
         env:
           FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
       - run: |
           nix run .#attos-ci -- pr update/packages "chore(packages): 自前パッケージとPiリソースを更新"
         env:
           FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
+      # The PR keeps only the bumps that built; fail the job so a reverted bump is not missed.
+      - run: |
+          if [ -s .attos-ci-build-failures ]; then cat .attos-ci-build-failures; exit 1; fi
 
   images:
     needs: packages

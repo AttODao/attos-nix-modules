@@ -3,6 +3,7 @@ let
   inherit (lib) mkOption types;
   # Services whose HTTP upstream the consumer supplies as backendUrl; the owner publishes it there.
   httpServices = [
+    "attic"
     "forgejo"
     "headscale"
     "immich"
@@ -140,8 +141,7 @@ rec {
     wants = [ "network-online.target" ];
     after = [ "network-online.target" ];
   };
-  # Standalone stays on loopback; a public owner publishes on its backendUrl for the gateway.
-  # A native owner listens itself, so admit the gateway to the backendUrl port on that address only.
+  # A native public owner listens itself, so admit the gateway to the backendUrl port on that address only.
   backendFirewall =
     config: selected: extraPorts:
     let
@@ -264,7 +264,7 @@ rec {
           { }
         else
           first.cfg;
-      # ponytail: legacy units/container names are single-instance; use instance-qualified names when multiple local deployments are needed.
+      # Unit and container names are not instance-qualified, so one host runs at most one deployment per service.
       assertions = [
         {
           assertion = builtins.length local <= 1;

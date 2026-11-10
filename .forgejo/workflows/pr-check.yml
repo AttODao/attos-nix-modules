@@ -1,7 +1,9 @@
-# Evaluates a pull request (and main on demand): `nix flake check --no-build` of this flake,
-# then every consumer host in .forgejo/consumers with this checkout as attos-nix-modules.
-# Nothing is built and no secret is used (the consumer repos are public). One job, so the
-# host evaluations run one at a time on the shared runner.
+# Evaluates a pull request (and main on demand): every flake check and the packages output of
+# this flake (one nix process per check), then every nixosConfiguration of the consumer repos in
+# .forgejo/consumers with this checkout as attos-nix-modules. Evaluation warnings missing from
+# .forgejo/known-warnings fail the job. Finally the wiki option tables are rendered (not written;
+# docs.yml pushes them after the merge). Nothing is built and no secret is used (the consumer
+# repos are public). One job, so the evaluations run one at a time on the shared runner.
 name: pr-check
 on:
   pull_request:
@@ -24,3 +26,4 @@ jobs:
           git checkout -q FETCH_HEAD
           git log -1 --format='%H %s'
       - run: nix run .#attos-ci -- check-consumers
+      - run: nix run .#attos-ci -- docs

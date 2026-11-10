@@ -1,0 +1,19 @@
+# Evaluation warnings that attos-ci check-consumers accepts (every other `evaluation warning:` /
+# `trace: warning:` fails the check after all hosts were evaluated). One fixed substring of the
+# normalised message per line (store paths read /nix/store/<hash>-...), with a comment above it
+# saying where the warning comes from and when to remove the line. A line that no evaluation
+# printed is reported as a notice; remove it.
+
+# modules/hyprland/nixos.nix and modules/shutdown-hold/default.nix add reloadTriggers to the
+# logind unit that NixOS marks reloadIfChanged, on purpose (a reload is what applies logind.conf).
+# personal-nix (attodesk, attolap).
+Service 'systemd-logind.service' has both 'reloadIfChanged' and 'reloadTriggers' set.
+
+# rust-overlay's lib/mk-aggregated.nix (rust toolchain of honkers-railway-launcher), an input of
+# aagl-gtk-on-nix in personal-nix (attodesk). Remove when aagl's rust-overlay pin drops them.
+stdenv.isLinux is deprecated, use stdenv.hostPlatform.isLinux instead
+stdenv.isDarwin is deprecated, use stdenv.hostPlatform.isDarwin instead
+
+# personal-nix hosts/attodesk/deck.nix still sets services.resolved.domains; a personal-nix
+# branch moves it to services.resolved.settings.Resolve.Domains. Remove after that merge.
+The option `services.resolved.domains' defined in

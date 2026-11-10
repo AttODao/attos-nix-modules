@@ -80,7 +80,6 @@ in
             systemDomain = lib.mkDefault primary;
             systemName = lib.mkDefault cfg.systemName;
             systemContact = lib.mkDefault "postmaster@${primary}";
-            sendingFqdn = lib.mkDefault selected.hostname;
             x509.useACMEHost = lib.mkDefault (if selected.standalone then null else selected.hostname);
             enableImap = lib.mkDefault true;
             enableSubmission = lib.mkDefault true;
@@ -88,7 +87,6 @@ in
             storage.path = lib.mkDefault "${root}/vmail";
             indexDir = lib.mkDefault "${root}/index";
             dkim = {
-              enable = lib.mkDefault true;
               keyDirectory = lib.mkDefault "${root}/dkim";
               domains = dkimDomains;
             };

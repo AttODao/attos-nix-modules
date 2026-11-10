@@ -9,33 +9,22 @@
 
   options.modules.atcoder-go = {
     enable = lib.mkEnableOption "shared AtCoder Go tools and commands";
-    goPackage = lib.mkOption {
-      type = lib.types.package;
-      default = pkgs.go;
-      defaultText = lib.literalExpression "pkgs.go";
-      description = "Global Go package for all HM users; independent of the optional project wrapper toolchain.";
-    };
     devenv.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Install devenv for every HM user; the project scaffold needs it, other hosts may supply their own.";
-    };
-    nixDirenv.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Use nix-direnv for the shared direnv setup.";
+      description = "Install devenv for every HM user. The project scaffold needs it; disable on hosts that supply their own.";
     };
     projectAssets = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = ./assets;
       defaultText = lib.literalExpression "./assets";
-      description = "Complete project scaffold; defaults to the module's bundled CLI source, templates and devenv definitions. Null makes atcoder-go init/sync use go.mod as recorded without scaffolding.";
+      description = "Complete project scaffold (CLI source, templates and devenv definitions) that `atcoder-go init`/`sync` write into a project; defaults to the bundled one. Null disables scaffolding, and init/sync use go.mod as recorded.";
     };
     projectGoPackage = lib.mkOption {
       type = lib.types.package;
-      default = config.modules.atcoder-go.goPackage;
-      defaultText = lib.literalExpression "config.modules.atcoder-go.goPackage";
-      description = "Go toolchain used by the project scaffold's atcoder-go command.";
+      default = pkgs.go;
+      defaultText = lib.literalExpression "pkgs.go";
+      description = "Go toolchain the `atcoder-go` command uses while a project scaffold is set; without one it uses each user's `programs.go.package`.";
     };
   };
 
