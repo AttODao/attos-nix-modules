@@ -32,6 +32,8 @@ usage: attos-ci COMMAND [ARGS]
                            check-flake, then evaluate every nixosConfiguration of each consumer (default .forgejo/consumers)
                            against this checkout; fails on evaluation warnings missing from .forgejo/known-warnings
                            (--report-warnings writes them to the PR body instead)
+  check-hosts              (consumer repos) evaluate every nixosConfiguration and nix flake check --no-build;
+                           fails on evaluation warnings missing from .forgejo/known-warnings
   docs [WIKI_DIR]          write the generated option tables into WIKI_DIR/module-<name>.md (without WIKI_DIR: render only)
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
   cache-push               push the flake input sources in the store to the binary cache (needs ATTIC_TOKEN, ATTIC_ENDPOINT, ATTIC_CACHE)
@@ -283,6 +285,26 @@ check_consumers() {
   finish_eval "$report" "$all"
 }
 
+# For consumer repos (run from their root): evaluate every nixosConfiguration's toplevel first (it
+# realises the IFD that `nix flake check --no-build` cannot fetch into an empty store), then the
+# flake check. Warnings missing from the repo's own .forgejo/known-warnings fail the run at the
+# end; known-warnings lines that no evaluation printed are shown as a notice.
+check_hosts() {
+  eval_setup
+  local host hosts
+  if ! hosts=$(nix eval --raw .#nixosConfigurations --apply 'c: builtins.concatStringsSep " " (builtins.attrNames c)'); then
+    echo "::error::cannot list nixosConfigurations" >&2
+    return 1
+  fi
+  for host in $hosts; do
+    echo "== $host"
+    evaluate "$host" nix eval --raw ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath" >/dev/null
+  done
+  echo "== nix flake check --no-build"
+  evaluate "flake check" nix flake check --no-build
+  finish_eval false true
+}
+
 # --- Evaluation with warning capture ---------------------------------------------------------
 # Every evaluation of check-flake / check-consumers goes through evaluate(), which keeps the first
 # line of each `evaluation warning:` / `trace: warning:` it prints. finish_eval() compares them with
@@ -528,11 +550,12 @@ pr() {
   fi
 }
 
-# Pushes the fetched flake input sources (every `*-source` path in the job's store: this flake's
-# inputs and those of the evaluated consumers) to the binary cache, so later jobs substitute them
-# by narHash instead of downloading them from GitHub. Settings: ATTIC_ENDPOINT, ATTIC_CACHE (workflow
-# env) and the secret ATTIC_TOKEN (push access to that cache). Without the token it does nothing;
-# a failed push only warns, the cache is an optimisation.
+# Pushes the flake input sources (every input of this flake, archived into the store, and every
+# other `*-source` path in the job's store, i.e. the inputs of the evaluated consumers) to the
+# binary cache, so later jobs substitute them by narHash instead of downloading them from GitHub.
+# Settings: ATTIC_ENDPOINT, ATTIC_CACHE (workflow env) and the secret ATTIC_TOKEN (push access to
+# that cache). Without the token it does nothing; a failed push only warns, the cache is an
+# optimisation.
 cache_push() {
   if [ -z "${ATTIC_TOKEN:-}" ]; then
     echo "::notice::ATTIC_TOKEN is not set; nothing pushed to the binary cache"
@@ -545,7 +568,14 @@ cache_push() {
   mkdir -p "$dir/attic"
   printf '%s' "$ATTIC_TOKEN" >"$dir/token"
   printf 'default-server = "ci"\n[servers.ci]\nendpoint = "%s"\ntoken-file = "%s"\n' "$ATTIC_ENDPOINT" "$dir/token" >"$dir/attic/config.toml"
-  paths=$(nix path-info --all | grep -E -- '-source$' || true)
+  # Nix fetches flake inputs into its Git cache and copies a source into the store only when
+  # evaluation needs it, so the store does not hold every input: `nix flake archive` copies all
+  # inputs of this flake (recursively) into the store first. The other `*-source` paths come from
+  # the consumers that check-consumers evaluated.
+  paths=$({
+    nix flake archive --json --no-write-lock-file . | jq -r '.inputs | .. | .path? // empty'
+    nix path-info --all | grep -E -- '-source$' || true
+  } | sort -u)
   if [ -z "$paths" ]; then
     echo "no flake input sources in the store"
   else
@@ -566,6 +596,7 @@ case "$command" in
   update-packages) update_packages ;;
   check-consumers) check_consumers "$@" ;;
   check-flake) check_flake && finish_eval ;;
+  check-hosts) check_hosts ;;
   docs) docs "$@" ;;
   pr) pr "$@" ;;
   cache-push) cache_push ;;
