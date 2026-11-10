@@ -25,7 +25,8 @@ usage() {
   cat >&2 <<'USAGE'
 usage: attos-ci COMMAND [ARGS]
   update-shared            bump attos-nix-modules inputs: HM/hermes pins in flake.nix, flake.lock
-  update-packages          nix-update every versioned custom package and registry-based Strata API images, update-nix-fetchgit the Pi and skill sources
+  update-packages          nix-update every versioned custom package and registry-based Strata API images, update-nix-fetchgit the Pi and skill sources,
+                           then build every package whose derivation changed (a failed build reverts that bump)
   check-flake              evaluate every checks.x86_64-linux drvPath (one nix process each) and the packages output
   check-consumers [--report-warnings] [owner/repo[:host,host]...]
                            check-flake, then evaluate every nixosConfiguration of each consumer (default .forgejo/consumers)
@@ -78,6 +79,22 @@ package_versions() {
     printf '%s %s\n' "$pkg" "$(nix eval --raw ".#$pkg.version" 2>/dev/null || echo "?")"
   done
 }
+
+# drvPath of each package (version, source hash and every other input), to find what a bump changed.
+package_drvs() {
+  local pkg
+  for pkg in "$@"; do
+    printf '%s %s\n' "$pkg" "$(nix eval --raw ".#$pkg.drvPath" 2>/dev/null || echo "?")"
+  done
+}
+
+# Tracked and untracked paths that differ from HEAD, one per line.
+changed_paths() {
+  git status --porcelain --untracked-files=all | cut -c4- | sort
+}
+
+# Packages whose bump failed to build; read by the workflow after the PR step.
+build_failures_file=.attos-ci-build-failures
 
 # owner/repo of each fetchFromGitHub whose rev changed in the given files.
 fetch_summary() {
@@ -138,10 +155,13 @@ sync_strata_images() {
 
 update_packages() {
   local pkg version failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop ccpocket-bridge attos-mouse attos-deck)
-  local strata_before strata_after
+  local strata_before strata_after drvs_before drvs_after old new pre log built=() build_failed=()
+  local -A bumped_paths=()
   strata_before=$(strata_image_version)
   before=$(package_versions "${packages[@]}")
+  drvs_before=$(package_drvs "${packages[@]}")
   for pkg in "${packages[@]}"; do
+    pre=$(changed_paths)
     local args=(--flake "$pkg")
     [ "$pkg" = pi ] && args+=(--custom-dep modelData)
     if [ "$pkg" = ccpocket-bridge ]; then
@@ -152,7 +172,30 @@ update_packages() {
       args+=(--version "$version")
     fi
     nix-update "${args[@]}" || failed+=("$pkg")
+    bumped_paths[$pkg]=$(comm -13 <(echo "$pre") <(changed_paths))
   done
+  # Evaluation never runs a package's build or installCheck, so a bump with a new upstream layout
+  # would first break on a host. Build (x86_64-linux, nothing pushed) every package whose drvPath
+  # changed; a failing build restores that package's files and is listed in the PR body.
+  drvs_after=$(package_drvs "${packages[@]}")
+  rm -f "$build_failures_file"
+  while read -r pkg old new; do
+    [ "$old" != "$new" ] || continue
+    echo "== build $pkg"
+    log=$(mktemp)
+    if nix build --no-link --max-jobs 1 --print-build-logs ".#$pkg" 2>&1 | tee "$log"; then
+      built+=("$pkg")
+    else
+      build_failed+=("$pkg")
+      echo "::error::$pkg: build failed; reverting its bump" >&2
+      { echo "- $pkg"; echo; echo '```'; tail -n 30 "$log"; echo '```'; echo; } >>"$build_failures_file"
+      while read -r path; do
+        [ -n "$path" ] || continue
+        if git cat-file -e "HEAD:$path" 2>/dev/null; then git checkout -q HEAD -- "$path"; else rm -f -- "$path"; fi
+      done <<<"${bumped_paths[$pkg]:-}"
+    fi
+    rm -f "$log"
+  done < <(paste -d" " <(echo "$drvs_before") <(echo "$drvs_after") | awk '{ print $1, $2, $4 }')
   update-nix-fetchgit modules/pi/resources.nix modules/skills/sources.nix || failed+=(pi-and-skill-sources)
   if ! sync_strata_images; then
     failed+=(strata-images)
@@ -180,9 +223,24 @@ update_packages() {
       fi
       echo
     fi
+    echo "### build（x86_64-linux）"
+    echo
+    if [ ${#built[@]} -eq 0 ] && [ ${#build_failed[@]} -eq 0 ]; then
+      echo "変更したpackageはありません。"
+    else
+      [ ${#built[@]} -eq 0 ] || echo "buildに成功: ${built[*]}"
+      echo
+      if [ ${#build_failed[@]} -gt 0 ]; then
+        echo "**buildに失敗したため更新を戻したもの: ${build_failed[*]}**（このjobも失敗にします）"
+        echo
+        cat "$build_failures_file"
+      fi
+    fi
+    echo
     [ ${#failed[@]} -eq 0 ] || echo "更新できなかったもの: ${failed[*]}"
   } >"$summary_file"
   [ ${#failed[@]} -eq 0 ] || echo "::warning::not updated: ${failed[*]}"
+  [ ${#build_failed[@]} -eq 0 ] || echo "::error::build failed (bump reverted): ${build_failed[*]}"
 }
 
 check_consumers() {
@@ -338,7 +396,7 @@ pr() {
     echo "no changes"; return 0
   fi
   body=$(
-    echo "自動更新のPRです。ビルドはしていません。mergeの前に、必要ならホストで \`nixos-rebuild build\` を実行して確認してください。"
+    echo "自動更新のPRです。ホストのtoplevelはbuildしていません（\`update/packages\` は変更したcustom packageだけbuildします）。mergeの前に、必要ならホストで \`nixos-rebuild build\` を実行して確認してください。"
     echo
     if [ -s "$warnings_report" ]; then cat "$warnings_report"; fi
     lock_summary
