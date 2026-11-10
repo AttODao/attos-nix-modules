@@ -82,21 +82,6 @@
             ) legacyPackages;
             # `nix fmt -- <files>`。flakeのnixpkgsのnixfmtで整形する。
             formatter = nixpkgs.legacyPackages.${system}.nixfmt;
-            # modules/default.nixのstatic importsに、modules/直下のfeature dirがすべて載っていることを確かめる
-            # （載せ忘れたmoduleはoptionが存在せず、consumerの評価で初めて分かるため）。
-            checks =
-              let
-                imported = map baseNameOf (import ./modules).imports;
-                dirs = lib.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./modules));
-                missing = lib.subtractLists imported dirs;
-              in
-              {
-                module-imports =
-                  if missing != [ ] then
-                    throw "modules/default.nix does not import: ${lib.concatStringsSep ", " missing}"
-                  else
-                    nixpkgs.legacyPackages.${system}.writeText "module-imports" (lib.concatLines imported);
-              };
           };
 
         flake = {

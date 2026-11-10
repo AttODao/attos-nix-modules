@@ -74,7 +74,7 @@ Minimal form of a feature with both scopes (replace `example` with the actual fe
 
 ## 4. Register and connect packages
 
-1. Add `./<name>` to the static `imports` in `modules/default.nix`.
+1. No registration is needed: `modules/default.nix` imports every directory under `modules/` from the directory listing (static, independent of config). Do not put non-module directories there.
 2. For normal packages, use the consuming host's `pkgs`.
 3. Only when a custom derivation / override is needed, create `packages/by-name/<first-2-letters>/<name>/package.nix`, as in nixpkgs. Registration is automatic, and editing `packages/default.nix` is not needed. Builders that need consumer inputs take the curried form `{ deps }: { args }: ...`; when overriding a nixpkgs package of the same name, reference `pkgs.<name>`.
 4. For external repos that have `package.nix` at the root, add a `flake = false` input to `flake.nix` and add one line to the external input table in `packages/default.nix`.
@@ -87,7 +87,7 @@ Do not mix updates of the Home Manager revision, the shared nixpkgs or the consu
 
 ## 5. Evaluate
 
-There are no Nix module tests; the only flake check, `checks.x86_64-linux.module-imports`, fails when a directory under `modules/` is missing from `modules/default.nix`. Go custom packages run each package's tests and `go vet` inside the build. Run the following from the repository root.
+There are no Nix module tests. Go custom packages run each package's tests and `go vet` inside the build. Run the following from the repository root.
 
 ```sh
 nix flake check --no-build 'path:.'

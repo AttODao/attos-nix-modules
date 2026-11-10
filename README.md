@@ -88,7 +88,7 @@ HMは共有flakeがrevision固定したraw source（`flake = false`）から読�
 flake.nix
 flake.lock
 modules/
-  default.nix               各機能を静的import
+  default.nix               modules/直下の全dirを静的import（dir一覧から。登録不要）
   home-manager/default.nix  HMユーザー一覧・共通HM設定・package引数
   home-manager/home.nix     全HMユーザー共通のhelper（`config.lib.attos.*`）
   thunderbird/
@@ -111,7 +111,7 @@ workbench/                  作業dir（nix-setup）のdevenv・AGENTS.md・setu
 
 公開option・module間の依存は各機能の `default.nix` に置く。
 `home.nix` / `nixos.nix` は実設定を担当し、HM側は `osConfig.modules.<feature>` を参照する。
-importをenableから組み立てず、設定を条件付きで適用する。独自のfeature探索・依存resolverは使わない。
+importをenableから組み立てず、設定を条件付きで適用する。`modules/default.nix` はdir一覧をそのままimportするだけで、独自のfeature探索・依存resolverは使わない。
 
 ## 機能と依存
 
@@ -399,7 +399,7 @@ mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` す�
 
 ## 検証
 
-module単体のテストは持たない。`checks.x86_64-linux.module-imports` だけが、`modules/` 直下のdirがすべて `modules/default.nix` のimportsに載っていることを確かめる。変更時は次の評価で確認する。
+module単体のテストは持たない。変更時は次の評価で確認する。
 
 ```sh
 nix flake check --no-build 'path:.'
