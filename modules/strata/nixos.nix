@@ -24,7 +24,7 @@ in
             inherit model;
             unit = "${name model}.service";
           }) cfg.models;
-          healthUrl = "http://${healthAddress}:${toString endpoint.port}/health";
+          inherit healthUrl;
           systemctl = "${pkgs.systemd}/bin/systemctl";
           loginctl = "${pkgs.systemd}/bin/loginctl";
           # Checked before a power-off: a running Docker container or heavy job postpones it.
@@ -48,12 +48,13 @@ in
       endpoint = ps.listen s 8080;
       healthAddress =
         if lib.hasInfix ":" endpoint.address then "[${endpoint.address}]" else endpoint.address;
+      healthUrl = "http://${healthAddress}:${toString endpoint.port}/health";
       sessionPackage = attopkgs.strata-headless-session {
         sessionConfig = {
           systemctl = "${pkgs.systemd}/bin/systemctl";
           setterm = "${pkgs.util-linux}/bin/setterm";
           endpoint = ps.url s 8080;
-          healthUrl = "http://${healthAddress}:${toString endpoint.port}/health";
+          inherit healthUrl;
           models = map (model: {
             inherit model;
             unit = "${name model}.service";

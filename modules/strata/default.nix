@@ -49,7 +49,7 @@ in
       user = lib.mkOption {
         type = lib.types.nullOr lib.types.nonEmptyStr;
         default = null;
-        description = "Consumer-owned account running the greeter session and permitted to start/stop model units.";
+        description = "Existing consumer-owned account that owns dataDir, runs the containers and may start/stop the model units from its local session (the Strata greeter session); required when deployed locally.";
       };
       wake = {
         enable = lib.mkEnableOption "on-demand start: the gateway wakes the owner (Wake-on-LAN), starts Strata for POST requests and stops what it started after idleness";
