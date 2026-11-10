@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  options,
   ps,
   ...
 }:
@@ -10,9 +9,6 @@ let
   forgejo = ps.entries config "forgejo";
   localForgejo = ps.select config "forgejo";
   local = localForgejo.standalone || lib.any (entry: ps.isLocal config entry.cfg) forgejo;
-  # Guests pinned to an older nixpkgs import this module too; define the runner only where it exists
-  # (hasAttrByPath also keeps the standalone Home Manager evaluation, which has no NixOS options, working).
-  supported = lib.hasAttrByPath [ "services" "forgejo-runner" ] options;
 in
 {
   # jobはこのhostで動く。このhostを信頼して任せられるworkflowのownerだけにForgejoでrunnerを登録する。
@@ -21,16 +17,12 @@ in
       {
         assertions = [
           {
-            assertion = supported;
-            message = "modules.forgejo-actions-runner needs a nixpkgs with services.forgejo-runner.";
-          }
-          {
             assertion = cfg.uuid != null && cfg.tokenFile != null;
             message = "modules.forgejo-actions-runner.uuid and tokenFile must be supplied when enabled.";
           }
         ];
       }
-      (lib.optionalAttrs supported {
+      {
         services.forgejo-runner.instances.default = {
           enable = true;
           settings = {
@@ -83,7 +75,7 @@ in
           wants = lib.optional local "forgejo.service";
           after = lib.optional local "forgejo.service";
         };
-      })
+      }
     ]
   );
 }
