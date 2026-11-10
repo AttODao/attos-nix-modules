@@ -1,13 +1,11 @@
 {
   osConfig,
-  config,
   lib,
   ...
 }:
 {
   config = lib.mkIf osConfig.modules.vscode.enable {
     programs.vscode.enable = true;
-    programs.vscode.profiles.default.userSettings = lib.mkDefault osConfig.modules.vscode.userSettings;
     programs.vscode.profiles.default.keybindings = [
       {
         key = "ctrl+j";
@@ -45,7 +43,8 @@
         key = "ctrl+space";
         command = "-workbench.action.terminal.sendSequence";
       }
-      # Keep the existing Ctrl+Alt+Space focus toggle while suggestions are visible.
+      # Suggestions move from Ctrl+Space to Ctrl+Alt+Space; the `when` clauses leave VS Code's own
+      # Ctrl+Alt+Space binding (suggestion focus toggle) active while the widget is visible.
       {
         key = "ctrl+alt+space";
         command = "editor.action.triggerSuggest";
