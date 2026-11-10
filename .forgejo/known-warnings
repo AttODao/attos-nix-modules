@@ -13,7 +13,3 @@ Service 'systemd-logind.service' has both 'reloadIfChanged' and 'reloadTriggers'
 # aagl-gtk-on-nix in personal-nix (attodesk). Remove when aagl's rust-overlay pin drops them.
 stdenv.isLinux is deprecated, use stdenv.hostPlatform.isLinux instead
 stdenv.isDarwin is deprecated, use stdenv.hostPlatform.isDarwin instead
-
-# personal-nix hosts/attodesk/deck.nix still sets services.resolved.domains; a personal-nix
-# branch moves it to services.resolved.settings.Resolve.Domains. Remove after that merge.
-The option `services.resolved.domains' defined in
