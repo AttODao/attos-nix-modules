@@ -16,8 +16,8 @@ in
   options.modules = ps.moduleOptions "opencloud" (
     ps.common "OpenCloud server"
     // {
-      dataDir = ps.pathOption "Service root containing the existing config and data directories.";
-      environmentFile = ps.pathOption "Runtime OpenCloud environment file, including credentials.";
+      dataDir = ps.pathOption "Service root holding config/ (opencloud.yaml, used as OC_CONFIG_DIR) and data/ (the state directory); required when deployed locally.";
+      environmentFile = ps.pathOption "Runtime environment file for OpenCloud with its credentials (for example the initial admin password); required when deployed locally.";
     }
   );
 
@@ -26,7 +26,8 @@ in
     (lib.mkIf s.enabled {
       services.opencloud = {
         enable = true;
-        # Rolling release; production would be a downgrade. attopkgs supplies 9.x until nixpkgs does.
+        # Rolling release: the existing data is newer than nixpkgs' production package.
+        # attopkgs.opencloud returns pkgs.opencloud once nixpkgs catches up (see its package.nix).
         package = lib.mkDefault attopkgs.opencloud;
         address = listen.address;
         port = listen.port;
