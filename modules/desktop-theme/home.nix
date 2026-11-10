@@ -61,7 +61,7 @@ in
       colorScheme = lib.mkDefault "dark";
     };
 
-    # The old qt6ct dependency was package-only; use HM's native Qt plugin wiring.
+    # HM installs no package for the name qt6ct (only for qtct), so pass it explicitly.
     qt = {
       enable = true;
       platformTheme = {
