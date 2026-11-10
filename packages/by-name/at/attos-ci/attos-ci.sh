@@ -32,6 +32,7 @@ usage: attos-ci COMMAND [ARGS]
                            check-flake, then evaluate every nixosConfiguration of each consumer (default .forgejo/consumers)
                            against this checkout; fails on evaluation warnings missing from .forgejo/known-warnings
                            (--report-warnings writes them to the PR body instead)
+  docs [WIKI_DIR]          write the generated option tables into WIKI_DIR/module-<name>.md (without WIKI_DIR: render only)
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
 USAGE
   exit 2
@@ -389,6 +390,119 @@ check_flake() {
   evaluate packages nix eval --json "$flake#.packages.x86_64-linux" --apply 'builtins.mapAttrs (_: p: p.drvPath)' >/dev/null
 }
 
+# --- Generated option docs --------------------------------------------------------------------
+# Rows of the option table of each wiki page, keyed by page (module-<key>.md). An option belongs to
+# the modules/<dir> that declares it (public-services registry options too); options declared
+# outside this repo (submodules of upstream modules) fall back to modules.<name>.
+# shellcheck disable=SC2016 # jq program.
+docs_jq='
+  def html: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  def cell: gsub("\r"; "") | gsub("\n[ \t]*\n[\n \t]*"; "<br><br>") | gsub("\n[ \t]*"; " ") | gsub("\\|"; "\\|");
+  def text: split("`") | to_entries | map(if .key % 2 == 0 then (.value | html) else .value end) | join("`") | cell;
+  def code:
+    if . == null then "—"
+    else gsub("\n[ \t]*"; " ") | (if test("`") then "`` " + . + " ``" else "`" + . + "`" end) | gsub("\\|"; "\\|")
+    end;
+  (map(.name)) as $names
+  | [ .[] | . as $o | select(any($names[]; startswith($o.name + ".")) | not) ]
+  | map({
+      page: (.dirs[0] // .loc[1]),
+      row: "| `\(.name)` | \(.type // "" | html | cell) | \(.default | code) | \(.description // "（descriptionなし）" | text) |"
+    })
+  | group_by(.page) | map({ key: .[0].page, value: [.[].row] }) | from_entries
+'
+
+docs_begin='<!-- attos-options:begin -->'
+docs_end='<!-- attos-options:end -->'
+
+# Replace the block between the markers; without markers, replace the one hand-written option table
+# (header with an option/項目 first cell and a 型 column), or add a section before "## 実装".
+# Prints what it did on stderr.
+# shellcheck disable=SC2016 # awk program.
+docs_awk='
+  BEGIN { while ((getline l < blockfile) > 0) blk = blk l "\n" }
+  { line[++n] = $0 }
+  function candidate(i,   f, first) {
+    if (line[i] !~ /^\|/ || (i > 1 && line[i - 1] ~ /^\|/) || line[i + 1] !~ /^\| *:?-+/) return 0
+    split(line[i], f, "|")
+    first = tolower(f[2])
+    return line[i] ~ /型/ && (first ~ /option/ || first ~ /項目/ || first ~ /`modules\./)
+  }
+  END {
+    for (i = 1; i <= n; i++) {
+      if (line[i] == begin) b = i
+      if (line[i] == end && b) { e = i; break }
+    }
+    if (b && e) { mode = "markers"; s = b; t = e }
+    else {
+      for (i = 1; i < n; i++) if (candidate(i)) { c++; ci = i }
+      if (c == 1) {
+        mode = "table"; s = ci
+        for (t = ci; t < n && line[t + 1] ~ /^\|/; t++) ;
+      }
+    }
+    if (mode == "") {
+      mode = c > 1 ? "append (" c " option tables kept)" : "append"
+      for (i = 1; i <= n; i++) if (line[i] ~ /^## 実装/) { ins = i; break }
+      if (!ins) ins = n + 1
+      for (i = 1; i < ins; i++) print line[i]
+      if (ins > 1 && line[ins - 1] != "") print ""
+      print "## option一覧"
+      print ""
+      printf "%s", blk
+      if (ins <= n) { print ""; for (i = ins; i <= n; i++) print line[i] }
+    } else {
+      for (i = 1; i < s; i++) print line[i]
+      printf "%s", blk
+      for (i = t + 1; i <= n; i++) print line[i]
+    }
+    print mode (mode == "table" ? ": replaced " line[s] : "") > "/dev/stderr"
+  }
+'
+
+docs() {
+  local wiki=${1:-} json rows page file block out mode count missing
+  eval_setup
+  json=$eval_tmp/options.json
+  rows=$eval_tmp/rows.json
+  nix eval --impure --json --expr "import ${ATTOS_CI_OPTIONS_DOC:?} { flakeRef = \"path:$PWD\"; }" >"$json"
+  jq "$docs_jq" "$json" >"$rows"
+  missing=$(jq -r '.[] | select((.description // "") == "") | .name' "$json")
+  while read -r page; do
+    [ -z "$page" ] || echo "::warning::option without description: $page" >&2
+  done <<<"$missing"
+  echo "$(jq length "$json") options on $(jq length "$rows") pages"
+  [ -n "$wiki" ] || return 0
+  [ -d "$wiki" ] || { echo "::error::$wiki is not a directory" >&2; exit 1; }
+  for page in $(jq -r 'keys[]' "$rows"); do
+    file=$wiki/module-$page.md
+    if [ ! -f "$file" ]; then
+      echo "::warning::no wiki page module-$page.md for the options of modules/$page" >&2
+      continue
+    fi
+    block=$eval_tmp/block.md
+    count=$(jq --arg p "$page" '.[$p] | length' "$rows")
+    {
+      echo "$docs_begin"
+      echo "<!-- attos-ci docsがnixosModules.defaultのoption宣言から生成します。直すときはmoduleのdescription・型・既定値を直してください。 -->"
+      echo
+      echo "| option | 型 | 既定値 | 説明 |"
+      echo "| --- | --- | --- | --- |"
+      jq -r --arg p "$page" '.[$p][]' "$rows"
+      echo
+      echo "$docs_end"
+    } >"$block"
+    out=$eval_tmp/page.md
+    mode=$(awk -v blockfile="$block" -v begin="$docs_begin" -v end="$docs_end" "$docs_awk" "$file" 2>&1 >"$out")
+    if cmp -s "$out" "$file"; then
+      echo "module-$page.md: unchanged ($count options)"
+    else
+      cat "$out" >"$file"
+      echo "module-$page.md: $mode ($count options)"
+    fi
+  done
+}
+
 
 pr() {
   local branch=$1 title=$2 existing body
@@ -422,6 +536,7 @@ case "$command" in
   update-packages) update_packages ;;
   check-consumers) check_consumers "$@" ;;
   check-flake) check_flake && finish_eval ;;
+  docs) docs "$@" ;;
   pr) pr "$@" ;;
   *) usage ;;
 esac

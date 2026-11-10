@@ -1,0 +1,49 @@
+# Writes the generated option tables (attos-ci docs) into the module pages of the wiki after
+# every push to main, and commits/pushes only when a page changed. Secret: WIKI_TOKEN (write
+# access to the AttODao/attos-nix-modules wiki); it is passed only to the clone and push steps,
+# in an http.extraHeader, never in a URL. The generator itself runs without the token.
+name: docs
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# One run at a time; a newer push regenerates everything anyway.
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+env:
+  NIX_CONFIG: "experimental-features = nix-command flakes"
+  # Outside the checkout, so that the path: flake attos-ci evaluates does not copy the wiki.
+  WIKI_DIR: /tmp/attos-nix-modules.wiki
+
+jobs:
+  wiki:
+    runs-on: docker
+    timeout-minutes: 30
+    container:
+      image: nixos/nix:2.35.3@sha256:ff480dbb23511aa1c10710aa068ceea5b93fed9bfce5f5379f3a6b07282cbc7b
+    steps:
+      - run: |
+          git init -q .
+          git fetch -q --depth 1 "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_REF"
+          git checkout -q FETCH_HEAD
+          git log -1 --format='%H %s'
+      - env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
+        run: |
+          git -c "http.extraHeader=Authorization: token $WIKI_TOKEN" clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.wiki.git" "$WIKI_DIR"
+      - run: nix run .#attos-ci -- docs "$WIKI_DIR"
+      - env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
+        run: |
+          rev=$(git rev-parse --short HEAD)
+          cd "$WIKI_DIR"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "wiki unchanged"
+            exit 0
+          fi
+          git add -A
+          git -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qm "option表を更新（attos-nix-modules $rev）"
+          git -c "http.extraHeader=Authorization: token $WIKI_TOKEN" push -q origin HEAD

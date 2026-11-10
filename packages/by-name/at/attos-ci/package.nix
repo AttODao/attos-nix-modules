@@ -26,5 +26,7 @@ writeShellApplication {
     nix-update
     update-nix-fetchgit
   ];
+  # `attos-ci docs` evaluates this file against the checkout (option declarations → wiki tables).
+  runtimeEnv.ATTOS_CI_OPTIONS_DOC = "${./options-doc.nix}";
   text = builtins.readFile ./attos-ci.sh;
 }
