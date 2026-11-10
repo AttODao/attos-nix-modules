@@ -66,16 +66,10 @@ in
 
   config.assertions =
     selected.assertions
-    ++ lib.concatMap (entry: [
-      {
-        assertion = entry.cfg.private;
-        message = "hermes: password-authenticated dashboards must remain private; use VPN access.";
-      }
-      {
-        assertion = entry.cfg.backendUrl != null;
-        message = "hermes: backendUrl is required for ${entry.hostname}.";
-      }
-    ]) (ps.entries config "hermes")
+    ++ map (entry: {
+      assertion = entry.cfg.private;
+      message = "hermes: password-authenticated dashboards must remain private; use VPN access.";
+    }) (ps.entries config "hermes")
     ++ lib.optional (selected.enabled && selected.cfg.sandbox) {
       # A user manager would run cron workers outside the sandboxed units.
       assertion = !(config.users.users.${selected.cfg.user}.linger or false == true);
