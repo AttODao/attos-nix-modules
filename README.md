@@ -142,8 +142,9 @@ tests/
   fixtures.nix              有効時に必須のoptionへ入れるtest用の値
 workbench/                  作業dir（nix-setup）のdevenv・AGENTS.md・setup.sh
 .forgejo/
-  consumers                 CIで評価する利用側ホストの一覧
-  workflows/                pr-check（PRの評価）、update（週次の更新PR）
+  consumers                 CIで評価する利用側repoの一覧
+  known-warnings            CIが許す評価warning（出どころのcomment付き）
+  workflows/                pr-check（PRの評価）、update（週次の更新PR）、docs（wikiのoption表）
 ```
 
 flake出力: `nixosModules.default`（別名 `nixos.default`、`modules.nixos.default`）、`modules.homeManager.{default,<name>}`（別名 `homeModules`）、`overlays.default`、`attopkgs`、`packages` / `legacyPackages`（x86_64-linux）、`formatter`（nixfmt。`nix fmt -- <files>`）、`checks`（下記の検証）。
@@ -417,19 +418,23 @@ Open-Deckのupstream desktop entryは `--no-sandbox` を使うため、Electron 
 
 ## 自動更新
 
-Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。Actionsは何もbuildしない。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側ホストの一覧は `.forgejo/consumers`（1行に `owner/repo:host,host`）で、手動実行時のinput `consumers` で上書きできる。利用側にホストを足したらこのファイルに足す。PRのタイトル・本文は日本語。
+Forgejo Actions（`.forgejo/workflows/update.yml`）が毎週土曜03:00 JST（手動実行も可）に更新PRを作る。ホストのtoplevelはbuildせず評価だけで、`update/packages` だけが変更したcustom packageをbuildする（下記）。jobは共有Docker runner（label `docker`）上の固定digestの `nixos/nix` containerで動き、repoは `git clone` で取得する。secretは `BOT_TOKEN`（PR作成用bot account）だけで、使うstepにだけ渡す。3つのjobは `needs:` で直列に走る（複数ホストの評価を共有runnerで並列に走らせるとOOMするため）。評価する利用側は `.forgejo/consumers`（1行に `owner/repo`）で、各repoの `nixosConfigurations` の全ホストを評価する（ホストの追加・廃止でこのファイルは変えない。`owner/repo:host,host` と書くとそのホストだけ）。手動実行時のinput `consumers` で上書きできる。PRのタイトル・本文は日本語。
 
 - `update/flake-inputs`: HM revision・hermes-agent release tag・flake.lock。
 - `update/packages`: version固定のcustom package（Open-DeckのAppImage、CC Pocket Bridgeを含む）、Pi plugin catalog（`modules/pi/resources.nix`）とskill repo（`modules/skills/sources.nix`）の固定。StrataのAPI専用image（`modules/strata/nixos.nix`）はRenovateの対象外で、registryのtag一覧から全flavorの`<version>-<flavor>`が揃う最新の数値版を選び、tag・digestをまとめて更新する。取得失敗や揃う版がない場合はimageの固定を変更しない。
 - OCI image: Renovate（`renovate.json`）がmodule内の `image = lib.mkDefault "name:tag@sha256:..."` とForgejo runner labelの `docker://name:tag@sha256:...` をimageごとのPRで更新する。PostgreSQLのmajor更新はdump/restoreが必要なため無効。
 
-flake input・packageのPRは、`nix flake check --no-build` と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
+flake input・packageのPRは、このflakeのcheck・packagesの評価と利用側全ホストの `--override-input` 評価（buildなし）を通してから作る。`update/packages` はさらに、bumpでderivationが変わったpackageをx86_64-linuxでbuildする（評価ではbuild・installCheckが走らず、upstreamのlayout変更が実機の適用で初めて壊れるため）。buildに失敗したpackageはbumpを戻してPR本文に失敗logを載せ、PR作成後にjobを失敗させる。build分だけjobが延びるため、timeoutは90分。container storeは毎回空なので、build入力はcache.nixos.orgから取得する（runnerの負荷はbumpされたpackageの数に比例し、変更なしの週は増えない）。評価で出た `evaluation warning:`・`trace: warning:` のうち `.forgejo/known-warnings`（1行1つの固定文字列、各行の上に出どころのcomment）に無いものはPR本文の「新しい評価warning」に載り、そのPRのpr-checkが失敗する。処理は `attos-ci`（[packages/README.md](packages/README.md)）。
 mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` する。利用側は各repoの週次更新PR（土曜05:00 JST）でpinを上げて採用し、各ホストが自身でbuild・適用する。
 共有runnerは外部のjobも実行するため、このrepoと利用側repoのmainはbranch protectionでbotにPR作成だけを許す運用を推奨する。
 
 ## PRの評価
 
-`.forgejo/workflows/pr-check.yml` はPR（AGitを含む）と手動実行で、PRのcommitに対して `attos-ci check-consumers` を流す（`nix flake check --no-build` と `.forgejo/consumers` の全ホストの `toplevel.drvPath` 評価。buildもsecretも使わない）。server-nix・personal-nixにも同名のworkflowがあり、各repoの全ホストを評価してから `nix flake check --no-build` を流す。
+`.forgejo/workflows/pr-check.yml` はPR（AGitを含む）と手動実行で、PRのcommitに対して `attos-ci check-consumers` を流す（`checks.x86_64-linux` の各attributeを別々の `nix eval` processで評価し（まとめた `nix flake check` は評価だけのcheckが増えるとrunnerの6GiBに収まらないため）、`packages` 出力のdrvPathと、`.forgejo/consumers` の各repoの全ホストの `toplevel.drvPath` を評価する。`.forgejo/known-warnings` に無い評価warningがあれば、全ホストの評価後に一覧を出して失敗する。buildもsecretも使わない）。続けて `attos-ci docs` でwikiのoption表を生成できることだけを確かめる（wikiはPRに含まれないため書き込まない）。server-nix・personal-nixにも同名のworkflowがあり、各repoの全ホストを評価してから `nix flake check --no-build` を流し、各repoの `.forgejo/known-warnings` に無い評価warningで失敗する。
+
+## option表の生成（wiki）
+
+wikiの各 `module-<name>.md` のoption表（`<!-- attos-options:begin -->`〜`<!-- attos-options:end -->` の間）は生成物で、手では直さない。`.forgejo/workflows/docs.yml` がmainへのpush（と手動実行）ごとに `attos-ci docs <wiki>` を流し、ページが変わったときだけbot名義（attos-bot <bot@attodao.cc>）でwikiへcommit・pushする。生成は `nixosModules.default` を最小の `nixosSystem` で評価し、`options.modules` の宣言（`modules.public-services.<name>.<service>` の登録optionを含む）を宣言した `modules/<dir>` のページへ、option名・型・既定値・descriptionの表として書く（buildはしない）。表を直すときはmoduleのdescription・型・既定値（`defaultText`）を直す。markerの無いページは、手書きのoption表が1つだけならそれを置き換え、無いか複数あれば `## 実装` の前に `## option一覧` として足す。secretは `WIKI_TOKEN`（このrepoのwikiへ書けるtoken。clone・pushのstepにだけ渡し、URLには入れない）。
 
 ## 作業環境（nix-setup）
 
