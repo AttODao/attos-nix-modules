@@ -34,6 +34,7 @@ usage: attos-ci COMMAND [ARGS]
                            (--report-warnings writes them to the PR body instead)
   docs [WIKI_DIR]          write the generated option tables into WIKI_DIR/module-<name>.md (without WIKI_DIR: render only)
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
+  cache-push               push the flake input sources in the store to the binary cache (needs ATTIC_TOKEN, ATTIC_ENDPOINT, ATTIC_CACHE)
 USAGE
   exit 2
 }
@@ -527,6 +528,35 @@ pr() {
   fi
 }
 
+# Pushes the fetched flake input sources (every `*-source` path in the job's store: this flake's
+# inputs and those of the evaluated consumers) to the binary cache, so later jobs substitute them
+# by narHash instead of downloading them from GitHub. Settings: ATTIC_ENDPOINT, ATTIC_CACHE (workflow
+# env) and the secret ATTIC_TOKEN (push access to that cache). Without the token it does nothing;
+# a failed push only warns, the cache is an optimisation.
+cache_push() {
+  if [ -z "${ATTIC_TOKEN:-}" ]; then
+    echo "::notice::ATTIC_TOKEN is not set; nothing pushed to the binary cache"
+    return 0
+  fi
+  : "${ATTIC_ENDPOINT:?ATTIC_ENDPOINT is not set}" "${ATTIC_CACHE:?ATTIC_CACHE is not set}"
+  local dir paths
+  dir=$(mktemp -d)
+  # The token goes into a file the client reads (token-file), never into argv or the config.
+  mkdir -p "$dir/attic"
+  printf '%s' "$ATTIC_TOKEN" >"$dir/token"
+  printf 'default-server = "ci"\n[servers.ci]\nendpoint = "%s"\ntoken-file = "%s"\n' "$ATTIC_ENDPOINT" "$dir/token" >"$dir/attic/config.toml"
+  paths=$(nix path-info --all | grep -E -- '-source$' || true)
+  if [ -z "$paths" ]; then
+    echo "no flake input sources in the store"
+  else
+    echo "pushing $(wc -l <<<"$paths") source paths to $ATTIC_CACHE"
+    # shellcheck disable=SC2086 # one store path per word.
+    XDG_CONFIG_HOME=$dir attic push "$ATTIC_CACHE" $paths ||
+      echo "::warning::pushing to the binary cache failed; the job result does not depend on it"
+  fi
+  rm -rf -- "$dir"
+}
+
 
 [ $# -gt 0 ] || usage
 command=$1
@@ -538,5 +568,6 @@ case "$command" in
   check-flake) check_flake && finish_eval ;;
   docs) docs "$@" ;;
   pr) pr "$@" ;;
+  cache-push) cache_push ;;
   *) usage ;;
 esac

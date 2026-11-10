@@ -2,15 +2,25 @@
 # this flake (one nix process per check), then every nixosConfiguration of the consumer repos in
 # .forgejo/consumers with this checkout as attos-nix-modules. Evaluation warnings missing from
 # .forgejo/known-warnings fail the job. Finally the wiki option tables are rendered (not written;
-# docs.yml pushes them after the merge). Nothing is built and no secret is used (the consumer
-# repos are public). One job, so the evaluations run one at a time on the shared runner.
+# docs.yml pushes them after the merge). Nothing is built. The consumer repos are public; the only
+# secret, ATTIC_TOKEN, goes to the cache-push step, which stores the fetched input sources in the
+# binary cache. One job, so the evaluations run one at a time on the shared runner.
 name: pr-check
 on:
   pull_request:
   workflow_dispatch: {}
 
 env:
-  NIX_CONFIG: "experimental-features = nix-command flakes"
+  # Flake inputs and outputs are also substituted from the private binary cache on attobox
+  # (Attic, server-nix); an unreachable cache only costs the timeout, then Nix fetches as before.
+  NIX_CONFIG: |
+    experimental-features = nix-command flakes
+    extra-substituters = https://cache.attodao.cc/ci
+    extra-trusted-public-keys = ci:srH2BUGXoEpH8toJDNpuJtyGSKfCpysKlKXydEZO9Z8=
+    connect-timeout = 5
+  # Where `attos-ci cache-push` pushes the fetched input sources (secret ATTIC_TOKEN).
+  ATTIC_ENDPOINT: https://cache.attodao.cc/
+  ATTIC_CACHE: ci
 
 jobs:
   eval:
@@ -26,4 +36,7 @@ jobs:
           git checkout -q FETCH_HEAD
           git log -1 --format='%H %s'
       - run: nix run .#attos-ci -- check-consumers
+      - run: nix run .#attos-ci -- cache-push
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       - run: nix run .#attos-ci -- docs
