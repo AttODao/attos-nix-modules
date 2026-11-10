@@ -8,6 +8,10 @@
 name: pr-check
 on:
   pull_request:
+  # Also after each merge: Forgejo gives secrets (ATTIC_TOKEN) only to runs on this repository's
+  # own branches, so this run is the one that fills the binary cache with main's input sources.
+  push:
+    branches: [main]
   workflow_dispatch: {}
 
 env:
