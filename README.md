@@ -436,7 +436,7 @@ mergeは手動。必要ならmerge前にホストで `nixos-rebuild build` す�
 
 ## option表の生成（wiki）
 
-wikiの各 `module-<name>.md` のoption表（`<!-- attos-options:begin -->`〜`<!-- attos-options:end -->` の間）は生成物で、手では直さない。`.forgejo/workflows/docs.yml` がmainへのpush（と手動実行）ごとに `attos-ci docs <wiki>` を流し、ページが変わったときだけbot名義（attos-bot <bot@attodao.cc>）でwikiへcommit・pushする。生成は `nixosModules.default` を最小の `nixosSystem` で評価し、`options.modules` の宣言（`modules.public-services.<name>.<service>` の登録optionを含む）を宣言した `modules/<dir>` のページへ、option名・型・既定値・descriptionの表として書く（buildはしない）。表を直すときはmoduleのdescription・型・既定値（`defaultText`）を直す。markerの無いページは、手書きのoption表が1つだけならそれを置き換え、無いか複数あれば `## 実装` の前に `## option一覧` として足す。secretは `WIKI_TOKEN`（このrepoのwikiへ書けるtoken。clone・pushのstepにだけ渡し、URLには入れない）。
+wikiの各 `module-<name>.md` のoption表（`<!-- attos-options:begin -->`〜`<!-- attos-options:end -->` の間）は生成物で、手では直さない。`.forgejo/workflows/docs.yml` がmainへのpush（と手動実行）ごとに `attos-ci docs <wiki>` を流し、ページが変わったときだけbot名義（attos-bot <bot@attodao.cc>）でwikiへcommit・pushする。生成は `nixosModules.default` を最小の `nixosSystem` で評価し、`options.modules` の宣言（`modules.public-services.<name>.<service>` の登録optionを含む）を宣言した `modules/<dir>` のページへ、option名・型・既定値・descriptionの表として書く（buildはしない）。表を直すときはmoduleのdescription・型・既定値（`defaultText`）を直す。markerの無いページは、手書きのoption表が1つだけならそれを置き換え、無いか複数あれば `## 実装` の前に `## option一覧` として足す。secretは `WIKI_TOKEN`（このrepoのwikiへ書けるtoken。pushのstepにだけ渡し、URLには入れない）。wikiは公開なのでcloneにtokenは使わず、`WIKI_TOKEN` が無いときは表を生成するだけでpushせず、warningを出して成功にする。
 
 ## 作業環境（nix-setup）
 

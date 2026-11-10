@@ -1,7 +1,7 @@
 # Writes the generated option tables (attos-ci docs) into the module pages of the wiki after
 # every push to main, and commits/pushes only when a page changed. Secret: WIKI_TOKEN (write
-# access to the AttODao/attos-nix-modules wiki); it is passed only to the clone and push steps,
-# in an http.extraHeader, never in a URL. The generator itself runs without the token.
+# access to the AttODao/attos-nix-modules wiki); it is passed only to the push step, in an
+# http.extraHeader, never in a URL. Without it the job generates the tables and skips the push.
 name: docs
 on:
   push:
@@ -30,10 +30,8 @@ jobs:
           git fetch -q --depth 1 "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$GITHUB_REF"
           git checkout -q FETCH_HEAD
           git log -1 --format='%H %s'
-      - env:
-          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
-        run: |
-          git -c "http.extraHeader=Authorization: token $WIKI_TOKEN" clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.wiki.git" "$WIKI_DIR"
+      # The wiki is publicly readable: clone it without the token.
+      - run: git clone -q "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.wiki.git" "$WIKI_DIR"
       - run: nix run .#attos-ci -- docs "$WIKI_DIR"
       - env:
           WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
@@ -42,6 +40,13 @@ jobs:
           cd "$WIKI_DIR"
           if [ -z "$(git status --porcelain)" ]; then
             echo "wiki unchanged"
+            exit 0
+          fi
+          git status --short
+          if [ -z "$WIKI_TOKEN" ]; then
+            # Without the secret the tables are still generated (so a broken generator fails the
+            # job), but nothing is pushed.
+            echo "::warning::WIKI_TOKEN is not set; the generated option tables were not pushed"
             exit 0
           fi
           git add -A
