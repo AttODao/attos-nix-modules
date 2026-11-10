@@ -10,7 +10,7 @@ let
     backendUrl = lib.mkOption {
       type = lib.types.nullOr lib.types.nonEmptyStr;
       default = null;
-      description = "Native nginx upstream reachable by the gateway; required when Traefik forwards this service. Do not use Docker's own loopback address.";
+      description = "HTTP upstream of this host's nginx (Roundcube and /radicale/) reachable by the gateway, for example http://10.0.0.2:80; required when enabled. nginx keeps its native listen addresses (all addresses); the consumer admits the gateway to that port in its own firewall.";
     };
     dataDir = ps.pathOption "Consumer-owned Radicale data directory for collections.";
     productName = lib.mkOption {
