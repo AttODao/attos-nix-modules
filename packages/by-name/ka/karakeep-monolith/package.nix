@@ -1,37 +1,13 @@
-{ pkgsStatic, coreutils }:
-# monolith 2.10.1 treats fragment-only SVG USE references as remote assets
-# and embeds the entire HTML document into each reference. Keep those local
-# references intact so MathJax and inline SVG sprites remain renderable.
-pkgsStatic.monolith.overrideAttrs (oldAttrs: {
+{ monolith, coreutils }:
+# monolith adds a BASE element for the source page, so fragment-only links in an
+# archive leave the archive viewer. The patch rewrites them to the archive URL
+# when MONOLITH_FRAGMENT_NAVIGATION_PREFIX is set (see modules/karakeep).
+monolith.overrideAttrs (oldAttrs: {
   patches = (oldAttrs.patches or [ ]) ++ [ ./karakeep-monolith.patch ];
 
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck
-
-    local_fragment_output="$(${coreutils}/bin/printf '%s' \
-      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><path id="icon" d="M0 0h1v1H0z"></path><path id="legacy" d="M0 0h2v2H0z"></path></defs><use href="#icon"></use><use xlink:href="#legacy"></use></svg>' \
-      | "$out/bin/monolith" -q -e -M -b file:///tmp/monolith-test/page.html -)"
-
-    case "$local_fragment_output" in
-      *'href="#icon"'*'xlink:href="#legacy"'*) ;;
-      *)
-        echo "fragment-only SVG USE references were not preserved" >&2
-        exit 1
-        ;;
-    esac
-
-    external_reference_output="$(${coreutils}/bin/printf '%s' \
-      '<svg xmlns="http://www.w3.org/2000/svg"><use href="icons.svg#icon"></use></svg>' \
-      | "$out/bin/monolith" -q -e -M -b file:///tmp/monolith-test/page.html -)"
-
-    case "$external_reference_output" in
-      *'href="data:text/plain;base64,"'*) ;;
-      *)
-        echo "external SVG USE references no longer follow the existing processing path" >&2
-        exit 1
-        ;;
-    esac
 
     default_navigation_output="$(${coreutils}/bin/printf '%s' \
       '<html><body><a href="#section">Section</a><h2 id="section">Section</h2></body></html>' \
