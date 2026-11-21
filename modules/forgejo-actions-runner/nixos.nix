@@ -45,7 +45,7 @@ in
               labels = lib.mkIf cfg.docker (
                 lib.mkDefault [
                   "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-24.04@sha256:19619a010b204f44c5340bff7d39b68551109fe6a56a53f75201ea91e05d4270"
-                  "docker:docker://node:24.22.2-bookworm@sha256:8fa96264f302f58bbb13aa7339c541547b56975766ce956c875da149452a3e40"
+                  "docker:docker://node:24.22.3-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496"
                 ]
               );
             };
