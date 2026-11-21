@@ -11,12 +11,12 @@
 # (Node >= 24.15), so it runs on Node instead of the base package's Bun.
 pkgs.context-mode.overrideAttrs (
   finalAttrs: previousAttrs: {
-    version = "2.1.10";
+    version = "2.2.1";
     # Pi loads skills from the package manifest; generic discovery finds duplicate copies.
     dontInstallAgentSkills = true;
     src = fetchurl {
       url = "https://registry.npmjs.org/context-mode/-/context-mode-${finalAttrs.version}.tgz";
-      hash = "sha256-aHH4MuXKop4R/PpjH//g+HyKjKp3sN7ChZOu91+F5Kw=";
+      hash = "sha256-LoIwmnZFupDyv6R+l4XkwK5g/kfuKhydG/bm9dmGtI4=";
     };
     nativeBuildInputs = [ makeWrapper ];
     # Keep the whole published package: the CLI, the MCP server and the Pi adapter
