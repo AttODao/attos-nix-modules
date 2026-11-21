@@ -10,7 +10,7 @@
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
     home-manager = {
-      url = "github:nix-community/home-manager/2c0c1f01521469cf0271180c453c79782d53c2f6";
+      url = "github:nix-community/home-manager/2b13c9cb3aa20653e6f8ee0b7f8331a53ea9b0a9";
       flake = false;
     };
     claude-code-nix = {
