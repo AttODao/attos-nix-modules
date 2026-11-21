@@ -1,12 +1,11 @@
 # Hermes Desktopのremote専用build。upstreamのnix/desktop.nixを利用ホストのpkgsで呼び、
 # local backend（Python venv）をclosureへ入れない。
 {
+  lib,
   callPackage,
-  nodejs_26,
   writeText,
   writeShellScriptBin,
   python3,
-  npm-lockfile-fix,
   hermes-agent-src,
   extraRun ? [ ],
 }:
@@ -14,12 +13,12 @@ let
   src = hermes-agent-src;
   # Release tag of the hermes-agent flake input (packages/default.nix reads it from flake.lock).
   inherit (hermes-agent-src) version;
-  # Upstream lib.nix reads only pmPackages.node; nixpkgs' Node avoids patching
-  # the prebuilt pm binary, which segfaults with patchelf 0.19.x.
-  pmPackages = {
-    node = nodejs_26;
-  };
-  hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit npm-lockfile-fix pmPackages; };
+  # Upstream lib.nix builds with the node and pnpm pinned in pm/lock.json, as
+  # upstream nix/packages.nix does. The pnpmDeps fixed-output hash
+  # (nix/pnpm-deps-hash) is computed with that pnpm and node, and
+  # pm-packages.nix patches the prebuilt binaries with its own fixed patchelf.
+  pmPackages = lib.filterAttrs (_: lib.isDerivation) (callPackage "${src}/nix/pm-packages.nix" { });
+  hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit pmPackages; };
   # icon生成はPillowとresvg-pyだけを使う。
   generatedIcons = callPackage "${src}/nix/icons.nix" {
     venv = python3.withPackages (ps: [
@@ -59,8 +58,10 @@ in
   extraRun = [ "unset HERMES_DESKTOP_HERMES" ] ++ extraRun;
 }).overrideAttrs
   (previous: {
-    # upstream nix/lib.nix reads lockfile sources during evaluation, which fails under
-    # nix flake check --no-build; flake.nix keeps this package out of the checked packages.
+    # upstream nix/lib.nix reads the hermes-agent source during evaluation. Its
+    # npm-based version failed under nix flake check --no-build, which is not
+    # re-verified for the pnpm-based one; flake.nix keeps this package out of the
+    # checked packages.
     passthru = (previous.passthru or { }) // {
       skipFlakeCheck = true;
     };
