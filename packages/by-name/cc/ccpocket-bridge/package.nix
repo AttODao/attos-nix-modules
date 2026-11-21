@@ -7,23 +7,28 @@
   patchelf,
 }:
 
+let
+  # npm hoists the Claude Agent SDK's platform package to the root node_modules
+  # or keeps it in the workspace; stdenv's nullglob drops the unused location.
+  claudeBinaries = "$out/lib/ccpocket/{,packages/bridge/}node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude";
+in
 buildNpmPackage (finalAttrs: {
   pname = "ccpocket-bridge";
-  version = "1.101.0";
+  version = "1.114.0";
 
   # The monorepo tags each app separately; the bridge releases are bridge/v<version>.
   src = fetchFromGitHub {
     owner = "K9i-0";
     repo = "ccpocket";
     tag = "bridge/v${finalAttrs.version}";
-    hash = "sha256-pMaoQRFWv+U5AWYAP0kO1cEXAmM3BLGUiZ+ghuq3pZw=";
+    hash = "sha256-/GVBXsf9DgVd+WHB7cxIIV0BFuQ/pFniDRuUzNiglQM=";
   };
 
   nodejs = nodejs_22;
 
   # Unchanged upstream root lockfile; NPM_FETCHER_VERSION=2 keeps workspace metadata.
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-yjgV8X0t64rFUQ75Mw6NIveHH7SIedZO96KvB68jJuA=";
+  npmDepsHash = "sha256-C12Zhy7OxxMBvZC4wxCJXyB9+d193Xdh5a6XGhfVi7s=";
   npmWorkspace = "packages/bridge";
 
   nativeBuildInputs = [
@@ -37,20 +42,27 @@ buildNpmPackage (finalAttrs: {
     # Production dependencies are hoisted to the root or kept in the workspace.
     npm prune --omit=dev --no-audit --no-fund --ignore-scripts
     # npm keeps musl prebuilds next to glibc ones; they cannot run on glibc.
-    find node_modules packages/bridge/node_modules -maxdepth 2 -type d -name '*musl*' -prune \
-      -exec rm -rf {} +
+    for nm in node_modules packages/bridge/node_modules; do
+      [ ! -d $nm ] || find $nm -maxdepth 2 -type d -name '*musl*' -prune -exec rm -rf {} +
+    done
 
     lib=$out/lib/ccpocket
     mkdir -p $lib/packages/bridge
     cp -a node_modules package.json LICENSE $lib/
-    cp -a packages/bridge/{dist,node_modules,package.json,LICENSE} $lib/packages/bridge/
+    cp -a packages/bridge/{dist,package.json,LICENSE} $lib/packages/bridge/
+    [ ! -d packages/bridge/node_modules ] || cp -a packages/bridge/node_modules $lib/packages/bridge/
     # Workspace self-links point back into the build directory.
     find $lib -xtype l -delete
 
     # The Claude Agent SDK runs its bundled Claude Code binary, which only
     # needs the loader. Do not autoPatchelf sharp: patched libvips segfaults,
     # and the unpatched addon finds libstdc++ already loaded by node.
-    for claude in $lib/packages/bridge/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude; do
+    claudes=(${claudeBinaries})
+    [ ''${#claudes[@]} -gt 0 ] || {
+      echo "no Claude Agent SDK binary (claude-agent-sdk-linux-*/claude) found" >&2
+      exit 1
+    }
+    for claude in "''${claudes[@]}"; do
       patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" "$claude"
     done
 
@@ -69,7 +81,11 @@ buildNpmPackage (finalAttrs: {
       require('sharp')({ create: { width: 1, height: 1, channels: 3, background: 'red' } })
         .png().toBuffer().catch(() => process.exit(1));
     ")
-    $out/lib/ccpocket/packages/bridge/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude --version
+    claudes=(${claudeBinaries})
+    [ ''${#claudes[@]} -gt 0 ] || { echo "no Claude Agent SDK binary found" >&2; exit 1; }
+    for claude in "''${claudes[@]}"; do
+      "$claude" --version
+    done
   '';
 
   meta = {
