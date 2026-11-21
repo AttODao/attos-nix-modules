@@ -19,7 +19,7 @@
     };
     # hermes moduleが使うupstream NixOS moduleと、hermes-desktopのsource。
     # upstreamのPython環境はupstreamのlockで固定するため、nixpkgsはfollowsしない。
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.0";
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.3";
     # scarlett-driver（CLI・daemon・gpui GUI）。root直下のpackage.nixでsourceからbuildする。
     scarlett-driver = {
       url = "git+https://git.attodao.cc/AttODao/scaelett-driver?ref=refs/tags/v0.1.1";
@@ -81,7 +81,7 @@
           {
             inherit legacyPackages;
             # passthru.skipFlakeCheck = true を宣言したpackage（hermes-desktop: upstream nix/lib.nixがeval中に
-            # lockfile sourceを読み、--no-buildのflake checkで失敗する）はcheckされるpackagesから外す
+            # hermes-agentのsourceを読み、npm版で--no-buildのflake checkが失敗した）はcheckされるpackagesから外す
             # （legacyPackagesとattopkgsには残る）。
             packages = lib.filterAttrs (
               _: value: lib.isDerivation value && !(value.passthru.skipFlakeCheck or false)

@@ -7,16 +7,16 @@
 # Remove this override once the pinned nixpkgs provides Pi >= 1.3.0.
 pi-coding-agent.overrideAttrs (
   finalAttrs: previousAttrs: {
-    version = "1.5.0";
+    version = "1.6.0";
 
     src = fetchFromGitHub {
       owner = "earendil-works";
       repo = "pi";
       tag = "v${finalAttrs.version}";
-      hash = "sha256-eH3RuypmXeayuZ9lEag6KW3m2LSM4bDc4ogyHxjZMNI=";
+      hash = "sha256-UVQnOMYikjxi7JREcxPZh/Uamy0l4rBvhawHR/MZZgo=";
     };
 
-    npmDepsHash = "sha256-koVd02HEhEAOkcvIuUg4X1A6P6P0B+wJp4DJLwkH62w=";
+    npmDepsHash = "sha256-V7fRy44X50tqfFewWQ/k5UjvUt+AoMOZkTw/v0bib6o=";
     npmDeps = fetchNpmDeps {
       name = "pi-coding-agent-${finalAttrs.version}-npm-deps";
       inherit (finalAttrs) src;
@@ -25,7 +25,7 @@ pi-coding-agent.overrideAttrs (
 
     modelData = fetchurl {
       url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-      hash = "sha256-4yD+e9K5J3grqaN9NW/lg38aqWpGQyYQ4bO5zLdI6lw=";
+      hash = "sha256-1oMS7FdLyVnLf+4m2k9IdtBnrtm7vnbodjWeYNIpR0c=";
     };
 
     buildPhase = ''
@@ -44,7 +44,9 @@ pi-coding-agent.overrideAttrs (
         rm "$nm/@earendil-works/$pkg"
         cp -r "packages/$src" "$nm/@earendil-works/$pkg"
       done
-      find "$nm" -type l -lname '*/packages/*' -delete
+      # Remaining workspace links (packages/*, and the private apps/* that the
+      # coding agent does not depend on) point into the build directory.
+      find "$nm" -type l \( -lname '*/packages/*' -o -lname '*/apps/*' \) -delete
       find "$nm/.bin" -xtype l -delete
     '';
     postInstallCheck = (previousAttrs.postInstallCheck or "") + ''
