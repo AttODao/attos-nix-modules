@@ -6,6 +6,7 @@
   writeText,
   writeShellScriptBin,
   python3,
+  patchelfUnstable,
   hermes-agent-src,
   extraRun ? [ ],
 }:
@@ -15,9 +16,18 @@ let
   inherit (hermes-agent-src) version;
   # Upstream lib.nix builds with the node and pnpm pinned in pm/lock.json, as
   # upstream nix/packages.nix does. The pnpmDeps fixed-output hash
-  # (nix/pnpm-deps-hash) is computed with that pnpm and node, and
-  # pm-packages.nix patches the prebuilt binaries with its own fixed patchelf.
-  pmPackages = lib.filterAttrs (_: lib.isDerivation) (callPackage "${src}/nix/pm-packages.nix" { });
+  # (nix/pnpm-deps-hash) is computed with that pnpm and node.
+  # pm-packages.nix adds the header-overlap fix (NixOS/patchelf#672) to
+  # `patchelf` with overrideAttrs. That patch is written for 0.19.2, the
+  # `patchelf` of upstream's nixpkgs pin, and does not apply to the 0.15.2 of
+  # the consumers' nixpkgs. patchelfUnstable already contains the fix, so it is
+  # passed as is and the extra patch is dropped.
+  patchelfFixed = patchelfUnstable // {
+    overrideAttrs = _: patchelfUnstable;
+  };
+  pmPackages = lib.filterAttrs (_: lib.isDerivation) (
+    callPackage "${src}/nix/pm-packages.nix" { patchelf = patchelfFixed; }
+  );
   hermesNpmLib = callPackage "${src}/nix/lib.nix" { inherit pmPackages; };
   # icon生成はPillowとresvg-pyだけを使う。
   generatedIcons = callPackage "${src}/nix/icons.nix" {
