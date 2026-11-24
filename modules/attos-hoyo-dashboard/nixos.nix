@@ -61,7 +61,7 @@ in
 
         attos-hoyo-dashboard = {
           # Update version and registry index digest together after release review.
-          image = lib.mkDefault "git.attodao.cc/attodao/attoshoyodashboard:2.3.0@sha256:7220a4854d5c370c8f6432aa67ce0452955a8c92f9a1303283194a788abe0445";
+          image = lib.mkDefault "git.attodao.cc/attodao/attoshoyodashboard:2.3.1@sha256:b0ba40a8ee3aabc4b45928bb81b19683d253d5169d70113a93d945853275e059";
           ports = lib.mkDefault (ps.publish s 8082 8080);
           environmentFiles = lib.mkDefault (
             [ environmentFile ]
