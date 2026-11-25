@@ -3,8 +3,14 @@
 # body and fails the job). New evaluation warnings are listed in the PR body (its pr-check then
 # fails until they are fixed or added to .forgejo/known-warnings). Jobs run in a pinned Nix
 # container on the shared Docker runner, one at a time (consumer evaluation of every host would
-# OOM the runner if run in parallel). Secrets: BOT_TOKEN (bot account that can open PRs, not push
-# main) and ATTIC_TOKEN (push to the binary cache); each is passed only to the steps that need it.
+# OOM the runner if run in parallel).
+#
+# flake-inputs and packages use no bot account: `attos-ci pr` with ATTOS_CI_PUSH_ONLY pushes the
+# update/<name> branch with the run's automatic token, the pull request body in the commit message,
+# and a scheduled job outside Actions (Hermes, update-pr-open) opens the pull request from that
+# branch over SSH as a regular user, so that its checks run. Secrets: ATTIC_TOKEN (push to the
+# binary cache) and, for the images job only, BOT_TOKEN (Renovate opens its pull requests through
+# the API); each is passed only to the steps that need it.
 name: update
 on:
   schedule:
@@ -41,15 +47,14 @@ jobs:
       - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-shared
       - run: nix run .#attos-ci -- check-consumers --report-warnings $CONSUMERS
-        env:
-          FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
       - run: nix run .#attos-ci -- cache-push
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       - run: |
           nix run .#attos-ci -- pr update/flake-inputs "chore(flake): Home Manager・nixpkgs・固定inputを更新"
         env:
-          FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ATTOS_CI_PUSH_ONLY: "1"
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   packages:
     needs: flake-inputs
@@ -64,15 +69,14 @@ jobs:
       - run: git clone -q -b main "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" .
       - run: nix run .#attos-ci -- update-packages
       - run: nix run .#attos-ci -- check-consumers --report-warnings $CONSUMERS
-        env:
-          FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
       - run: nix run .#attos-ci -- cache-push
         env:
           ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       - run: |
           nix run .#attos-ci -- pr update/packages "chore(packages): 自前パッケージとPiリソースを更新"
         env:
-          FORGEJO_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ATTOS_CI_PUSH_ONLY: "1"
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # The PR keeps only the bumps that built; fail the job so a reverted bump is not missed.
       - run: |
           if [ -s .attos-ci-build-failures ]; then cat .attos-ci-build-failures; exit 1; fi
