@@ -19,7 +19,7 @@
     };
     # hermes moduleが使うupstream NixOS moduleと、hermes-desktopのsource。
     # upstreamのPython環境はupstreamのlockで固定するため、nixpkgsはfollowsしない。
-    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.3";
+    hermes-agent.url = "github:NousResearch/hermes-agent/v0.23.4";
     # scarlett-driver（CLI・daemon・gpui GUI）。root直下のpackage.nixでsourceからbuildする。
     scarlett-driver = {
       url = "git+https://git.attodao.cc/AttODao/scaelett-driver?ref=refs/tags/v0.1.1";
