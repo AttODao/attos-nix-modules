@@ -1,5 +1,7 @@
 # attos-ci: shared steps for the Forgejo Actions workflows of attos-nix-modules and its consumers.
 # Environment: GITHUB_SERVER_URL, GITHUB_REPOSITORY (Actions), FORGEJO_TOKEN (bot; not needed by check-consumers).
+# With ATTOS_CI_PUSH_ONLY, `pr` needs no bot token: FORGEJO_TOKEN is then the run's automatic token
+# and the pull request is opened from the pushed branch by a job outside Actions.
 set -euo pipefail
 
 api() { curl -fsS -H "Authorization: token $FORGEJO_TOKEN" -H 'Content-Type: application/json' "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/$1" "${@:2}"; }
@@ -36,6 +38,7 @@ usage: attos-ci COMMAND [ARGS]
                            fails on evaluation warnings missing from .forgejo/known-warnings
   docs [WIKI_DIR]          write the generated option tables into WIKI_DIR/module-<name>.md (without WIKI_DIR: render only)
   pr BRANCH TITLE          commit the work tree to BRANCH and open or update its pull request
+                           (with ATTOS_CI_PUSH_ONLY: push BRANCH only, the body as the commit message body)
   cache-push               push the flake input sources in the store to the binary cache (needs ATTIC_TOKEN, ATTIC_ENDPOINT, ATTIC_CACHE)
 USAGE
   exit 2
@@ -539,6 +542,16 @@ pr() {
     lock_summary
     if [ -s "$summary_file" ]; then cat "$summary_file"; fi
   )
+  if [ -n "${ATTOS_CI_PUSH_ONLY:-}" ]; then
+    # Without a bot account: FORGEJO_TOKEN is the run's automatic token. It can push a branch of
+    # this repository, but a pull request opened with it would belong to the Actions bot. So push
+    # the commit only, with the pull request body as the commit message body; a job outside
+    # Actions that pushes over SSH as a regular user opens the pull request from this branch.
+    git -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qa -m "$title" -m "$body"
+    auth_git push -qf "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
+    echo "pushed $branch"
+    return 0
+  fi
   git -c user.name=attos-bot -c user.email=bot@attodao.cc commit -qam "$title"
   auth_git push -qf "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
   existing=$(api "pulls?state=open&limit=50" | jq --arg b "$branch" '[.[] | select(.head.ref == $b)][0].number // empty')
