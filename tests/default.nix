@@ -136,6 +136,80 @@ let
     else
       pkgs.writeText "home-manager-unknown-option" "rejected\n";
 
+  # --- service-catalog -----------------------------------------------------------------------
+  # One registry entry more renders one [[services]] more in the HyperMonitor config and widens
+  # the attos-deck-agent allow-list of its owner by its units (status included); removing it
+  # (the reverse) takes both away. Nothing in the HyperMonitor module names a service.
+  catalogCheck =
+    let
+      registry = extra: {
+        users.groups.agent = { };
+        modules.attos-deck.agent = {
+          enable = true;
+          socketGroup = "agent";
+        };
+        modules.public-services = {
+          "dash.${hostName}.example".hypermonitor = fixtures.services.hypermonitor // {
+            enable = true;
+            host = hostName;
+            agents.${hostName}.socket = "/run/attos-deck-agent.sock";
+          };
+          "git.${hostName}.example".forgejo = fixtures.services.forgejo // {
+            enable = true;
+            host = hostName;
+          };
+        }
+        // extra;
+      };
+      eval =
+        extra:
+        (nixos [
+          nixosModule
+          (registry extra)
+        ]).config;
+      summary = c: {
+        services = map (svc: svc.id) c.modules.hypermonitor-settings.services;
+        units = c.modules.attos-deck.agent.settings.units;
+      };
+      before = summary (eval { });
+      after = summary (eval {
+        "watch.${hostName}.example".jellyfin = fixtures.services.jellyfin // {
+          enable = true;
+          host = hostName;
+        };
+      });
+      added = lib.subtractLists before.services after.services;
+      addedUnits = lib.subtractLists (lib.attrNames before.units) (lib.attrNames after.units);
+      expect = cond: message: if cond then true else throw "service-catalog: ${message}";
+    in
+    assert expect (
+      before.services == [
+        "dash.${hostName}.example"
+        "git.${hostName}.example"
+      ]
+    ) "services ${builtins.toJSON before.services}";
+    assert expect (
+      added == [ "watch.${hostName}.example" ]
+      && builtins.length after.services == builtins.length before.services + 1
+    ) "one entry more did not add exactly one service: ${builtins.toJSON after.services}";
+    assert expect (
+      addedUnits == [ "jellyfin.service" ]
+    ) "one entry more did not add its unit: ${builtins.toJSON addedUnits}";
+    assert expect (
+      after.units."jellyfin.service".allow == [
+        "restart"
+        "status"
+      ]
+    ) "allow ${builtins.toJSON after.units."jellyfin.service"}";
+    assert expect (
+      before.units."forgejo.service".allow == [
+        "restart"
+        "status"
+      ]
+      && before.units ? "hypermonitor.service"
+    ) "allow-list before ${builtins.toJSON before.units}";
+    pkgs.writeText "service-catalog" (builtins.toJSON { inherit before after; });
+
   # --- modules-disabled ---------------------------------------------------------------------
   summary =
     { config, options, ... }:
@@ -204,6 +278,7 @@ let
 in
 {
   modules-disabled = disabledCheck;
+  service-catalog = catalogCheck;
   home-manager-unknown-option = homeUnknownOption;
 }
 // moduleChecks

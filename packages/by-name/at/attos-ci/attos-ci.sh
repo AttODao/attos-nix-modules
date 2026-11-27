@@ -161,7 +161,7 @@ sync_strata_images() {
 }
 
 update_packages() {
-  local pkg version failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop ccpocket-bridge attos-mouse attos-deck)
+  local pkg version failed=() before after packages=(pi context-mode paseo pi-mermaid-studio atcoder-cli atcoder-aclogin mcsmanager pipeasio open-deck-desktop ccpocket-bridge attos-mouse attos-deck hypermonitor)
   local strata_before strata_after drvs_before drvs_after old new pre log built=() build_failed=()
   local -A bumped_paths=()
   strata_before=$(strata_image_version)
@@ -171,6 +171,8 @@ update_packages() {
     pre=$(changed_paths)
     local args=(--flake "$pkg")
     [ "$pkg" = pi ] && args+=(--custom-dep modelData)
+    # Server releases are tagged server-vX.Y.Z (vX.Y.Z tags are the Android app).
+    [ "$pkg" = hypermonitor ] && args+=(--version-regex 'server-v(.*)')
     if [ "$pkg" = ccpocket-bridge ]; then
       # The releases feed nix-update reads is flooded by the monorepo's app tags; take the newest bridge tag.
       version=$(git ls-remote --tags --refs https://github.com/K9i-0/ccpocket 'bridge/v*' | sed 's|.*refs/tags/bridge/v||' |

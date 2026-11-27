@@ -166,6 +166,7 @@ importをenableから組み立てず、設定を条件付きで適用する。`m
 | greeter | NixOS | Hyprland |
 | attos-mouse | NixOS + HM | Logitech hidraw uaccess（Solaarとは排他） |
 | attos-deck | NixOS | —（Stream Deck MK.2のsystem service・udev・専用group。`agent.enable`はsystemctl agentのsocket） |
+| hypermonitor | NixOS | —（公開サービス種類。HyperMonitorのserverとWeb UI、専用user。サービス一覧は`modules.service-catalog`から生成） |
 | solaar | NixOS + HM | Noctalia、HM側にKando同梱 |
 | pipeasio | NixOS + HM | PipeWire・Steam（`programs.steam.package`へWINEDLLPATH付きSteamを既定値として渡す） |
 | pipewire | NixOS | rtkit・ALSA・Pulse |
@@ -337,7 +338,7 @@ modules.public-services."vault.example.org".vaultwarden = {
 
 対応サービス: `attic`, `forgejo`, `immich`, `karakeep`, `vaultwarden`, `opencloud`, `mcsmanager`,
 `jellyfin`, `ollama`（任意のOpen WebUIを同梱）, `searxng`, `attos-hoyo-dashboard`, `mailserver`, `groupware`, `headscale`,
-`paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`。
+`paseo`, `ccpocket`, `ssh`, `code-server`, `hermes`, `strata`, `hypermonitor`。
 DNS・公開CNAME・Traefikはこのnamespaceから導出し、consumerの `public-hosts.nix` をimportしない。
 `deploy = false` はendpoint登録のみで、local unit・秘密・保存先を要求しない。
 HTTPサービスは有効時に `backendUrl = "http://<address>:<port>"`（port明示）が必須。gatewayのupstreamであり、Dockerサービスの所有OSはcontainerをこのaddress:portへpublishする。native service（Forgejo・Immich・Vaultwarden・OpenCloud・Jellyfin・SearXNG・Karakeep・Attic）はこのaddress:portでlistenし、`127.x`以外ならfirewallをこの宛先address・portだけ開ける。
@@ -367,6 +368,14 @@ upstreamはactivation時に`config.yaml`へNixの`settings`（既定は`terminal
 
 `hermes.botDesktop`のpackage・fontは`modules.bot-screen-host`を有効にして入れる。
 `hermes.botDesktop`（既定false）はBot Screen（TigerVNC Xvnc + Xfce core）・DejaVuとNoto CJK font・computer_use用の`attopkgs.cua-driver`をgateway・dashboard backend・SSH/Desktop sessionへ供給する。`sandbox = false`が必須で、X11 socketをsession間で共有する。driverはNixの絶対pathを`HERMES_CUA_DRIVER_CMD`で指定し、PMによる個別install・repairを避ける。toolsetの有効化と`bot_desktop.*`は`hermes config set`でNixの外で管理する。
+
+### 監視・操作のcatalog（`modules.service-catalog`）
+
+各サービス種類のmoduleは`modules/<kind>/catalog.nix`で、registryの1件（`{ hostname, cfg }`）から表示名・アイコンの種類・systemd unit・許可する操作（`start`／`stop`／`restart`）・到達確認のpath・開始時の選択肢（Strataの`models`ごとのunit）を返す関数を`modules.service-catalog.kinds.<kind>`に1回だけ宣言する。`ps.catalog config`は有効で`deploy = true`の項目を宣言のある種類だけhostnameごとに1サービスへまとめる（同じhostnameの複数の種類はunit・操作を合わせ、題名は`order`の小さい方）。registryに無い基盤のunitは`modules.service-catalog.extraTargets`。attos-deck-agentを有効にしたhostでは、そのhostが所有するサービスのunitに`status`と許可した操作が`modules.attos-deck.agent.settings.units`へ自動で入る（`service-catalog.agentAllow`、既定true）。registryに1件足せば両方に出て、消せば消える（`checks.service-catalog`）。
+
+HyperMonitorの公開入力は `hypermonitor.{hosts,agents,placement,prometheusUrl,forgejo,github,ahd,hermes,trustedProxies,sessionIdleHours,sessionMaxDays,ingestListen,stateDirectory,package}`。`hosts`は表示するhost（`agent`・`optional`・`gpu`・`wol`・`flake`（`owner/repo`、mainとの差）・`report`（host-reportのURL））、`agents`はattos-deck-agentの経路（同じhostは`socket`、他は`ssh = "<user>@<address>"`）、`placement.<owner>`はregistryの`host`がdashboardのhostでない所有者（guest）をどのhostに出しどのagentで操作するか。各`tokenFile`はruntime pathで`LoadCredential`で渡す。生成したTOMLはbuild時に`hypermonitor check-config`で検証し、`/etc/hypermonitor/config.toml`にも置く（`sudo hypermonitor passwd --config /etc/hypermonitor/config.toml`でpasswordを設定）。unitは専用user `hypermonitor`・`StateDirectory`・同じhostのagent socket group。SSHの鍵は初回起動時に`<state>/ssh/id_ed25519`へ作り、公開鍵を毎回journalへ出すので、他hostの`attos-deck` accountへ`restrict,command="…attos-deck-agent ssh"`付きで登録する。
+
+host-reportのJSONは`system.configuration_revision`（`nixos-version --json`の`configurationRevision`、利用側が`system.configurationRevision`を設定したときだけ）も持つ。
 
 ### 複数マシンへの配置
 
