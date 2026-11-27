@@ -8,7 +8,10 @@ let
   s = ps.select config "attos-hoyo-dashboard";
 in
 {
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ./catalog.nix
+  ];
 
   options.modules = ps.moduleOptions "attos-hoyo-dashboard" (
     ps.common "AttOsHoYoDashboard HoYoLAB dashboard"

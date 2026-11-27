@@ -19,6 +19,8 @@ let
   ) config.virtualisation.oci-containers.containers;
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules.public-services = mkOption {
     type = types.attrsOf (
       types.submodule {

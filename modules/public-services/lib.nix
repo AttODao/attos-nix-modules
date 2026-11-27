@@ -6,6 +6,7 @@ let
     "attic"
     "forgejo"
     "headscale"
+    "hypermonitor"
     "immich"
     "attos-hoyo-dashboard"
     "karakeep"
@@ -276,6 +277,72 @@ rec {
         }
       ];
     };
+
+  # Monitoring catalog (modules.service-catalog, catalog.nix): one service per registry hostname
+  # whose enabled, deployed entries have a kind declaration, then the extra targets. Fields
+  # follow HyperMonitor's [[services]]; `host` is the registry owner (networking.hostName).
+  catalog =
+    config:
+    let
+      kinds = config.modules.service-catalog.kinds;
+      routed = map (route: route.hostname) (routes config);
+      declared = lib.concatLists (
+        lib.mapAttrsToList (
+          hostname: services:
+          lib.mapAttrsToList
+            (service: cfg: {
+              inherit hostname service cfg;
+              decl = kinds.${service} { inherit hostname cfg; };
+            })
+            (
+              lib.filterAttrs (
+                service: cfg: (cfg.enable or false) && (cfg.deploy or true) && kinds ? ${service}
+              ) services
+            )
+        ) config.modules.public-services
+      );
+      service =
+        hostname: parts:
+        let
+          sorted = lib.sort (a: b: a.decl.order < b.decl.order) parts;
+          first = builtins.head sorted;
+          url = if lib.elem hostname routed then "https://${hostname}" else null;
+          probes = lib.filter (path: path != null) (map (p: p.decl.probe) sorted);
+        in
+        {
+          id = hostname;
+          inherit (first.decl) title;
+          kind = if first.decl.kind != null then first.decl.kind else first.service;
+          inherit (first.cfg) host;
+          inherit url;
+          private = lib.all (p: p.cfg.private or false) sorted;
+          probe =
+            if url == null || probes == [ ] then
+              null
+            else if builtins.head probes == "/" then
+              url
+            else
+              url + builtins.head probes;
+          units = lib.unique (lib.concatMap (p: p.decl.units) sorted);
+          ops = lib.unique (lib.concatMap (p: p.decl.ops) sorted);
+          variants = lib.concatMap (p: p.decl.variants) sorted;
+        };
+    in
+    lib.mapAttrsToList service (lib.groupBy (p: p.hostname) declared)
+    ++ map (t: {
+      inherit (t)
+        id
+        title
+        kind
+        host
+        url
+        probe
+        units
+        ops
+        variants
+        ;
+      private = true;
+    }) config.modules.service-catalog.extraTargets;
 
   require =
     service: field: value:

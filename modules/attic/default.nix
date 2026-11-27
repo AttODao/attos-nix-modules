@@ -18,6 +18,8 @@ let
       "${listen.address}:${toString listen.port}";
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "attic" (
     ps.common "Attic Nix binary cache server"
     // {

@@ -20,7 +20,10 @@ let
     };
 in
 {
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ./catalog.nix
+  ];
   options.modules = ps.moduleOptions "mcsmanager" (
     ps.common "MCSManager game management"
     // {

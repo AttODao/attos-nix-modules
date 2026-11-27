@@ -10,7 +10,10 @@ let
   mediaDir = if s.standalone then s.cfg.mediaDir else ps.require "jellyfin" "mediaDir" s.cfg.mediaDir;
 in
 {
-  imports = [ ../ytdl-sub ];
+  imports = [
+    ../ytdl-sub
+    ./catalog.nix
+  ];
 
   options.modules = ps.moduleOptions "jellyfin" (
     ps.common "Jellyfin media server"

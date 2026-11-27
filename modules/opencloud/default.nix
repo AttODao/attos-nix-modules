@@ -13,6 +13,8 @@ let
   listen = ps.listen s 9200;
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "opencloud" (
     ps.common "OpenCloud server"
     // {

@@ -10,6 +10,8 @@ let
   listen = ps.listen s 8081;
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "searxng" (
     ps.common "SearXNG search service"
     // {

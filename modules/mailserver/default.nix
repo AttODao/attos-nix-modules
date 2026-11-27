@@ -16,7 +16,10 @@ in
 {
   # The upstream simple-nixos-mailserver module comes from the flake input nixos-mailserver,
   # imported next to ./modules by nixosModules.default in flake.nix.
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ./catalog.nix
+  ];
 
   options.modules = ps.moduleOptions "mailserver" (
     ps.common "shared simple-nixos-mailserver integration"

@@ -15,7 +15,10 @@ let
     };
 in
 {
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ./catalog.nix
+  ];
 
   options.modules = ps.moduleOptions "hermes" (
     ps.common "Hermes Agent gateway and dashboard as sandboxed native services"

@@ -49,6 +49,11 @@ let
       dataDir = "/srv/hermes";
       private = true;
     };
+    hypermonitor = {
+      backendUrl = "http://127.0.0.1:8650";
+      private = true;
+      hosts = [ { name = hostName; } ];
+    };
     immich = {
       backendUrl = "http://127.0.0.1:2283";
       dataDir = "/srv/immich";

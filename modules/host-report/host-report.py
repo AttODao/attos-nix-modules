@@ -396,6 +396,13 @@ def collect(cfg, state):
         'configuration_changed_since_boot': current != booted,
         'reboot_required': bool(boot_changes),
         'changed_boot_artifacts': boot_changes}
+    # The flake revision the running configuration was built from
+    # (system.configurationRevision; null when unset, `<rev>-dirty` for a dirty tree).
+    revision = attempt('nixos-version', lambda: command_json(
+        ['/run/current-system/sw/bin/nixos-version', '--json']
+    ).get('configurationRevision'), None)
+    report['system']['configuration_revision'] = (
+        short(revision, 64) if isinstance(revision, str) else None)
     report['uptime_seconds'] = float(
         Path('/proc/uptime').read_text().split()[0])
     report['load'] = list(os.getloadavg())
