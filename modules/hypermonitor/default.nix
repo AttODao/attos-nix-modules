@@ -123,6 +123,23 @@ let
       default = null;
       description = "address:port of the bridge-only listener (Hermes bridge); null for none.";
     };
+    ingestPeers = mkOption {
+      type = types.listOf (types.strMatching "[0-9a-fA-F.:]+");
+      default = [ ];
+      example = [ "10.0.0.13" ];
+      description = "IP addresses of the bridges (modules.hypermonitor-bridge) that may call `ingestListen`; the server answers every other peer with 403.";
+    };
+    ingestInterface = mkOption {
+      type = types.nullOr types.nonEmptyStr;
+      default = null;
+      example = "incusbr0";
+      description = "Interface the bridges come in on: opens `ingestListen` in the nftables firewall for `ingestPeers` on it only; null opens nothing.";
+    };
+    briefRetentionDays = mkOption {
+      type = types.nullOr types.ints.positive;
+      default = null;
+      description = "Days the ingested morning Briefs are kept; null keeps the server default (365).";
+    };
     trustedProxies = mkOption {
       type = types.listOf types.nonEmptyStr;
       default = [
@@ -262,5 +279,15 @@ in
         assertion = (a.socket == null) != (a.ssh == null);
         message = "hypermonitor.agents.${agentName}: set exactly one of socket and ssh.";
       }) s.cfg.agents
+      ++ [
+        {
+          assertion = s.cfg.ingestListen == null || s.cfg.ingestPeers != [ ];
+          message = "hypermonitor.ingestListen needs ingestPeers (the bridges allowed to call it).";
+        }
+        {
+          assertion = s.cfg.ingestInterface == null || config.networking.nftables.enable;
+          message = "hypermonitor.ingestInterface opens the port with nftables rules: enable networking.nftables.";
+        }
+      ]
     );
 }

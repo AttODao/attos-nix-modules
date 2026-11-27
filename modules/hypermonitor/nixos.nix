@@ -91,7 +91,13 @@ let
     ) cfg.hosts;
     inherit services;
   }
-  // lib.optionalAttrs (cfg.ingestListen != null) { ingest_listen = cfg.ingestListen; }
+  // lib.optionalAttrs (cfg.ingestListen != null) {
+    ingest_listen = cfg.ingestListen;
+    ingest_peers = cfg.ingestPeers;
+  }
+  // lib.optionalAttrs (cfg.briefRetentionDays != null) {
+    brief.retention_days = cfg.briefRetentionDays;
+  }
   // lib.optionalAttrs (cfg.prometheusUrl != null) { prometheus.url = cfg.prometheusUrl; }
   // lib.optionalAttrs (cfg.forgejo != null) {
     forgejo = {
@@ -120,6 +126,22 @@ let
     cp ${configToml} "$out"
   '';
 
+  # The bridges may reach the ingest listener on their interface, nothing else may.
+  ingest =
+    let
+      m =
+        if cfg.ingestListen != null then builtins.match "\\[?([^]]*)]?:([0-9]+)" cfg.ingestListen else null;
+      address = if m != null then builtins.elemAt m 0 else "";
+      port = if m != null then builtins.elemAt m 1 else "";
+      family = a: if lib.hasInfix ":" a then "ip6" else "ip";
+      wildcard = address == "0.0.0.0" || address == "::";
+      daddr = lib.optionalString (!wildcard) " ${family address} daddr ${address}";
+    in
+    lib.concatMapStrings (
+      peer:
+      "iifname \"${cfg.ingestInterface}\" ${family peer} saddr ${peer}${daddr} tcp dport ${port} accept\n"
+    ) cfg.ingestPeers;
+
   # The server's SSH identity for the agents of other hosts: generated once in the state
   # directory and logged, so the consumer can authorise it on those hosts' agent accounts.
   keygen = pkgs.writeShellScript "hypermonitor-keygen" ''
@@ -145,6 +167,9 @@ in
     # `sudo hypermonitor passwd --config /etc/hypermonitor/config.toml` sets the login password.
     environment.systemPackages = [ pkg ];
     environment.etc."hypermonitor/config.toml".source = configFile;
+    networking.firewall.extraInputRules = lib.mkIf (
+      cfg.ingestListen != null && cfg.ingestInterface != null
+    ) ingest;
 
     systemd.services.hypermonitor = ps.afterNetworkOnline // {
       description = "HyperMonitor dashboard";

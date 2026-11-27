@@ -120,6 +120,15 @@ in
 
   modules = {
     attos-jobs.modules.attos-jobs.socketGroup = "wheel";
+    hypermonitor-bridge.modules.hypermonitor-bridge = {
+      server = "http://10.0.0.1:8651";
+      categories = [
+        {
+          id = "news";
+          label = "News";
+        }
+      ];
+    };
     # The bridge listens on the SSH address registered for the same hostname.
     ccpocket.modules.public-services.${fqdn "ccpocket"}.ssh = {
       enable = true;
