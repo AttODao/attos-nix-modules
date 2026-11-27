@@ -54,7 +54,7 @@ in
     };
 
     virtualisation.oci-containers.containers.open-terminal = {
-      image = lib.mkDefault "ghcr.io/open-webui/open-terminal:0.17.20@sha256:0b5efee30aad238aa4f9268e29f674c5b1ca47022a1d84c5ec8083047bf826ed";
+      image = lib.mkDefault "ghcr.io/open-webui/open-terminal:0.18.8@sha256:58037fb1af52ae89df67b533c00594a4a4ebedf880a757de4c6e0d3dcb095b6d";
       environmentFiles = lib.mkDefault [ environmentFile ];
       environment = {
         OPEN_TERMINAL_CORS_ALLOWED_ORIGINS = lib.mkDefault (
