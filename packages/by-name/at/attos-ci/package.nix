@@ -2,6 +2,7 @@
   writeShellApplication,
   attic-client,
   coreutils,
+  diffutils,
   findutils,
   gawk,
   gnugrep,
@@ -18,6 +19,7 @@ writeShellApplication {
   runtimeInputs = [
     attic-client
     coreutils
+    diffutils
     findutils
     gawk
     gnugrep
