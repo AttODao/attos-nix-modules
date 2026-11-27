@@ -397,7 +397,8 @@ def collect(cfg, state):
         'reboot_required': bool(boot_changes),
         'changed_boot_artifacts': boot_changes}
     # The flake revision the running configuration was built from
-    # (system.configurationRevision; null when unset, `<rev>-dirty` for a dirty tree).
+    # (system.configurationRevision; null when unset, `<rev>-dirty` for
+    # a dirty tree).
     revision = attempt('nixos-version', lambda: command_json(
         ['/run/current-system/sw/bin/nixos-version', '--json']
     ).get('configurationRevision'), None)
