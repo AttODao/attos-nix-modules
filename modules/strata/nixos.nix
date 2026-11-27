@@ -38,9 +38,9 @@ in
       keyFile = ps.require "strata" "apiKeyFile" cfg.apiKeyFile;
       flavor = ps.require "strata" "flavor" cfg.flavor;
       images = {
-        rocm-gfx110x = "ghcr.io/niko1221/strata:0.2.17-rocm-gfx110x@sha256:2b1ff696d1caaf32f3f7b157c01c923ff3b42072e6700cfdd3d00c876a8069ca";
-        rocm-gfx120x = "ghcr.io/niko1221/strata:0.2.17-rocm-gfx120x@sha256:af9b6e45e4e07cdaeb55648a66a44d3d862ee3c3051efe3855a2bda131065ff8";
-        rocm-gfx1151 = "ghcr.io/niko1221/strata:0.2.17-rocm-gfx1151@sha256:a6814aea465ac5f55fe60ed2e804bb4cb10fd8326d7d3c5cf19bbcd5ffda5cdc";
+        rocm-gfx110x = "ghcr.io/niko1221/strata:0.2.22-rocm-gfx110x@sha256:1ac7136d88761c1c0ff9dc1234649a9460a086d459bb6ad6ed768266ce967eec";
+        rocm-gfx120x = "ghcr.io/niko1221/strata:0.2.22-rocm-gfx120x@sha256:091093e311d7fceb39fe93df3a7db3741b2d2cc6999d71a685441280437be18b";
+        rocm-gfx1151 = "ghcr.io/niko1221/strata:0.2.22-rocm-gfx1151@sha256:3401ea9ea802cf62fa4b4cfc42fecd12972faa816bd781d4ac300303cacc6429";
       };
       name = model: "strata-headless-${lib.toLower (lib.replaceStrings [ "_" "." ] [ "-" "-" ] model)}";
       names = map name cfg.models;
