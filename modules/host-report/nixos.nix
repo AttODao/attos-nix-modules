@@ -12,6 +12,7 @@ let
       host = config.networking.hostName;
       inherit (cfg)
         readerGroup
+        certificates
         publish
         fetch
         alert
@@ -32,6 +33,15 @@ let
         failure
         ;
     };
+  # Traefik logs failed ACME orders at info level, so neither the unit state nor the journal priority shows them.
+  # It retries a renewal every 24 hours: a 48 hour window keeps one alert open instead of resolving between retries.
+  acmeCheck = lib.mapAttrs (_: lib.mkDefault) {
+    units = [ "traefik.service" ];
+    pattern = "(?P<error>(?:Error renewing|Unable to obtain) ACME certificate.*)";
+    ipPattern = null;
+    failure = false;
+    alertWindow = 172800;
+  };
 in
 {
   config = lib.mkIf cfg.enable {
@@ -86,6 +96,7 @@ in
           "forgejo.service"
         ] "Failed authentication attempt" "from (?:\\[)?([0-9a-fA-F:.]+)" true;
       }
+      // lib.optionalAttrs config.modules.traefik.enable { traefikAcme = acmeCheck; }
       // lib.optionalAttrs config.services.vaultwarden.enable {
         vaultwarden = check [
           "vaultwarden.service"

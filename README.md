@@ -306,14 +306,18 @@ NixOSの `programs.ssh.systemd-ssh-proxy.enable` は既定falseにする。
 `readerGroup`（既定null）は既存の閲覧group、`onCalendar` は収集時刻。
 `publish.{enable,address,port}` は自ホストJSONだけの静的HTTP配信（既定無効、address必須、port 9180）。
 `fetch.<host>.url` は信頼する内部link上の他ホストのJSONをrootで取得する。firewallは利用側で限定する。
-`alert.{enable,to,from,sendmail,repeatInterval,staleAfter,authFailures,diskPercent,smartPercentageUsed,diskWritesPerDayGB}` はsendmailによる
+`alert.{enable,to,from,sendmail,repeatInterval,staleAfter,authFailures,diskPercent,smartPercentageUsed,diskWritesPerDayGB,certificateDays}` はsendmailによる
 新規・継続・解消通知（既定無効、宛先必須、間隔86400秒・鮮度3600秒・認証失敗20件/run・disk 90%）。
 SMARTはmodel・温度・稼働時間・exit statusの意味、NVMeのcritical_warningとビットの意味・percentage_used・spare・累積書込bytes・media errors、ATAの主要raw属性を保存する（serialは含めない）。
 失敗通知には具体的なSMART値を含める。`alert.smartPercentageUsed` は既定80（1–255、nullで無効）、NVMeの寿命使用率が以上なら `smart-wear/<device>`、spareがthreshold+10ポイント以下でも警告する。
 `disk_writes` は実ディスクの書込量、`swap_io` はpswpin/pswpoutを直近24時間のbytesで記録する。
 `alert.diskWritesPerDayGB` は正整数またはnull（既定null=無効、decimal GB）。24時間分の履歴が揃い、観測した書込量が超過すると `disk-writes/<device>` を通知する。
 再起動・カウンタ減少の区間は破棄し、履歴不足時は通知しない。24時間境界をまたぐ区間を含めず外挿もしないため、`observed_seconds` と `window_complete` を併記する。schemaは1のまま、新fieldを持たないpeerも読み取れる。
-`logChecks.<name>.{units,pattern,ipPattern,failure}` は有効なnative serviceだけに追加するjournal checkの調整入力。
+`certificates`（既定は空）は `host:port` の一覧で、収集のたびにTLS証明書を検証付きで読み、期限 `not_after` と残り日数 `days_left` を `certificates` に記録する（最初からTLSのportのみ、STARTTLSは不可。そのhostから届く名前を書く）。
+残りが `alert.certificateDays`（既定20日。ACMEの更新は期限の約30日前なので、更新が約10日失敗し続けている状態）未満、または検証に失敗（期限切れ・名前不一致・未信頼の発行者）すると `cert/<host:port>` を通知し、メールに期限と残り日数を書く。接続できない場合は1回再試行し、それでも失敗すれば証明書の問題ではなく収集エラーにする。
+`logChecks.<name>.{units,pattern,ipPattern,failure,alertWindow}` は有効なnative serviceだけに追加するjournal checkの調整入力。
+`alertWindow`（秒、既定null）を設定したcheckは1件の一致で `log/<name>` を通知し、一致した文（名前付きgroup `error`、300文字まで）を `log_alerts` とメールに含める。その秒数のあいだ新しい一致が無ければ解消する。
+`modules.traefik.enable` のhostには `traefikAcme` が既定で入り、TraefikがINFOで記録するACMEの失敗（`Error renewing ACME certificate` / `Unable to obtain ACME certificate`）を検出する。Traefikの再試行は24時間ごとなので、解消と再通知を繰り返さないよう窓は48時間。
 SSH成功・sudo・Fail2banは認証失敗とは別集計。直近24時間の件数と前回cursorをroot専用stateに保持する。
 閲覧側の管理権限・ネットワーク制限は緩めない。[Wiki](https://git.attodao.cc/AttODao/attos-nix-modules/wiki/module-host-report)参照。
 

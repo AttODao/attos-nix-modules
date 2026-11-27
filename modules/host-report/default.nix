@@ -49,6 +49,15 @@ in
         }
       );
     };
+    certificates = mkOption {
+      type = types.listOf (types.strMatching "[A-Za-z0-9.-]+:[0-9]+");
+      default = [ ];
+      example = [
+        "git.example.org:443"
+        "mail.example.org:993"
+      ];
+      description = "TLS endpoints (`host:port`, TLS from the first byte, no STARTTLS) whose certificate the collector reads on every run. The report lists expiry date and days left; a certificate that fails verification (expired, wrong name, untrusted issuer) or has fewer than `alert.certificateDays` days left is a problem. A connection failure (after one retry) is a collection error. Use a name this host can reach.";
+    };
     alert = {
       enable = lib.mkEnableOption "deduplicated sendmail alerts and recovery notices";
       to = mkOption {
@@ -75,6 +84,11 @@ in
         default = null;
         description = "Disk writes in decimal GB per rolling 24h above which to warn; null disables. Requires a complete history window; partial intervals are not extrapolated.";
       };
+      certificateDays = mkOption {
+        type = types.ints.positive;
+        default = 20;
+        description = "Days left on a certificate in `certificates` below which to alert. ACME clients renew about 30 days before expiry, so the default means renewal has been failing for about 10 days.";
+      };
       diskPercent = mkOption {
         type = types.ints.between 1 100;
         default = 90;
@@ -83,7 +97,7 @@ in
     };
     logChecks = mkOption {
       default = { };
-      description = "Journal checks; native enabled services get overridable defaults. Only regex captures, never raw messages, enter the report. Patterns use Python re syntax.";
+      description = "Journal checks; native enabled services get overridable defaults. Only regex captures, never raw messages, enter the report. Patterns use Python re syntax and see messages without terminal colour codes.";
       type = types.attrsOf (
         types.submodule {
           options = {
@@ -93,12 +107,17 @@ in
             };
             pattern = mkOption {
               type = types.nonEmptyStr;
-              description = "Event regex. Named user, command and action groups become bounded summaries.";
+              description = "Event regex. Named user, command and action groups become bounded summaries. With `alertWindow`, the named group `error` (or the whole match) is kept, cut to 300 characters, so it must not capture secrets.";
             };
             ipPattern = mkOption {
               type = types.nullOr types.nonEmptyStr;
               default = null;
               description = "Optional regex whose first capture is validated as an IP address.";
+            };
+            alertWindow = mkOption {
+              type = types.nullOr types.ints.positive;
+              default = null;
+              description = "When set, a single match is a problem, reported with its text until no further match arrives for this many seconds. Choose more than the interval at which the service retries, otherwise the alert resolves and reopens between retries. For errors the journal priority does not show (services that log failures at info level).";
             };
             failure = mkOption {
               type = types.bool;
