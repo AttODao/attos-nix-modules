@@ -390,6 +390,11 @@ in
           pkgs.writeShellScript "traefik-start" ''
             : "''${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for Traefik DNS-01}"
             export CF_DNS_API_TOKEN="$CLOUDFLARE_API_TOKEN"
+            # The environment file is usually shared with the DDNS client. lego reads the TTL of
+            # the challenge TXT record from these names and rejects values below 120, while
+            # Cloudflare's "automatic" TTL for ordinary records is 1; every renewal then fails
+            # with "invalid TTL". Drop them so lego uses its own default.
+            unset CLOUDFLARE_TTL CF_TTL
             exec ${lib.getExe config.services.traefik.package} --configfile=${staticFile}
           ''
         );
