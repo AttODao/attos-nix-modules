@@ -210,6 +210,42 @@ let
     ) "allow-list before ${builtins.toJSON before.units}";
     pkgs.writeText "service-catalog" (builtins.toJSON { inherit before after; });
 
+  # --- hypermonitor ingest --------------------------------------------------------------------
+  # The ingest listener reaches the generated config with its peers, and the firewall opens it
+  # for those peers on the bridge interface only; the bridge's config is checked at build time.
+  ingestCheck =
+    let
+      c =
+        (nixos [
+          nixosModule
+          {
+            networking.nftables.enable = true;
+            modules.public-services."dash.${hostName}.example".hypermonitor =
+              fixtures.services.hypermonitor
+              // {
+                enable = true;
+                host = hostName;
+                ingestListen = "10.0.0.1:8651";
+                ingestPeers = [ "10.0.0.13" ];
+                ingestInterface = "br0";
+                briefRetentionDays = 30;
+              };
+          }
+        ]).config;
+      settings = c.modules.hypermonitor-settings;
+      rules = c.networking.firewall.extraInputRules;
+      expect = cond: message: if cond then true else throw "hypermonitor-ingest: ${message}";
+    in
+    assert expect (
+      settings.ingest_listen == "10.0.0.1:8651"
+      && settings.ingest_peers == [ "10.0.0.13" ]
+      && settings.brief.retention_days == 30
+    ) "settings ${builtins.toJSON settings}";
+    assert expect
+      (lib.hasInfix ''iifname "br0" ip saddr 10.0.0.13 ip daddr 10.0.0.1 tcp dport 8651 accept'' rules)
+      "rules ${rules}";
+    pkgs.writeText "hypermonitor-ingest" rules;
+
   # --- modules-disabled ---------------------------------------------------------------------
   summary =
     { config, options, ... }:
@@ -279,6 +315,7 @@ in
 {
   modules-disabled = disabledCheck;
   service-catalog = catalogCheck;
+  hypermonitor-ingest = ingestCheck;
   home-manager-unknown-option = homeUnknownOption;
 }
 // moduleChecks
