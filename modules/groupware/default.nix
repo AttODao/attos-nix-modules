@@ -21,7 +21,10 @@ let
   };
 in
 {
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ./catalog.nix
+  ];
   options.modules.groupware = lib.mkOption {
     type = lib.types.submodule (ps.standaloneOptions serviceOptions);
     default = { };

@@ -16,6 +16,8 @@ let
     };
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "forgejo" (
     ps.common "shared Forgejo service"
     // {

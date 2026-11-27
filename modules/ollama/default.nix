@@ -44,6 +44,7 @@ let
 in
 {
   imports = [
+    ./catalog.nix
     ./nixos.nix
     ../docker
     ../open-terminal

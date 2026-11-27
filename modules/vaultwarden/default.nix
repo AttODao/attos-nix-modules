@@ -12,6 +12,8 @@ let
   listen = ps.listen s 8000;
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "vaultwarden" (
     ps.common "Vaultwarden password manager"
     // {

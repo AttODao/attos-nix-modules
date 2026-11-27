@@ -9,6 +9,7 @@ let
 in
 {
   imports = [
+    ./catalog.nix
     ./nixos.nix
     ./gateway.nix
   ];

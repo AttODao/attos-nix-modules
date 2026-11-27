@@ -10,6 +10,8 @@ let
   listen = ps.listen s 2283;
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "immich" (
     ps.common "shared Immich photo service"
     // {

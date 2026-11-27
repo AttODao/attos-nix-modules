@@ -8,7 +8,10 @@ let
   s = ps.select config "karakeep";
 in
 {
-  imports = [ ./nixos.nix ];
+  imports = [
+    ./nixos.nix
+    ./catalog.nix
+  ];
 
   options.modules = ps.moduleOptions "karakeep" (
     ps.common "shared Karakeep service"

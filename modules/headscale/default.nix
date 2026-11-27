@@ -31,6 +31,8 @@ let
   ) others;
 in
 {
+  imports = [ ./catalog.nix ];
+
   options.modules = ps.moduleOptions "headscale" (
     ps.common "Headscale coordination server for Tailscale clients"
     // {
