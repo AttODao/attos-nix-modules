@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -67,6 +69,24 @@ def short(value, length=100):
     return re.sub(r'[\x00-\x1f\x7f]', '?', str(value))[:length]
 
 
+def iso(seconds):
+    return datetime.datetime.fromtimestamp(
+        seconds, datetime.timezone.utc).isoformat(timespec='seconds')
+
+
+def journal_text(message):
+    # journalctl -o json renders messages with escape sequences (coloured
+    # logs such as Traefik's) as a byte array instead of a string.
+    if isinstance(message, list):
+        try:
+            message = bytes(message).decode('utf-8', 'replace')
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(message, str):
+        return None
+    return re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', message)
+
+
 def parsed_ip(value):
     value = value.strip('[]')
     candidates = [value, value.rstrip('.')]
@@ -111,8 +131,8 @@ def journal(checks, state, errors, now):
     for line in lines:
         entry = json.loads(line)
         state['cursor'] = entry.get('__CURSOR', state.get('cursor'))
-        message = entry.get('MESSAGE', '')
-        if not isinstance(message, str):
+        message = journal_text(entry.get('MESSAGE', ''))
+        if message is None:
             continue
         for name, check in checks.items():
             if check['units']:
@@ -126,6 +146,18 @@ def journal(checks, state, errors, now):
                 continue
             result = results[name]
             result['count'] += 1
+            if check.get('alertWindow'):
+                try:
+                    at = int(entry['__REALTIME_TIMESTAMP']) / 1000000
+                except (KeyError, ValueError):
+                    at = now
+                seen = state.setdefault('log_alerts', {}).setdefault(
+                    name, {'first_at': at, 'count': 0})
+                seen['count'] += 1
+                seen['last_at'] = at
+                # Regex capture only, bounded and without control characters.
+                seen['error'] = short(
+                    match.groupdict().get('error') or match[0], 300)
             example = {}
             for key, value in match.groupdict().items():
                 if key in ('user', 'action', 'command') and value:
@@ -289,6 +321,56 @@ def smart_summary(item):
     return ', '.join(details)
 
 
+def log_alerts(checks, state, now):
+    # A match stays reported until no further match arrives for alertWindow
+    # seconds; the collector decides, so a peer evaluates it without config.
+    kept = {}
+    for name, seen in state.get('log_alerts', {}).items():
+        window = checks.get(name, {}).get('alertWindow')
+        if window and now - seen['last_at'] < window:
+            kept[name] = seen
+    state['log_alerts'] = kept
+    return {name: {'count': seen['count'], 'error': seen['error'],
+                   'first_seen': iso(seen['first_at']),
+                   'last_seen': iso(seen['last_at']),
+                   'window_seconds': checks[name]['alertWindow']}
+            for name, seen in kept.items()}
+
+
+def certificate(endpoint, now):
+    host, port = endpoint.rsplit(':', 1)
+    context = ssl.create_default_context()
+    for last in (False, True):
+        try:
+            with socket.create_connection((host, int(port)),
+                                          timeout=10) as sock:
+                with context.wrap_socket(sock, server_hostname=host) as tls:
+                    cert = tls.getpeercert()
+            break
+        except ssl.SSLCertVerificationError as exc:
+            # Expired, wrong name or untrusted issuer: a certificate problem,
+            # not a collection error.
+            return {'endpoint': endpoint, 'verified': False,
+                    'verify_error': short(exc.verify_message, 200)}
+        except OSError:
+            # One retry: a restarting server must not raise a mail.
+            if last:
+                raise
+            time.sleep(5)
+    expires = ssl.cert_time_to_seconds(cert['notAfter'])
+
+    def common_name(key):
+        names = [value for rdn in cert.get(key, ()) for field, value in rdn
+                 if field == 'commonName']
+        return short(names[0]) if names else None
+    return {'endpoint': endpoint, 'verified': True,
+            'subject': common_name('subject'),
+            'issuer': common_name('issuer'),
+            'not_before': iso(ssl.cert_time_to_seconds(cert['notBefore'])),
+            'not_after': iso(expires),
+            'days_left': round((expires - now) / 86400, 1)}
+
+
 def collect(cfg, state):
     now = time.time()
     errors = []
@@ -412,8 +494,17 @@ def collect(cfg, state):
                                'elements': count})
             return result
         report['nft_dynamic_sets'] = attempt('nft', nft_sets, [])
+    report['certificates'] = []
+    for endpoint in cfg['certificates']:
+        # The error key is everything before the first colon, so keep the
+        # port out of it (host and port are separated by a space here).
+        item = attempt('certificate ' + endpoint.replace(':', ' port '),
+                       lambda: certificate(endpoint, now), None)
+        if item:
+            report['certificates'].append(item)
     report['security'] = attempt('journal', lambda: journal(
         cfg['logChecks'], state, errors, now), {})
+    report['log_alerts'] = log_alerts(cfg['logChecks'], state, now)
     history = [row for row in state.get('history', [])
                if row['at'] > now - 86400]
     history.append({'at': now, 'counts': {
@@ -489,6 +580,23 @@ def problems(report, alert):
         if item['failure'] and item['count'] >= alert['authFailures']:
             add('auth/' + name, f"{name}: {item['count']} failures; "
                 f"IPs {item['top_ips']}")
+    # Peers collected by an older module version lack the next two fields.
+    for item in report.get('certificates', []):
+        endpoint = item['endpoint']
+        if not item['verified']:
+            add('cert/' + endpoint, f'certificate {endpoint} failed '
+                f"verification: {item['verify_error']}")
+            continue
+        days = (datetime.datetime.fromisoformat(
+            item['not_after']).timestamp() - time.time()) / 86400
+        if days < alert['certificateDays']:
+            add('cert/' + endpoint,
+                f"certificate {endpoint} expires {item['not_after']}, "
+                f"{days:.1f} days left (alert below "
+                f"{alert['certificateDays']})")
+    for name, item in report.get('log_alerts', {}).items():
+        add('log/' + name, f"{name}: {item['count']} log matches, last "
+            f"{item['last_seen']}: {item['error']}")
     return found
 
 
