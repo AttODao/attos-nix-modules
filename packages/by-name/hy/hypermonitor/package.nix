@@ -6,11 +6,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "hypermonitor";
-  version = "0.4.0";
+  version = "0.4.1";
 
   src = fetchurl {
     url = "https://git.attodao.cc/AttODao/HyperMonitor/releases/download/server-v${finalAttrs.version}/hypermonitor-server-${finalAttrs.version}-x86_64-linux-musl.tar.gz";
-    hash = "sha256-bDtdMRRHCsJMAysoVOgMCY6son2d8GU4JmQFn2SZ5io=";
+    hash = "sha256-9JUrSVehdhRIEfA9Z7XibcMOKc/wTPPt7AXb1NPxlMs=";
   };
 
   dontConfigure = true;
