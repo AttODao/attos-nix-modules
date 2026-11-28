@@ -83,6 +83,7 @@ let
           gpu
           flake
           report
+          jobs
           ;
         wol = if h.wol != null then { inherit (h.wol) mac broadcast; } else null;
         suspend_unit = h.suspendUnit;

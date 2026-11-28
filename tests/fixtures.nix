@@ -120,6 +120,24 @@ in
 
   modules = {
     attos-jobs.modules.attos-jobs.socketGroup = "wheel";
+    # The units are started through the agent; the jobs status is published by host-report.
+    hypermonitor-power.modules = {
+      attos-deck.agent = {
+        enable = true;
+        socketGroup = "wheel";
+      };
+      attos-jobs = {
+        enable = true;
+        socketGroup = "wheel";
+      };
+      host-report = {
+        enable = true;
+        publish = {
+          enable = true;
+          address = "127.0.0.1";
+        };
+      };
+    };
     hypermonitor-bridge.modules.hypermonitor-bridge = {
       server = "http://10.0.0.1:8651";
       categories = [

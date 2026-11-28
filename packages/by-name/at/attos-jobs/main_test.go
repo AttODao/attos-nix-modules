@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -137,6 +138,32 @@ State=active
 Scope=session-9.scope
 Service=greetd
 TimestampMonotonic=50000000
+Seat=seat0
+TTY=tty1
+Type=wayland
+Desktop=Hyprland
+
+Id=10
+Name=attodao
+User=1000
+Remote=no
+RemoteHost=
+Class=user
+State=closing
+Scope=session-10.scope
+Service=greetd
+TimestampMonotonic=40000000
+
+Id=11
+Name=greeter
+User=990
+Remote=no
+RemoteHost=
+Class=greeter
+State=online
+Scope=session-11.scope
+Service=greetd
+TimestampMonotonic=30000000
 EOF
 ;;
 terminate-session) echo "$2" >> "`+dir+`/terminated" ;;
@@ -196,8 +223,23 @@ func TestCollect(t *testing.T) {
 	if u := got["unit:strata-headless-iq3-s.service"]; u.Title != "Strata IQ3_S" || u.SinceUnix != 1793000000 {
 		t.Errorf("unit: %+v", u)
 	}
-	if ids := localSessions(c); strings.Join(ids, ",") != "9" {
+	if ids := localSessions(c); strings.Join(ids, ",") != "10,9" {
 		t.Errorf("local sessions %v", ids)
+	}
+	// Local logins: the open user session only (not the closing one, not the greeter).
+	if len(doc.LocalSessions) != 1 {
+		t.Fatalf("local logins %+v", doc.LocalSessions)
+	}
+	if l := doc.LocalSessions[0]; l.ID != "9" || l.User != "attodao" || l.Seat != "seat0" || l.TTY != "tty1" ||
+		l.Type != "wayland" || l.Desktop != "Hyprland" || l.SinceUnix == 0 {
+		t.Errorf("local login %+v", l)
+	}
+	if data, err := json.Marshal(doc); err != nil || !strings.Contains(string(data), `"localSessions":[{"id":"9"`) {
+		t.Errorf("status JSON %s (%v)", data, err)
+	}
+	empty := statusDoc{Items: []item{}, LocalSessions: []localLogin{}}
+	if data, _ := json.Marshal(empty); !strings.Contains(string(data), `"localSessions":[]`) {
+		t.Errorf("no local login must still say so: %s", data)
 	}
 }
 

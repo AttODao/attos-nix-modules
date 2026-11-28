@@ -54,12 +54,20 @@ let
       suspendUnit = mkOption {
         type = types.nullOr unitName;
         default = null;
-        description = "Unit the host's agent starts to suspend the host (operations of a later version).";
+        example = "hypermonitor-suspend.service";
+        description = "Unit the host's agent starts to suspend the host (`modules.hypermonitor-power` on that host provides `hypermonitor-suspend.service`). Needs `jobs`.";
       };
       poweroffUnit = mkOption {
         type = types.nullOr unitName;
         default = null;
-        description = "Unit the host's agent starts to power the host off (operations of a later version).";
+        example = "hypermonitor-poweroff.service";
+        description = "Unit the host's agent starts to power the host off (`modules.hypermonitor-power` provides `hypermonitor-poweroff.service`). Needs `jobs`.";
+      };
+      jobs = mkOption {
+        type = types.nullOr url;
+        default = null;
+        example = "http://192.0.2.10:9180/attos-jobs.json";
+        description = "URL of the host's attos-jobs status (`modules.hypermonitor-power.publishJobs`): suspend and poweroff are refused while it lists work or a local login, or cannot be read.";
       };
       flake = mkOption {
         type = types.nullOr (types.strMatching "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
