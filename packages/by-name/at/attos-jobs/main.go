@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 const defaultConfigPath = "/etc/attos-jobs/config.json"
 
@@ -111,7 +111,21 @@ type statusDoc struct {
 	PausedBy             string   `json:"pausedBy,omitempty"`
 	PreparingForShutdown bool     `json:"preparingForShutdown"`
 	Items                []item   `json:"items"`
-	Errors               []string `json:"errors,omitempty"`
+	// LocalSessions are the logins at the machine (not remote work; see localLogins).
+	LocalSessions []localLogin `json:"localSessions"`
+	Errors        []string     `json:"errors,omitempty"`
+}
+
+// localLogin is one local user session (`loginctl`).
+type localLogin struct {
+	ID        string `json:"id"`
+	User      string `json:"user,omitempty"`
+	Seat      string `json:"seat,omitempty"`
+	TTY       string `json:"tty,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Desktop   string `json:"desktop,omitempty"`
+	State     string `json:"state,omitempty"`
+	SinceUnix int64  `json:"sinceUnix,omitempty"`
 }
 
 func readStatus(c config) (statusDoc, error) {

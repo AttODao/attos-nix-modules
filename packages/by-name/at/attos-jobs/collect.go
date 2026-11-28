@@ -218,6 +218,7 @@ type heavyOwner struct {
 
 type session struct {
 	id, user, uid, remoteHost, class, state, scope, service string
+	seat, tty, kind, desktop                                string
 	remote                                                  bool
 	since                                                   int64
 }
@@ -282,7 +283,8 @@ func (col *collector) loadSessions() {
 		return
 	}
 	args := []string{"show-session", "--no-pager", "-p", "Id", "-p", "Name", "-p", "User", "-p", "Remote", "-p", "RemoteHost",
-		"-p", "Class", "-p", "State", "-p", "Scope", "-p", "Service", "-p", "TimestampMonotonic"}
+		"-p", "Class", "-p", "State", "-p", "Scope", "-p", "Service", "-p", "TimestampMonotonic",
+		"-p", "Seat", "-p", "TTY", "-p", "Type", "-p", "Desktop"}
 	out, err = runOut(10*time.Second, col.c.Loginctl, append(args, ids...)...)
 	if err != nil && len(out) == 0 {
 		col.fail("sessions: %v", err)
@@ -292,6 +294,7 @@ func (col *collector) loadSessions() {
 		s := session{
 			id: b["Id"], user: b["Name"], uid: b["User"], remoteHost: b["RemoteHost"], class: b["Class"],
 			state: b["State"], scope: b["Scope"], service: b["Service"], remote: b["Remote"] == "yes",
+			seat: b["Seat"], tty: b["TTY"], kind: b["Type"], desktop: b["Desktop"],
 			since: col.monotonicToUnix(b["TimestampMonotonic"]),
 		}
 		if s.id != "" {
@@ -543,6 +546,7 @@ func collect(c config) statusDoc {
 	doc.Items = append(doc.Items, col.ciItems()...)
 	doc.Items = append(doc.Items, col.sessionItems(heavySessions)...)
 	doc.Items = append(doc.Items, col.unitItems()...)
+	doc.LocalSessions = col.localLogins()
 	sort.SliceStable(doc.Items, func(i, j int) bool {
 		if doc.Items[i].Kind != doc.Items[j].Kind {
 			return kindOrder(doc.Items[i].Kind) < kindOrder(doc.Items[j].Kind)
@@ -564,6 +568,22 @@ func kindOrder(k string) int {
 	default:
 		return 3
 	}
+}
+
+// localLogins lists the local (non-remote) user sessions that are not closing: someone
+// at the machine. Consumers that power the host off (HyperMonitor) treat each as a reason
+// to stay on; they are not remote work, so they are not items and cannot be stopped here.
+func (col *collector) localLogins() []localLogin {
+	out := []localLogin{}
+	for _, s := range col.sessions {
+		if s.remote || !strings.HasPrefix(s.class, "user") || s.state == "closing" {
+			continue
+		}
+		out = append(out, localLogin{ID: s.id, User: s.user, Seat: s.seat, TTY: s.tty, Type: s.kind,
+			Desktop: s.desktop, State: s.state, SinceUnix: s.since})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // localSessions returns the IDs of local (non-remote) user sessions.

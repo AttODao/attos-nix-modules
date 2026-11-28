@@ -246,6 +246,65 @@ let
       "rules ${rules}";
     pkgs.writeText "hypermonitor-ingest" rules;
 
+  # --- hypermonitor power -----------------------------------------------------------------------
+  # The host side of suspend/poweroff: two units the agent may only start (and read), and the
+  # attos-jobs status linked next to the published host report; the dashboard side writes the
+  # host's jobs URL into its config.
+  powerCheck =
+    let
+      c =
+        (nixos [
+          nixosModule
+          (enable "hypermonitor-power")
+          fixtures.modules.hypermonitor-power
+          {
+            modules.public-services."dash.${hostName}.example".hypermonitor =
+              fixtures.services.hypermonitor
+              // {
+                enable = true;
+                host = hostName;
+                hosts = [
+                  {
+                    name = "desk";
+                    optional = true;
+                    suspendUnit = "hypermonitor-suspend.service";
+                    poweroffUnit = "hypermonitor-poweroff.service";
+                    jobs = "http://192.0.2.10:9180/attos-jobs.json";
+                  }
+                ];
+              };
+          }
+        ]).config;
+      units = c.modules.attos-deck.agent.settings.units;
+      svc = c.systemd.services;
+      host = lib.head c.modules.hypermonitor-settings.hosts;
+      expect = cond: message: if cond then true else throw "hypermonitor-power: ${message}";
+    in
+    assert expect (
+      units."hypermonitor-suspend.service".allow == [
+        "start"
+        "status"
+      ]
+      &&
+        units."hypermonitor-poweroff.service".allow == [
+          "start"
+          "status"
+        ]
+    ) "agent allow-list ${builtins.toJSON units}";
+    assert expect (
+      svc.hypermonitor-suspend.serviceConfig.Type == "exec"
+      && svc.hypermonitor-poweroff.serviceConfig.Type == "exec"
+      && (svc.hypermonitor-suspend.wantedBy or [ ]) == [ ]
+    ) "units are started on request only";
+    assert expect
+      (lib.elem "L+ /var/lib/host-report-publish/attos-jobs.json - - - - /run/attos-jobs/status.json" c.systemd.tmpfiles.rules)
+      "jobs status link";
+    assert expect (
+      host.jobs == "http://192.0.2.10:9180/attos-jobs.json"
+      && host.suspend_unit == "hypermonitor-suspend.service"
+    ) "dashboard host ${builtins.toJSON host}";
+    pkgs.writeText "hypermonitor-power" (builtins.toJSON { inherit units host; });
+
   # --- modules-disabled ---------------------------------------------------------------------
   summary =
     { config, options, ... }:
@@ -316,6 +375,7 @@ in
   modules-disabled = disabledCheck;
   service-catalog = catalogCheck;
   hypermonitor-ingest = ingestCheck;
+  hypermonitor-power = powerCheck;
   home-manager-unknown-option = homeUnknownOption;
 }
 // moduleChecks
