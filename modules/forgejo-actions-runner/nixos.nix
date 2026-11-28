@@ -44,7 +44,7 @@ in
               name = lib.mkDefault config.networking.hostName;
               labels = lib.mkIf cfg.docker (
                 lib.mkDefault [
-                  "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-24.04@sha256:7bf3a8afc2bbfe7fdaf4b9d2716cb2f3634fd21e4f38e26aa17a12cfda80d721"
+                  "ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-24.04@sha256:f195e42bedd719818f81f28c6e54c1d08c5a8400f3012aa187cb90df3823e59a"
                   "docker:docker://node:24.22.3-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496"
                 ]
               );
