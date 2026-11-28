@@ -305,6 +305,45 @@ let
     ) "dashboard host ${builtins.toJSON host}";
     pkgs.writeText "hypermonitor-power" (builtins.toJSON { inherit units host; });
 
+  # --- hypermonitor bridge commands -------------------------------------------------------------
+  # Without hermesPackage the Hermes home stays read-only; with it the unit may write it (the
+  # Hermes CLI updates kanban.db) and Python may map writable executable memory.
+  bridgeCommandsCheck =
+    let
+      unit =
+        extra:
+        (nixos [
+          nixosModule
+          (enable "hypermonitor-bridge")
+          fixtures.modules.hypermonitor-bridge
+          { modules.hypermonitor-bridge = extra; }
+        ]).config.systemd.services.hypermonitor-bridge.serviceConfig;
+      plain = unit { };
+      commands = unit {
+        hermesPackage = pkgs.hello;
+        promptListen = "127.0.0.1:8652";
+        chatUrl = "https://hermes.example/#/sessions/{session}";
+      };
+      expect = cond: message: if cond then true else throw "hypermonitor-bridge-commands: ${message}";
+      pick = sc: { inherit (sc) ReadOnlyPaths ReadWritePaths MemoryDenyWriteExecute; };
+    in
+    assert expect (
+      plain.ReadOnlyPaths == [ "/var/lib/hermes/.hermes" ]
+      && plain.ReadWritePaths == [ ]
+      && plain.MemoryDenyWriteExecute
+    ) "read-only ${builtins.toJSON (pick plain)}";
+    assert expect (
+      commands.ReadOnlyPaths == [ ]
+      && commands.ReadWritePaths == [ "/var/lib/hermes/.hermes" ]
+      && !commands.MemoryDenyWriteExecute
+    ) "commands ${builtins.toJSON (pick commands)}";
+    pkgs.writeText "hypermonitor-bridge-commands" (
+      builtins.toJSON {
+        plain = pick plain;
+        commands = pick commands;
+      }
+    );
+
   # --- modules-disabled ---------------------------------------------------------------------
   summary =
     { config, options, ... }:
@@ -376,6 +415,7 @@ in
   service-catalog = catalogCheck;
   hypermonitor-ingest = ingestCheck;
   hypermonitor-power = powerCheck;
+  hypermonitor-bridge-commands = bridgeCommandsCheck;
   home-manager-unknown-option = homeUnknownOption;
 }
 // moduleChecks
