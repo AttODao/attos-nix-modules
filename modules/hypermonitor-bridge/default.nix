@@ -112,6 +112,9 @@ in
         IPv4 loopback address where the bridge receives Hermes' outbound webhook for chat questions
         (`hooks.outbound` with the events `on_session_prompt` and `on_session_prompt_settled`,
         url `http://<address>/prompt`); they become events that link to the chat. Needs `chatUrl`.
+        With `hermesPackage` too, they can be answered from the dashboard: the bridge runs a
+        small helper with that package's Python, which answers through the gateway's control
+        socket and Hermes' own client (no secret, no listener).
       '';
     };
     chatUrl = mkOption {
