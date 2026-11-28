@@ -21,6 +21,9 @@ let
     categories = map (c: { inherit (c) id label; }) cfg.categories;
     history_days = cfg.historyDays;
   }
+  // lib.optionalAttrs (cfg.results != { }) {
+    results = lib.mapAttrsToList (source: kind: { inherit source kind; }) cfg.results;
+  }
   // lib.optionalAttrs (cfg.settleSeconds != null) { settle_secs = cfg.settleSeconds; }
   // lib.optionalAttrs (cfg.hermesPackage != null) {
     hermes_bin = "${cfg.hermesPackage}/bin/hermes";
@@ -49,7 +52,7 @@ in
     hermesHome = mkOption {
       type = ps.absolutePath;
       default = "/var/lib/hermes/.hermes";
-      description = "Hermes home (HERMES_HOME) read by the bridge: `cache/morning-brief/<date>/`, `kanban.db`, `cron/jobs.json`.";
+      description = "Hermes home (HERMES_HOME) read by the bridge: `cache/morning-brief/<date>/`, `kanban.db`, `cron/jobs.json` and `cron/output/`, `state.db` (webhook runs), `cache/hypermonitor/notices/`.";
     };
     user = mkOption {
       type = types.nonEmptyStr;
@@ -117,10 +120,34 @@ in
       example = "https://hermes.example/#/sessions/{session}";
       description = "Page of a chat session, `{session}` replaced by the session id (where a chat question is answered).";
     };
+    results = mkOption {
+      type = types.attrsOf (
+        types.enum [
+          "host_alert"
+          "pr_review"
+          "ci_failure"
+          "pr_merged"
+          "price_watch"
+          "brief"
+          "cron"
+        ]
+      );
+      default = { };
+      example = {
+        "cron:68c6e425a83d" = "host_alert";
+        "webhook:forgejo-action-failure" = "ci_failure";
+      };
+      description = ''
+        Job family of the results of a Hermes cron job (`cron:<job id>`) or webhook route
+        (`webhook:<route name>`); each result becomes an event of that kind on the dashboard
+        (host alerts and CI failures as warnings). Sources without an entry are `cron`; a
+        failed run is `job_failed` whatever its family.
+      '';
+    };
     historyDays = mkOption {
       type = types.ints.between 1 90;
       default = 7;
-      description = "Days of Kanban and cron history the bridge sends on its first start.";
+      description = "Days of Kanban, cron and webhook history the bridge sends on its first start.";
     };
   };
 
